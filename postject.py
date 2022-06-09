@@ -162,6 +162,19 @@ def main():
         default=False,
         help="Overwrite the resource if it already exists",
     )
+    parser.add_argument(
+        "--output-api-header",
+        default=False,
+        action="store_true",
+        help="Output the API header to stdout",
+    )
+
+    if "--output-api-header" in sys.argv:
+        with open(str(pathlib.Path(__file__).parent.joinpath("postject-api.h"))) as f:
+            print(f.read())
+
+        sys.exit(0)
+
     args = parser.parse_args()
 
     executable_format = get_executable_format(args.filename)
