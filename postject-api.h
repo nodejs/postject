@@ -11,6 +11,7 @@
 #include <elf.h>
 #elif defined(_WIN32)
 #include <libloaderapi.h>
+#include <winbase.h>
 #endif
 
 struct MachOOptions {
@@ -23,7 +24,6 @@ void postject_macho_options_init(MachOOptions* options) {
   options->segment_name = nullptr;
 }
 
-// TODO
 void* postject_find_resource(const char* name, size_t* size, const MachOOptions* macho_options = nullptr) {
 #if defined(__APPLE__) && defined(__MACH__)
   unsigned long section_size;
@@ -42,8 +42,18 @@ void* postject_find_resource(const char* name, size_t* size, const MachOOptions*
   *size = static_cast<size_t>(section_size);
 
   return ptr;
+#elif defined(__linux__)
+  // TODO - Implement for ELF
+#elif defined(_WIN32)
+  HRSRC resource_handle = FindResourceA(nullptr, resource_name, RT_RCDATA);
+
+  if (resource_handle != nullptr) {
+    *size = SizeofResource(nullptr, resource_handle);
+    return LockResource(LoadResource(nullptr, resource_handle));
+  }
 #endif
 
+  *size = 0;
   return nullptr;
 }
 
