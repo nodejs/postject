@@ -137,7 +137,7 @@ def main():
     )
     parser.add_argument(
         "filename",
-        type=str,
+        type=pathlib.Path,
         help="The executable to inject into",
     )
     parser.add_argument(
@@ -177,7 +177,9 @@ def main():
 
     args = parser.parse_args()
 
-    executable_format = get_executable_format(args.filename)
+    # Resolve path to walk any symlinks
+    filename = str(args.filename.resolve())
+    executable_format = get_executable_format(filename)
 
     if not executable_format:
         print("Executable must be a supported format: ELF, PE, or MachO")
@@ -187,18 +189,18 @@ def main():
 
     if executable_format == ExecutableFormat.MACH_O:
         if not inject_into_macho(
-            args.filename, args.macho_segment_name, args.resource_name, data, overwrite=args.overwrite
+            filename, args.macho_segment_name, args.resource_name, data, overwrite=args.overwrite
         ):
             print(f"Segment and section with that name already exists: {args.macho_segment_name}/{args.resource_name}")
             print("Use --overwrite to overwrite the existing content")
             sys.exit(2)
     elif executable_format == ExecutableFormat.ELF:
-        if not inject_into_elf(args.filename, args.resource_name, data, overwrite=args.overwrite):
+        if not inject_into_elf(filename, args.resource_name, data, overwrite=args.overwrite):
             print(f"Section with that name already exists: {args.resource_name}")
             print("Use --overwrite to overwrite the existing content")
             sys.exit(2)
     elif executable_format == ExecutableFormat.PE:
-        if not inject_into_pe(args.filename, args.resource_name, data, overwrite=args.overwrite):
+        if not inject_into_pe(filename, args.resource_name, data, overwrite=args.overwrite):
             print(f"Resource with that name already exists: {args.resource_name}")
             print("Use --overwrite to overwrite the existing content")
             sys.exit(2)
