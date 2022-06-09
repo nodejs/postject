@@ -1,0 +1,7 @@
+if (PYTHON_TESTS_ENABLED)
+  add_test(UNITTEST_PYTHON_art
+    ${CMAKE_COMMAND} -E env "PYTHONPATH=${PYTHONENV}"
+    ${PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/art_test.py)
+
+endif()
