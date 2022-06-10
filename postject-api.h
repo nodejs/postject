@@ -10,8 +10,7 @@
 #elif defined(__linux__)
 #include <elf.h>
 #elif defined(_WIN32)
-#include <libloaderapi.h>
-#include <winbase.h>
+#include <windows.h>
 #endif
 
 struct MachOOptions {
@@ -45,11 +44,15 @@ void* postject_find_resource(const char* name, size_t* size, const struct MachOO
 #elif defined(__linux__)
   // TODO - Implement for ELF
 #elif defined(_WIN32)
-  HRSRC resource_handle = FindResourceA(NULL, resource_name, RT_RCDATA);
+  HRSRC resource_handle = FindResourceA(NULL, name, MAKEINTRESOURCEA(10) /* RT_RCDATA */);
 
-  if (resource_handle != NULL) {
-    *size = SizeofResource(NULL, resource_handle);
-    return LockResource(LoadResource(NULL, resource_handle));
+  if (resource_handle) {
+    HGLOBAL global_resource_handle = LoadResource(NULL, resource_handle);
+
+    if (global_resource_handle) {
+      *size = SizeofResource(NULL, resource_handle);
+      return LockResource(global_resource_handle);
+    }
   }
 #endif
 
