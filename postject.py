@@ -6,7 +6,7 @@ import sys
 from enum import Enum, auto
 
 # Since we're building LIEF ourselves, add the build output to sys.path so it can be imported
-sys.path.append(str(pathlib.Path(__file__).parent.joinpath("dist")))
+sys.path.append(str(pathlib.Path(__file__).parent.joinpath("dist", "lief")))
 
 import lief
 
