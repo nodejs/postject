@@ -59,36 +59,52 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
 
     resources = app.resources
 
-    # First level => Type (ResourceDirectory node)
-    rcdata_node = next(iter(filter(lambda node: node.id == lief.PE.RESOURCE_TYPES.RCDATA, resources.childs)))
+    add_rcnode = False
+    add_id_node = False
+    add_lang_node = False
 
-    if not rcdata_node:
+    # First level => Type (ResourceDirectory node)
+    try:
+        rcdata_node = next(iter(filter(lambda node: node.id == lief.PE.RESOURCE_TYPES.RCDATA, resources.childs)))
+    except StopIteration:
         rcdata_node = lief.PE.ResourceDirectory()
         rcdata_node.id = lief.PE.RESOURCE_TYPES.RCDATA
-        resources.add_directory_node(rcdata_node)
+
+        add_rcnode = True
 
     # Second level => ID (ResourceDirectory node)
-    id_node = next(iter(filter(lambda node: node.name == resource_name, resources.childs)))
-
-    if not id_node:
+    try:
+        id_node = next(iter(filter(lambda node: node.name == resource_name, resources.childs)))
+    except StopIteration:
         id_node = lief.PE.ResourceDirectory()
         id_node.name = resource_name
-        rcdata_node.add_directory_node(id_node)
+
+        add_id_node = True
 
     # Third level => Lang (ResourceData node)
-    lang_node = id_node.childs[0]
+    try:
+        lang_node = id_node.childs[0]
+    except IndexError:
+        lang_node = lief.PE.ResourceData()
+        lang_node.content = data
 
-    if lang_node:
+        add_lang_node = True
+    else:
         if not overwrite:
             return False
 
         lang_node.content = data
-    else:
-        resource = lief.PE.ResourceData()
-        resource.content = data
-        resource.name = resource_name
 
-        lang_node.add_data_node(resource)
+    # These annoyingly need to be added in reverse order,
+    # since updating one after it's been added has no effect
+    if add_lang_node:
+        id_node.add_data_node(lang_node)
+
+    if add_id_node:
+        rcdata_node.add_directory_node(id_node)
+
+    if add_rcnode:
+        resources.add_directory_node(rcdata_node)
 
     app.write(filename)
 
