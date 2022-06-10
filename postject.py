@@ -108,6 +108,13 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
     if add_rcdata_node:
         resources.add_directory_node(rcdata_node)
 
+        # TODO - This isn't documented, but if this isn't done things don't work
+        #        as expected. It seems that standard order for resources in PE
+        #        is to be sorted by ID, and if they're not, Windows APIs don't
+        #        seem to work as expected. Was not able to find this documented
+        #        for the PE format itself.
+        resources.sort_by_id()
+
     app.write(filename)
 
     return True
