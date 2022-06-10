@@ -158,8 +158,8 @@ def main():
     )
     parser.add_argument(
         "--overwrite",
-        type=bool,
         default=False,
+        action="store_true",
         help="Overwrite the resource if it already exists",
     )
     parser.add_argument(
