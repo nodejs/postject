@@ -51,7 +51,6 @@ def inject_into_elf(filename, section_name, data, overwrite=False):
     return True
 
 
-# TODO - This is untested, it likely won't work immediately
 def inject_into_pe(filename, resource_name, data, overwrite=False):
     app = lief.parse(filename)
 
@@ -59,25 +58,29 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
 
     resources = app.resources
 
-    add_rcnode = False
+    add_rcdata_node = False
     add_id_node = False
     add_lang_node = False
 
     # First level => Type (ResourceDirectory node)
     try:
-        rcdata_node = next(iter(filter(lambda node: node.id == lief.PE.RESOURCE_TYPES.RCDATA, resources.childs)))
+        rcdata_node = next(iter(filter(lambda node: node.id == lief.PE.RESOURCE_TYPES.RCDATA.value, resources.childs)))
     except StopIteration:
+        # TODO - This is the final blocking part of the puzzle - if we create this ourselves, it doesn't work
         rcdata_node = lief.PE.ResourceDirectory()
         rcdata_node.id = lief.PE.RESOURCE_TYPES.RCDATA
 
-        add_rcnode = True
+        add_rcdata_node = True
 
     # Second level => ID (ResourceDirectory node)
     try:
-        id_node = next(iter(filter(lambda node: node.name == resource_name, resources.childs)))
+        id_node = next(iter(filter(lambda node: node.name == resource_name, rcdata_node.childs)))
     except StopIteration:
         id_node = lief.PE.ResourceDirectory()
         id_node.name = resource_name
+        # TODO - This isn't documented, but if this isn't set then LIEF won't save the name. Seems
+        #        like LIEF should be able to automatically handle this if you've set the node's name
+        id_node.id = 0x80000000
 
         add_id_node = True
 
@@ -86,13 +89,12 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
         lang_node = id_node.childs[0]
     except IndexError:
         lang_node = lief.PE.ResourceData()
-        lang_node.content = data
 
         add_lang_node = True
     else:
         if not overwrite:
             return False
-
+    finally:
         lang_node.content = data
 
     # These annoyingly need to be added in reverse order,
@@ -103,7 +105,7 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
     if add_id_node:
         rcdata_node.add_directory_node(id_node)
 
-    if add_rcnode:
+    if add_rcdata_node:
         resources.add_directory_node(rcdata_node)
 
     app.write(filename)
