@@ -32,7 +32,7 @@ def get_executable_format(filename):
 def inject_into_elf(filename, section_name, data, overwrite=False):
     app = lief.parse(filename)
 
-    existing_section = app.get_section(segment_name, section_name)
+    existing_section = app.get_section(section_name)
 
     if existing_section:
         if not overwrite:
