@@ -232,8 +232,11 @@ def main():
             print("Use --overwrite to overwrite the existing content")
             sys.exit(2)
     elif executable_format == ExecutableFormat.PE:
-        if not inject_into_pe(filename, args.resource_name, data, overwrite=args.overwrite):
-            print(f"Resource with that name already exists: {args.resource_name}")
+        # PE resource names appear to only work if uppercase
+        resource_name = args.resource_name.upper()
+
+        if not inject_into_pe(filename, resource_name, data, overwrite=args.overwrite):
+            print(f"Resource with that name already exists: {resource_name}")
             print("Use --overwrite to overwrite the existing content")
             sys.exit(2)
 
