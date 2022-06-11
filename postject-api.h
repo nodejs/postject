@@ -25,21 +25,21 @@ void postject_macho_options_init(struct MachOOptions* options) {
 
 void* postject_find_resource(const char* name, size_t* size, const struct MachOOptions* macho_options) {
 #if defined(__APPLE__) && defined(__MACH__)
+  const char* segment_name = "__POSTJECT";
+
+  if (macho_options && macho_options->segment_name != NULL) {
+    segment_name = macho_options->segment_name;
+  }
+
   unsigned long section_size;
   char* ptr = NULL;
   if (macho_options && macho_options->framework_name != NULL) {
-    ptr = getsectdatafromFramework(macho_options->framework_name, macho_options->segment_name, name, &section_size);
+    ptr = getsectdatafromFramework(macho_options->framework_name, segment_name, name, &section_size);
   } else {
-    const char* segment_name = "__POSTJECT";
-
-    if (macho_options && macho_options->segment_name != NULL) {
-      segment_name = macho_options->segment_name;
-    }
-
     ptr = getsectdata(segment_name, name, &section_size);
   }
-  *size = (size_t) section_size;
 
+  *size = (size_t) section_size;
   return ptr;
 #elif defined(__linux__)
   // TODO - Implement for ELF
