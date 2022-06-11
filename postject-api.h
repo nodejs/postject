@@ -46,7 +46,7 @@ static void* postject_find_resource(const char* name,
     name = options->macho_section_name;
   } else if (strncmp(name, "__", 2) != 0) {
     // Automatically prepend __ to match naming convention
-    section_name = (char*)malloc(strlen(name) + 2);
+    section_name = (char*)malloc(strlen(name) + 3);
     strcpy(section_name, "__");
     strcat(section_name, name);
   }
