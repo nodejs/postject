@@ -23,7 +23,9 @@ void postject_macho_options_init(struct MachOOptions* options) {
   options->segment_name = NULL;
 }
 
-void* postject_find_resource(const char* name, size_t* size, const struct MachOOptions* macho_options) {
+void* postject_find_resource(const char* name,
+                             size_t* size,
+                             const struct MachOOptions* macho_options) {
 #if defined(__APPLE__) && defined(__MACH__)
   const char* segment_name = "__POSTJECT";
 
@@ -34,17 +36,19 @@ void* postject_find_resource(const char* name, size_t* size, const struct MachOO
   unsigned long section_size;
   char* ptr = NULL;
   if (macho_options && macho_options->framework_name != NULL) {
-    ptr = getsectdatafromFramework(macho_options->framework_name, segment_name, name, &section_size);
+    ptr = getsectdatafromFramework(macho_options->framework_name, segment_name,
+                                   name, &section_size);
   } else {
     ptr = getsectdata(segment_name, name, &section_size);
   }
 
-  *size = (size_t) section_size;
+  *size = (size_t)section_size;
   return ptr;
 #elif defined(__linux__)
   // TODO - Implement for ELF
 #elif defined(_WIN32)
-  HRSRC resource_handle = FindResourceA(NULL, name, MAKEINTRESOURCEA(10) /* RT_RCDATA */);
+  HRSRC resource_handle =
+      FindResourceA(NULL, name, MAKEINTRESOURCEA(10) /* RT_RCDATA */);
 
   if (resource_handle) {
     HGLOBAL global_resource_handle = LoadResource(NULL, resource_handle);
