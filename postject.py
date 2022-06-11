@@ -218,7 +218,7 @@ def main():
             section_name = f"__{section_name}"
 
         if not inject_into_macho(filename, args.macho_segment_name, section_name, data, overwrite=args.overwrite):
-            print(f"Segment and section with that name already exists: {args.macho_segment_name}/{args.resource_name}")
+            print(f"Segment and section with that name already exists: {args.macho_segment_name}/{section_name}")
             print("Use --overwrite to overwrite the existing content")
             sys.exit(2)
     elif executable_format == ExecutableFormat.ELF:
@@ -228,7 +228,7 @@ def main():
             section_name = f".{section_name}"
 
         if not inject_into_elf(filename, section_name, data, overwrite=args.overwrite):
-            print(f"Section with that name already exists: {args.resource_name}")
+            print(f"Section with that name already exists: {section_name}")
             print("Use --overwrite to overwrite the existing content")
             sys.exit(2)
     elif executable_format == ExecutableFormat.PE:
