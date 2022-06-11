@@ -66,7 +66,6 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
     try:
         rcdata_node = next(iter(filter(lambda node: node.id == lief.PE.RESOURCE_TYPES.RCDATA.value, resources.childs)))
     except StopIteration:
-        # TODO - This is the final blocking part of the puzzle - if we create this ourselves, it doesn't work
         rcdata_node = lief.PE.ResourceDirectory()
         rcdata_node.id = lief.PE.RESOURCE_TYPES.RCDATA
 
