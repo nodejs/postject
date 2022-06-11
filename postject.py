@@ -53,6 +53,9 @@ def get_executable_format(filename):
 #
 # TODO - At the moment this isn't infinitely repeatable with overwrite=True,
 #        the executable becomes corrupted after a few runs
+#
+# TODO - Parsing and then simply writing back to disk corrupts Electron
+#        and causes it to crash on Linux
 def inject_into_elf(filename, section_name, data, overwrite=False):
     app = lief.parse(filename)
 
