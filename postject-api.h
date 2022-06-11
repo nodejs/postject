@@ -15,6 +15,18 @@
 #include <windows.h>
 #endif
 
+#if defined(__linux__)
+// NOTE - This needs to be a sentinel value, if it's initialized to
+//        NULL then it won't have a spot in the executable to change
+#define POSTJECT_SHT_PTR_SENTINEL 0000000001
+extern volatile void* POSTJECT_SHT_PTR;
+
+struct postject_elf_section {
+  uint64_t virtual_address;  // Don't use a pointer here, standardize size
+  uint32_t size;
+};
+#endif
+
 struct PostjectOptions {
   const char* elf_section_name;
   const char* macho_framework_name;
@@ -72,7 +84,39 @@ static void* postject_find_resource(const char* name,
 
   return ptr;
 #elif defined(__linux__)
-  // TODO - Implement for ELF
+  void* ptr = NULL;
+
+  if (POSTJECT_SHT_PTR != (void*)POSTJECT_SHT_PTR_SENTINEL) {
+    void* sht_ptr = (void*)POSTJECT_SHT_PTR;
+
+    // First read the section count
+    uint32_t section_count = *((uint32_t*)sht_ptr);
+    sht_ptr = (uint32_t*)sht_ptr + 1;
+
+    for (int i = 0; i < section_count; i++) {
+      // Read the section name as a null-terminated string
+      const char* section_name = (const char*)sht_ptr;
+      sht_ptr = (char*)sht_ptr + strlen(section_name) + 1;
+
+      // Then read the virtual_address (8 bytes)
+      uint64_t virtual_address = *((uint64_t*)sht_ptr);
+      sht_ptr = (uint64_t*)sht_ptr + 1;
+
+      // Finally read the section size (4 bytes)
+      uint32_t section_size = *((uint32_t*)sht_ptr);
+      sht_ptr = (uint32_t*)sht_ptr + 1;
+
+      if (strcmp(section_name, name) == 0) {
+        if (size != NULL) {
+          *size = (size_t)section_size;
+        }
+        ptr = (void*)virtual_address;
+        break;
+      }
+    }
+  }
+
+  return ptr;
 #elif defined(_WIN32)
   void* ptr = NULL;
   char* resource_name = NULL;
