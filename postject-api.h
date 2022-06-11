@@ -93,7 +93,7 @@ static void* postject_find_resource(const char* name,
     uint32_t section_count = *((uint32_t*)sht_ptr);
     sht_ptr = (uint32_t*)sht_ptr + 1;
 
-    for (int i = 0; i < section_count; i++) {
+    for (uint32_t i = 0; i < section_count; i++) {
       // Read the section name as a null-terminated string
       const char* section_name = (const char*)sht_ptr;
       sht_ptr = (char*)sht_ptr + strlen(section_name) + 1;
