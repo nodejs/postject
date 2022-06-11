@@ -1,0 +1,118 @@
+From 530353c7ddf0aae184a502a5b16c81f533813f32 Mon Sep 17 00:00:00 2001
+From: David Sanders <david.sanders@postman.com>
+Date: Fri, 10 Jun 2022 23:26:51 -0700
+Subject: [PATCH] Add API to remove a section from a sgement & section names
+
+---
+ api/python/MachO/objects/pyBinary.cpp | 13 +++++++++++++
+ include/LIEF/MachO/Binary.hpp         |  9 +++++++++
+ src/MachO/Binary.cpp                  | 16 ++++++++++++++++
+ tests/macho/test_builder.py           | 21 +++++++++++++++++++++
+ 4 files changed, 59 insertions(+)
+
+diff --git a/api/python/MachO/objects/pyBinary.cpp b/api/python/MachO/objects/pyBinary.cpp
+index 4ae8a45..d17f244 100644
+--- a/api/python/MachO/objects/pyBinary.cpp
++++ b/api/python/MachO/objects/pyBinary.cpp
+@@ -475,6 +475,19 @@ void create<Binary>(py::module& m) {
+         "Remove the " RST_CLASS_REF(lief.MachO.LoadCommand) " at the given ``index``",
+         "index"_a)
+ 
++    .def("remove_section",
++        static_cast<void (Binary::*)(const std::string&, bool)>(&Binary::remove_section),
++        "Remove the section with the given name",
++        "name"_a, "clear"_a = false)
++
++    .def("remove_section",
++        py::overload_cast<const std::string&, const std::string&, bool>(&Binary::remove_section),
++        R"delim(
++        Remove the section from the segment with the name
++        given in the first parameter and with the section's name provided in the
++        second parameter.)delim",
++        "segname"_a, "secname"_a, "clear"_a = false)
++
+     .def("remove_signature",
+         static_cast<bool (Binary::*)(void)>(&Binary::remove_signature),
+         "Remove the " RST_CLASS_REF(lief.MachO.CodeSignature) " (if any)")
+diff --git a/include/LIEF/MachO/Binary.hpp b/include/LIEF/MachO/Binary.hpp
+index aa93142..8fab011 100644
+--- a/include/LIEF/MachO/Binary.hpp
++++ b/include/LIEF/MachO/Binary.hpp
+@@ -267,6 +267,15 @@ class LIEF_API Binary : public LIEF::Binary  {
+   //! @param clear    If ``true`` clear the content of the section before removing
+   void remove_section(const std::string& name, bool clear = false) override;
+ 
++  //! Remove the section from the segment with the name
++  //! given in the first parameter and with the section's name provided in the
++  //! second parameter
++  //!
++  //! @param segname     Name of the MachO::Segment
++  //! @param secname     Name of the MachO::Section to remove
++  //! @param clear       If ``true`` clear the content of the section before removing
++  void remove_section(const std::string& segname, const std::string& secname, bool clear = false);
++
+   //! Remove the given LoadCommand
+   bool remove(const LoadCommand& command);
+ 
+diff --git a/src/MachO/Binary.cpp b/src/MachO/Binary.cpp
+index 84c99ad..ff4e80d 100644
+--- a/src/MachO/Binary.cpp
++++ b/src/MachO/Binary.cpp
+@@ -1329,6 +1329,22 @@ void Binary::remove_section(const std::string& name, bool clear) {
+     return;
+   }
+ 
++  remove_section(segment->name(), name, clear);
++}
++
++void Binary::remove_section(const std::string& segname, const std::string& secname, bool clear) {
++  Section* sec_to_delete = get_section(segname, secname);
++  if (sec_to_delete == nullptr) {
++    LIEF_ERR("Can't find section '{}' in segment '{}'", secname, segname);
++    return;
++  }
++  SegmentCommand* segment = sec_to_delete->segment();
++  if (segment == nullptr) {
++    LIEF_ERR("The section {} is in an inconsistent state (missing segment). Can't remove it",
++             sec_to_delete->name());
++    return;
++  }
++
+   if (clear) {
+     sec_to_delete->clear(0);
+   }
+diff --git a/tests/macho/test_builder.py b/tests/macho/test_builder.py
+index 15b3a14..bbad5d0 100644
+--- a/tests/macho/test_builder.py
++++ b/tests/macho/test_builder.py
+@@ -300,6 +300,27 @@ def test_remove_section(tmp_path):
+         print(stdout)
+         assert re.search(r'Hello World', stdout) is not None
+ 
++def test_remove_section_with_segment_name(tmp_path):
++    bin_path = pathlib.Path(get_sample("MachO/MachO64_x86-64_binary_section_to_remove.bin"))
++    original = lief.parse(bin_path.as_posix())
++    output = f"{tmp_path}/{bin_path.name}"
++
++    original.remove_section("__DATA", "__to_remove")
++
++    original.write(output)
++    new = lief.parse(output)
++
++    checked, err = lief.MachO.check_layout(new)
++    assert checked, err
++
++    assert new.get_section("__DATA", "__to_remove") is None
++
++    if is_osx():
++        assert run_program(bin_path.as_posix())
++        stdout = run_program(output)
++
++        print(stdout)
++        assert re.search(r'Hello World', stdout) is not None
+ 
+ def test_objc_arm64(tmp_path):
+     bin_path = pathlib.Path(get_sample("MachO/test_objc_arm64.macho"))
+-- 
+2.32.0 (Apple Git-132)
+

@@ -129,8 +129,7 @@ def inject_into_macho(filename, segment_name, section_name, data, overwrite=Fals
         if not overwrite:
             return False
 
-        # TODO - There doesn't appear to be a way to specify segment name, not great
-        app.remove_section(section_name, clear=True)
+        app.remove_section(segment_name, section_name, clear=True)
 
     # Create the section and mark it read-only
     segment = lief.MachO.SegmentCommand(segment_name)
