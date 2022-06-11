@@ -214,6 +214,7 @@ def main():
     if executable_format == ExecutableFormat.MACH_O:
         section_name = args.resource_name
 
+        # Mach-O section names are conventionally of the style __foo
         if not section_name.startswith("__"):
             section_name = f"__{section_name}"
 
@@ -224,6 +225,7 @@ def main():
     elif executable_format == ExecutableFormat.ELF:
         section_name = args.resource_name
 
+        # ELF section names are conventionally of the style .foo
         if not section_name.startswith("."):
             section_name = f".{section_name}"
 
