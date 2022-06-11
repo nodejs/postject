@@ -74,12 +74,21 @@ static void* postject_find_resource(const char* name,
 #elif defined(__linux__)
   // TODO - Implement for ELF
 #elif defined(_WIN32)
+  void* ptr = NULL;
+  char* resource_name = NULL;
+
   if (options != NULL && options->pe_resource_name != NULL) {
     name = options->pe_resource_name;
+  } else {
+    // Automatically uppercase the resource name or it won't be found
+    resource_name = (char*)malloc(strlen(name) + 1);
+    strcpy(resource_name, name);
+    CharUpperA(resource_name);  // Uppercases inplace
   }
 
   HRSRC resource_handle =
-      FindResourceA(NULL, name, MAKEINTRESOURCEA(10) /* RT_RCDATA */);
+      FindResourceA(NULL, resource_name != NULL ? resource_name : name,
+                    MAKEINTRESOURCEA(10) /* RT_RCDATA */);
 
   if (resource_handle) {
     HGLOBAL global_resource_handle = LoadResource(NULL, resource_handle);
@@ -89,11 +98,16 @@ static void* postject_find_resource(const char* name,
         *size = SizeofResource(NULL, resource_handle);
       }
 
-      return LockResource(global_resource_handle);
+      ptr = LockResource(global_resource_handle);
     }
   }
-#endif
 
+  if (resource_name != NULL) {
+    free(resource_name);
+  }
+
+  return ptr;
+#endif
   if (size != NULL) {
     *size = 0;
   }
