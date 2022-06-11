@@ -28,5 +28,5 @@ TODO
 ## Usage
 
 ```sh
-$ ./postject.py --macho-segment-name __ELECTRON /Users/dsanders/electron/src/out/Testing/Electron.app/Contents/Frameworks/Electron\ Framework.framework/Electron\ Framework __app_asar /Users/dsanders/test.asar
+$ ./postject.py --macho-segment-name __ELECTRON /Users/dsanders/electron/src/out/Testing/Electron.app/Contents/Frameworks/Electron\ Framework.framework/Electron\ Framework app_asar /Users/dsanders/test.asar
 ```
