@@ -23,7 +23,10 @@ $ python3 ./setup.py build -b ../../dist/lief -j 8
 
 ### Linux
 
-TODO
+```sh
+$ cd vendor/lief
+$ python3 ./setup.py [--ninja] build_ext -b ../../dist/lief
+```
 
 ## Usage
 
