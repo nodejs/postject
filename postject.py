@@ -212,14 +212,22 @@ def main():
     data = list(args.resource.read())
 
     if executable_format == ExecutableFormat.MACH_O:
-        if not inject_into_macho(
-            filename, args.macho_segment_name, args.resource_name, data, overwrite=args.overwrite
-        ):
+        section_name = args.resource_name
+
+        if not section_name.startswith("__"):
+            section_name = f"__{section_name}"
+
+        if not inject_into_macho(filename, args.macho_segment_name, section_name, data, overwrite=args.overwrite):
             print(f"Segment and section with that name already exists: {args.macho_segment_name}/{args.resource_name}")
             print("Use --overwrite to overwrite the existing content")
             sys.exit(2)
     elif executable_format == ExecutableFormat.ELF:
-        if not inject_into_elf(filename, args.resource_name, data, overwrite=args.overwrite):
+        section_name = args.resource_name
+
+        if not section_name.startswith("."):
+            section_name = f".{section_name}"
+
+        if not inject_into_elf(filename, section_name, data, overwrite=args.overwrite):
             print(f"Section with that name already exists: {args.resource_name}")
             print("Use --overwrite to overwrite the existing content")
             sys.exit(2)
