@@ -27,7 +27,7 @@ struct postject_elf_section {
 };
 #endif
 
-struct PostjectOptions {
+struct postject_options {
   const char* elf_section_name;
   const char* macho_framework_name;
   const char* macho_section_name;
@@ -35,7 +35,7 @@ struct PostjectOptions {
   const char* pe_resource_name;
 };
 
-static void postject_options_init(struct PostjectOptions* options) {
+static void postject_options_init(struct postject_options* options) {
   options->elf_section_name = NULL;
   options->macho_framework_name = NULL;
   options->macho_section_name = NULL;
@@ -45,7 +45,7 @@ static void postject_options_init(struct PostjectOptions* options) {
 
 static void* postject_find_resource(const char* name,
                                     size_t* size,
-                                    const struct PostjectOptions* options) {
+                                    const struct postject_options* options) {
 #if defined(__APPLE__) && defined(__MACH__)
   char* section_name = NULL;
   const char* segment_name = "__POSTJECT";
@@ -93,7 +93,8 @@ static void* postject_find_resource(const char* name,
     uint32_t section_count = *((uint32_t*)sht_ptr);
     sht_ptr = (uint32_t*)sht_ptr + 1;
 
-    for (uint32_t i = 0; i < section_count; i++) {
+    uint32_t i;
+    for (i = 0; i < section_count; i++) {
       // Read the section name as a null-terminated string
       const char* section_name = (const char*)sht_ptr;
       sht_ptr = (char*)sht_ptr + strlen(section_name) + 1;
