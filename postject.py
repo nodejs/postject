@@ -93,7 +93,6 @@ def inject_into_elf(filename, section_name, data, overwrite=False):
     #   * section size (uint32)
     postject_sht = app.get_section("postject_sht")
 
-    # TODO - This hasn't been thoroughly tested, may have bugs
     if postject_sht:
         contents = postject_sht.content
 
