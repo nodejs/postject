@@ -170,18 +170,20 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
 
     resources = app.resources
 
-    add_rcdata_node = False
-    add_id_node = False
-    add_lang_node = False
-
     # First level => Type (ResourceDirectory node)
     try:
         rcdata_node = next(iter(filter(lambda node: node.id == lief.PE.RESOURCE_TYPES.RCDATA.value, resources.childs)))
     except StopIteration:
         rcdata_node = lief.PE.ResourceDirectory()
         rcdata_node.id = lief.PE.RESOURCE_TYPES.RCDATA
+        rcdata_node = resources.add_directory_node(rcdata_node)
 
-        add_rcdata_node = True
+        # TODO - This isn't documented, but if this isn't done things don't work
+        #        as expected. It seems that standard order for resources in PE
+        #        is to be sorted by ID, and if they're not, Windows APIs don't
+        #        seem to work as expected. Was not able to find this documented
+        #        for the PE format itself.
+        resources.sort_by_id()
 
     # Second level => ID (ResourceDirectory node)
     try:
@@ -192,39 +194,21 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
         # TODO - This isn't documented, but if this isn't set then LIEF won't save the name. Seems
         #        like LIEF should be able to automatically handle this if you've set the node's name
         id_node.id = 0x80000000
-
-        add_id_node = True
+        id_node = rcdata_node.add_directory_node(id_node)
 
     # Third level => Lang (ResourceData node)
     try:
         lang_node = id_node.childs[0]
     except IndexError:
         lang_node = lief.PE.ResourceData()
-
-        add_lang_node = True
     else:
         if not overwrite:
             return False
+
+        id_node.delete_child(lang_node)
     finally:
         lang_node.content = data
-
-    # These annoyingly need to be added in reverse order,
-    # since updating one after it's been added has no effect
-    if add_lang_node:
-        id_node.add_data_node(lang_node)
-
-    if add_id_node:
-        rcdata_node.add_directory_node(id_node)
-
-    if add_rcdata_node:
-        resources.add_directory_node(rcdata_node)
-
-        # TODO - This isn't documented, but if this isn't done things don't work
-        #        as expected. It seems that standard order for resources in PE
-        #        is to be sorted by ID, and if they're not, Windows APIs don't
-        #        seem to work as expected. Was not able to find this documented
-        #        for the PE format itself.
-        resources.sort_by_id()
+        lang_node = id_node.add_data_node(lang_node)
 
     app.write(filename)
 
