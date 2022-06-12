@@ -59,6 +59,9 @@ static void* postject_find_resource(const char* name,
   } else if (strncmp(name, "__", 2) != 0) {
     // Automatically prepend __ to match naming convention
     section_name = (char*)malloc(strlen(name) + 3);
+    if (section_name == NULL) {
+      return NULL;
+    }
     strcpy(section_name, "__");
     strcat(section_name, name);
   }
@@ -127,6 +130,9 @@ static void* postject_find_resource(const char* name,
   } else {
     // Automatically uppercase the resource name or it won't be found
     resource_name = (char*)malloc(strlen(name) + 1);
+    if (resource_name == NULL) {
+      return NULL;
+    }
     strcpy(resource_name, name);
     CharUpperA(resource_name);  // Uppercases inplace
   }
