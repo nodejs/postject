@@ -267,6 +267,15 @@ class LIEF_API Binary : public LIEF::Binary  {
   //! @param clear    If ``true`` clear the content of the section before removing
   void remove_section(const std::string& name, bool clear = false) override;
 
+  //! Remove the section from the segment with the name
+  //! given in the first parameter and with the section's name provided in the
+  //! second parameter
+  //!
+  //! @param segname     Name of the MachO::Segment
+  //! @param secname     Name of the MachO::Section to remove
+  //! @param clear       If ``true`` clear the content of the section before removing
+  void remove_section(const std::string& segname, const std::string& secname, bool clear = false);
+
   //! Remove the given LoadCommand
   bool remove(const LoadCommand& command);
 
@@ -312,9 +321,9 @@ class LIEF_API Binary : public LIEF::Binary  {
   //! Return the section from the segment with the name
   //! given in the first parameter and with the section's name provided in the
   //! second parameter. If the section cannot be found, it returns a nullptr
-  Section* get_section(const std::string& sgname, const std::string& secname);
+  Section* get_section(const std::string& segname, const std::string& secname);
 
-  const Section* get_section(const std::string& sgname, const std::string& secname) const;
+  const Section* get_section(const std::string& segname, const std::string& secname) const;
 
   //! Check if a segment with the given name exists
   bool has_segment(const std::string& name) const;
