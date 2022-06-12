@@ -209,7 +209,37 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
         lang_node.content = data
         lang_node = id_node.add_data_node(lang_node)
 
-    app.write(filename)
+    app.remove_section(".rsrc", clear=True)
+
+    # Write out the binary, only modifying the resources
+    builder = lief.PE.Builder(app)
+    builder.build_dos_stub(True)
+    builder.build_imports(False)
+    builder.build_overlay(False)
+    builder.build_relocations(False)
+    builder.build_resources(True)
+    builder.build_tls(False)
+    builder.build()
+
+    # TODO - Why doesn't LIEF just replace the .rsrc section?
+    #        Can we at least change build_resources to take a section name?
+
+    # Re-parse the output so the .l2 section is available
+    app = lief.parse(builder.get_build())
+
+    # Rename the rebuilt resource section
+    section = app.get_section(".l2")
+    section.name = ".rsrc"
+
+    builder = lief.PE.Builder(app)
+    builder.build_dos_stub(True)
+    builder.build_imports(False)
+    builder.build_overlay(False)
+    builder.build_relocations(False)
+    builder.build_resources(False)
+    builder.build_tls(False)
+    builder.build()
+    builder.write(filename)
 
     return True
 
