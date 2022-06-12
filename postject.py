@@ -57,7 +57,7 @@ def get_executable_format(filename):
 # TODO - Parsing and then simply writing back to disk corrupts Electron
 #        and causes it to crash on Linux
 def inject_into_elf(filename, section_name, data, overwrite=False):
-    app = lief.parse(filename)
+    app = lief.ELF.parse(filename)
 
     struct_endian_char = ">"
 
@@ -163,7 +163,7 @@ def inject_into_elf(filename, section_name, data, overwrite=False):
 
 
 def inject_into_pe(filename, resource_name, data, overwrite=False):
-    app = lief.parse(filename)
+    app = lief.PE.parse(filename)
 
     # TODO - lief.PE.ResourcesManager doesn't support RCDATA it seems, add support so this is simpler
 
@@ -245,7 +245,7 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
 
 
 def inject_into_macho(filename, segment_name, section_name, data, overwrite=False):
-    app = lief.parse(filename)
+    app = lief.MachO.parse(filename)
 
     existing_section = app.get_section(segment_name, section_name)
 
