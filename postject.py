@@ -291,7 +291,7 @@ def main():
     parser.add_argument(
         "resource_name",
         type=str,
-        help="The resource name to use (section name on MachO and ELF, resource name for PE)",
+        help="The resource name to use (section name on Mach-O and ELF, resource name for PE)",
     )
     parser.add_argument(
         "resource",
@@ -302,7 +302,7 @@ def main():
         "--macho-segment-name",
         type=str,
         default="__POSTJECT",
-        help="Name for the MachO segment (default: __POSTJECT)",
+        help="Name for the Mach-O segment (default: __POSTJECT)",
     )
     parser.add_argument(
         "--overwrite",
@@ -330,7 +330,7 @@ def main():
     executable_format = get_executable_format(filename)
 
     if not executable_format:
-        print("Executable must be a supported format: ELF, PE, or MachO")
+        print("Executable must be a supported format: ELF, PE, or Mach-O")
         sys.exit(1)
 
     data = list(args.resource.read())
