@@ -245,36 +245,38 @@ def inject_into_pe(filename, resource_name, data, overwrite=False):
 
 
 def inject_into_macho(filename, segment_name, section_name, data, overwrite=False):
-    app = lief.MachO.parse(filename)
+    fat_binary = lief.MachO.parse(filename)
 
-    existing_section = app.get_section(segment_name, section_name)
+    # Inject into all Mach-O binaries if there's more than one in a fat binary
+    for app in fat_binary:
+        existing_section = app.get_section(segment_name, section_name)
 
-    if existing_section:
-        if not overwrite:
-            return False
+        if existing_section:
+            if not overwrite:
+                return False
 
-        app.remove_section(segment_name, section_name, clear=True)
+            app.remove_section(segment_name, section_name, clear=True)
 
-    # Create the section and mark it read-only
-    segment = lief.MachO.SegmentCommand(segment_name)
-    segment.max_protection = lief.MachO.VM_PROTECTIONS.READ
-    segment.init_protection = lief.MachO.VM_PROTECTIONS.READ
+        # Create the section and mark it read-only
+        segment = lief.MachO.SegmentCommand(segment_name)
+        segment.max_protection = lief.MachO.VM_PROTECTIONS.READ
+        segment.init_protection = lief.MachO.VM_PROTECTIONS.READ
 
-    # TODO - Apple says a segment needs to be a multiple of 4096, but LIEF seems to
-    # be creating a segment which matches the section size, which is way smaller? It
-    # all seems to work correctly, but the discrepancy might cause other problems,
-    # so we should try to fix this in LIEF
-    #
-    # segment.virtual_size = 0x4000
-    # segment.file_size = segment.virtual_size - len(data)
+        # TODO - Apple says a segment needs to be a multiple of 4096, but LIEF seems to
+        # be creating a segment which matches the section size, which is way smaller? It
+        # all seems to work correctly, but the discrepancy might cause other problems,
+        # so we should try to fix this in LIEF
+        #
+        # segment.virtual_size = 0x4000
+        # segment.file_size = segment.virtual_size - len(data)
 
-    section = lief.MachO.Section(section_name, data)
-    segment.add_section(section)
-    app.add(segment)
+        section = lief.MachO.Section(section_name, data)
+        segment.add_section(section)
+        app.add(segment)
 
-    # It will need to be signed again anyway, so remove the signature
-    app.remove_signature()
-    app.write(filename)
+        # It will need to be signed again anyway, so remove the signature
+        app.remove_signature()
+        app.write(filename)
 
     return True
 
