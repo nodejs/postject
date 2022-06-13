@@ -8,6 +8,7 @@
 #include <string.h>
 
 #if defined(__APPLE__) && defined(__MACH__)
+#include <mach-o/dyld.h>
 #include <mach-o/getsect.h>
 #elif defined(__linux__)
 #include <link.h>
@@ -83,6 +84,12 @@ static void* postject_find_resource(const char* name,
 
   if (size != NULL) {
     *size = (size_t)section_size;
+  }
+
+  if (ptr != NULL) {
+    // Add the "virtual memory address slide" amount to ensure a valid pointer
+    // in cases where the virtual memory address have been adjusted by the OS
+    ptr += _dyld_get_image_vmaddr_slide(0);
   }
 
   return ptr;
