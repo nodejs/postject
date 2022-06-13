@@ -12,20 +12,11 @@
 #include <mach-o/getsect.h>
 #elif defined(__linux__)
 #include <link.h>
+#include <elf.h>
+#include <fcntl.h>
+#include <unistd.h>
 #elif defined(_WIN32)
 #include <windows.h>
-#endif
-
-#if defined(__linux__)
-// NOTE - This needs to be a sentinel value, if it's initialized to
-//        NULL then it won't have a spot in the executable to change
-#define POSTJECT_SHT_PTR_SENTINEL 0000000001
-extern volatile void* _binary_postject_sht_start;
-
-struct postject_elf_section {
-  uint64_t virtual_address;  // Don't use a pointer here, standardize size
-  uint32_t size;
-};
 #endif
 
 struct postject_options {
@@ -102,48 +93,50 @@ static const void* postject_find_resource(const char* name,
   return ptr;
 #elif defined(__linux__)
   void* ptr = NULL;
+  int fd, i;
+#if defined(__LP64__)
+  Elf64_Ehdr e;
+  Elf64_Shdr s;
+#else
+  Elf32_Ehdr e;
+  Elf32_Shdr s;
+#endif
+  char *strs;
+
+  if (options != NULL && options->elf_section_name != NULL) {
+    name = options->elf_section_name;
+  }
 
   // This executable might be a Position Independent Executable (PIE), so
   // the virtual address values need to be added to the relocation address
   uintptr_t relocation_addr = _r_debug.r_map->l_addr;
 
-  if (_binary_postject_sht_start != (void*)POSTJECT_SHT_PTR_SENTINEL) {
-#if defined(__POSTJECT_NO_SHT_PTR)
-    void* sht_ptr = (void*)&_binary_postject_sht_start;
-#else
-    void* sht_ptr =
-        (void*)(relocation_addr + (uintptr_t)_binary_postject_sht_start);
-#endif
-
-    // First read the section count
-    uint32_t section_count = *((uint32_t*)sht_ptr);
-    sht_ptr = (uint32_t*)sht_ptr + 1;
-
-    uint32_t i;
-    for (i = 0; i < section_count; i++) {
-      // Read the section name as a null-terminated string
-      const char* section_name = (const char*)sht_ptr;
-      sht_ptr = (char*)sht_ptr + strlen(section_name) + 1;
-
-      // Then read the virtual_address (8 bytes)
-      uint64_t virtual_address = *((uint64_t*)sht_ptr);
-      sht_ptr = (uint64_t*)sht_ptr + 1;
-
-      // Finally read the section size (4 bytes)
-      uint32_t section_size = *((uint32_t*)sht_ptr);
-      sht_ptr = (uint32_t*)sht_ptr + 1;
-
-      if (strcmp(section_name, name) == 0) {
-        if (size != NULL) {
-          *size = (size_t)section_size;
+  if ((fd = open("/proc/self/exe", O_RDONLY, 0)) != -1) {
+    if (read(fd, &e, sizeof(e)) == sizeof(e)) {
+      lseek(fd, e.e_shoff + (e.e_shstrndx * e.e_shentsize), SEEK_SET);
+      if (read(fd, &s, sizeof(s)) == sizeof(s)) {
+        strs = (char *)malloc(s.sh_size);
+        lseek(fd, s.sh_offset, SEEK_SET);
+        if (read(fd, strs, s.sh_size) == s.sh_size) {
+          for (i = 0; i < e.e_shnum; i++) {
+            lseek(fd, e.e_shoff + (i * e.e_shentsize), SEEK_SET);
+            if (read(fd, &s, sizeof(s)) != sizeof(s)) {
+              break;
+            }
+            if ((!strcmp(strs + s.sh_name, name)) && (s.sh_type == SHT_PROGBITS)) {
+              ptr = (void*)(relocation_addr + (uintptr_t)s.sh_addr);
+              *size = s.sh_size;
+              break;
+             }
+          }
         }
-        ptr = (void*)(relocation_addr + (uintptr_t)virtual_address);
-        break;
+        free(strs);
       }
     }
+    close(fd);
   }
-
   return ptr;
+
 #elif defined(_WIN32)
   void* ptr = NULL;
   char* resource_name = NULL;
