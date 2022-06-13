@@ -3,8 +3,8 @@
 
 #include "postject-api.h"
 
-#if defined(__linux__)
-volatile void* POSTJECT_SHT_PTR = (void*)POSTJECT_SHT_PTR_SENTINEL;
+#if defined(__linux__) && !defined(__POSTJECT_NO_SHT_PTR)
+volatile void* _binary_postject_sht_start = (void*)POSTJECT_SHT_PTR_SENTINEL;
 #endif
 
 int main() {
@@ -16,7 +16,6 @@ int main() {
   } else {
     std::cout << "Hello world" << std::endl;
   }
-
 
   return 0;
 }

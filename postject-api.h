@@ -10,7 +10,7 @@
 #if defined(__APPLE__) && defined(__MACH__)
 #include <mach-o/getsect.h>
 #elif defined(__linux__)
-#include <elf.h>
+#include <link.h>
 #elif defined(_WIN32)
 #include <windows.h>
 #endif
@@ -19,7 +19,7 @@
 // NOTE - This needs to be a sentinel value, if it's initialized to
 //        NULL then it won't have a spot in the executable to change
 #define POSTJECT_SHT_PTR_SENTINEL 0000000001
-extern volatile void* POSTJECT_SHT_PTR;
+extern volatile void* _binary_postject_sht_start;
 
 struct postject_elf_section {
   uint64_t virtual_address;  // Don't use a pointer here, standardize size
@@ -89,8 +89,17 @@ static void* postject_find_resource(const char* name,
 #elif defined(__linux__)
   void* ptr = NULL;
 
-  if (POSTJECT_SHT_PTR != (void*)POSTJECT_SHT_PTR_SENTINEL) {
-    void* sht_ptr = (void*)POSTJECT_SHT_PTR;
+  // This executable might be a Position Independent Executable (PIE), so
+  // the virtual address values need to be added to the relocation address
+  uintptr_t relocation_addr = _r_debug.r_map->l_addr;
+
+  if (_binary_postject_sht_start != (void*)POSTJECT_SHT_PTR_SENTINEL) {
+#if defined(__POSTJECT_NO_SHT_PTR)
+    void* sht_ptr = (void*)&_binary_postject_sht_start;
+#else
+    void* sht_ptr =
+        (void*)(relocation_addr + (uintptr_t)_binary_postject_sht_start);
+#endif
 
     // First read the section count
     uint32_t section_count = *((uint32_t*)sht_ptr);
@@ -114,7 +123,7 @@ static void* postject_find_resource(const char* name,
         if (size != NULL) {
           *size = (size_t)section_size;
         }
-        ptr = (void*)virtual_address;
+        ptr = (void*)(relocation_addr + (uintptr_t)virtual_address);
         break;
       }
     }

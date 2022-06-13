@@ -148,7 +148,7 @@ def inject_into_elf(filename, section_name, data, overwrite=False):
 
     # Find the symbol for our SHT pointer and update the value
     for symbol in app.symbols:
-        if symbol.demangled_name == "POSTJECT_SHT_PTR":
+        if symbol.demangled_name == "_binary_postject_sht_start":
             symbol_found = True
             app.patch_address(symbol.value, postject_sht.virtual_address)
             break
