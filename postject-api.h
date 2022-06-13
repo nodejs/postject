@@ -47,6 +47,11 @@ static void postject_options_init(struct postject_options* options) {
 static void* postject_find_resource(const char* name,
                                     size_t* size,
                                     const struct postject_options* options) {
+  // Always zero out the size pointer to start
+  if (size != NULL) {
+    *size = 0;
+  }
+
 #if defined(__APPLE__) && defined(__MACH__)
   char* section_name = NULL;
   const char* segment_name = "__POSTJECT";
@@ -174,12 +179,9 @@ static void* postject_find_resource(const char* name,
   }
 
   return ptr;
-#endif
-  if (size != NULL) {
-    *size = 0;
-  }
-
+#else
   return NULL;
+#endif
 }
 
 #endif  // POSTJECT_API_H_
