@@ -14,24 +14,22 @@ $ cd vendor\lief
 $ python3 ./setup.py --ninja build_ext -b ..\..\dist\lief
 ```
 
-### macOS
+### macOS / Linux
 
 ```sh
-$ cd vendor/lief
-$ python3 ./setup.py build -b ../../dist/lief -j 8
-```
-
-### Linux
-
-```sh
-$ cd vendor/lief
-$ python3 ./setup.py [--ninja] build_ext -b ../../dist/lief
+$ make lief
 ```
 
 ## Usage
 
 ```sh
 $ ./postject.py --macho-segment-name __ELECTRON /Users/dsanders/electron/src/out/Testing/Electron.app/Contents/Frameworks/Electron\ Framework.framework/Electron\ Framework app_asar /Users/dsanders/test.asar
+```
+
+### Testing
+
+```sh
+$ make check
 ```
 
 ## Design
