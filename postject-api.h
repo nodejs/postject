@@ -81,6 +81,16 @@ static void* postject_find_resource(const char* name,
   } else {
     ptr = getsectdata(segment_name, section_name != NULL ? section_name : name,
                       &section_size);
+
+    if (ptr != NULL) {
+      // Add the "virtual memory address slide" amount to ensure a valid pointer
+      // in cases where the virtual memory address have been adjusted by the OS.
+      //
+      // NOTE - `getsectdataFromFramework` already handles this adjustment for us,
+      //        which is why we only do it for `getsectdata`, see:
+      //        https://web.archive.org/web/20220613234007/https://opensource.apple.com/source/cctools/cctools-590/libmacho/getsecbyname.c.auto.html
+      ptr += _dyld_get_image_vmaddr_slide(0);
+    }
   }
 
   if (section_name != NULL) {
@@ -89,12 +99,6 @@ static void* postject_find_resource(const char* name,
 
   if (size != NULL) {
     *size = (size_t)section_size;
-  }
-
-  if (ptr != NULL) {
-    // Add the "virtual memory address slide" amount to ensure a valid pointer
-    // in cases where the virtual memory address have been adjusted by the OS
-    ptr += _dyld_get_image_vmaddr_slide(0);
   }
 
   return ptr;
