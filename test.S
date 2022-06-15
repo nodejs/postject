@@ -14,8 +14,8 @@ name_end:
 desc:
   .long rname_end - rname  // rnamesz
 rname:
-  .asciz "barbar"  // rname - Customize this to what you want
+  .asciz "foobar"  // Customize this to what you want
 rname_end:
-  .incbin "foo.txt"  // resoource content
+  .incbin "foo.txt"  // resource content
 desc_end:
   .size POSTJECT_NOTE, .-POSTJECT_NOTE
