@@ -1,7 +1,7 @@
 // This is modeled after
 // https://source.chromium.org/chromium/chromium/src/+/main:third_party/crashpad/crashpad/client/crashpad_info_note.S;drc=8371af273f35eb989520360435fb81a730d6a593
 
-  .section .note.crashpad.resource,"a",%note
+  .section .note.postject.resource,"a",%note
   .balign 4
 POSTJECT_NOTE:
   .long name_end - name  // namesz
