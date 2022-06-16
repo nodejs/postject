@@ -93,9 +93,7 @@ static void* postject_find_resource(const char* name,
     }
   }
 
-  if (section_name != NULL) {
-    free(section_name);
-  }
+  free(section_name);
 
   if (size != NULL) {
     *size = (size_t)section_size;
@@ -178,9 +176,7 @@ static void* postject_find_resource(const char* name,
     }
   }
 
-  if (resource_name != NULL) {
-    free(resource_name);
-  }
+  free(resource_name);
 
   return ptr;
 #else
