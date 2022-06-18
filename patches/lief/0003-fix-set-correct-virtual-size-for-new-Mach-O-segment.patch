@@ -1,0 +1,51 @@
+From c8ca3fb65b51f420604173bd9e6c36d9438e793a Mon Sep 17 00:00:00 2001
+From: David Sanders <david.sanders@postman.com>
+Date: Fri, 17 Jun 2022 20:45:21 -0700
+Subject: [PATCH] fix: set correct virtual size for new Mach-O segment
+
+---
+ src/MachO/Binary.cpp        |  2 +-
+ tests/macho/test_generic.py | 17 +++++++++++++++++
+ 2 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/src/MachO/Binary.cpp b/src/MachO/Binary.cpp
+index 499a2c0..3130655 100644
+--- a/src/MachO/Binary.cpp
++++ b/src/MachO/Binary.cpp
+@@ -1621,7 +1621,7 @@ LoadCommand* Binary::add(const SegmentCommand& segment) {
+   LIEF_DEBUG(" -> virtual address: 0x{:06x}", lnk_va);
+ 
+   segment_added->virtual_address(lnk_va);
+-  segment_added->virtual_size(segment_added->file_size());
++  segment_added->virtual_size(segment_added->virtual_size());
+   size_t current_va = segment_added->virtual_address();
+   for (Section& section : segment_added->sections()) {
+     section.virtual_address(current_va);
+diff --git a/tests/macho/test_generic.py b/tests/macho/test_generic.py
+index 9a38cb8..9c2bc41 100644
+--- a/tests/macho/test_generic.py
++++ b/tests/macho/test_generic.py
+@@ -242,3 +242,20 @@ def test_segment_add_section():
+         assert segment.has_section(section.name)
+         assert segment.has(section)
+         assert section in segment.sections
++
++
++def test_issue_728():
++    x86_64_binary = lief.parse(get_sample('MachO/MachO64_x86-64_binary_safaridriver.bin'))
++    arm64_binary = lief.MachO.parse(get_sample('MachO/FAT_MachO_arm-arm64-binary-helloworld.bin')).take(lief.MachO.CPU_TYPES.ARM64)
++
++    segment = lief.MachO.SegmentCommand("__FOO")
++    segment.add_section(lief.MachO.Section("__bar", [1, 2, 3]))
++
++    for parsed in (x86_64_binary, arm64_binary):
++        if parsed.header.cpu_type == lief.MachO.CPU_TYPES.x86_64:
++            expected_virtual_size = 0x1000
++        elif parsed.header.cpu_type == lief.MachO.CPU_TYPES.ARM64:
++            expected_virtual_size = 0x4000
++
++        new_segment = parsed.add(segment)
++        assert new_segment.virtual_size == expected_virtual_size
+-- 
+2.32.0 (Apple Git-132)
+
