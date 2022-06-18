@@ -257,10 +257,18 @@ def inject_into_macho(filename, segment_name, section_name, data, overwrite=Fals
 
             app.remove_section(segment_name, section_name, clear=True)
 
-        # Create the section and mark it read-only
-        segment = lief.MachO.SegmentCommand(segment_name)
-        segment.max_protection = lief.MachO.VM_PROTECTIONS.READ
-        segment.init_protection = lief.MachO.VM_PROTECTIONS.READ
+        segment = app.get_segment(segment_name)
+        section = lief.MachO.Section(section_name, data)
+
+        if not segment:
+            # Create the segment and mark it read-only
+            segment = lief.MachO.SegmentCommand(segment_name)
+            segment.max_protection = lief.MachO.VM_PROTECTIONS.READ
+            segment.init_protection = lief.MachO.VM_PROTECTIONS.READ
+            segment.add_section(section)
+            app.add(segment)
+        else:
+            segment.add_section(section)
 
         # TODO - Apple says a segment needs to be a multiple of 4096, but LIEF seems to
         # be creating a segment which matches the section size, which is way smaller? It
@@ -269,10 +277,6 @@ def inject_into_macho(filename, segment_name, section_name, data, overwrite=Fals
         #
         # segment.virtual_size = 0x4000
         # segment.file_size = segment.virtual_size - len(data)
-
-        section = lief.MachO.Section(section_name, data)
-        segment.add_section(section)
-        app.add(segment)
 
         # It will need to be signed again anyway, so remove the signature
         app.remove_signature()
