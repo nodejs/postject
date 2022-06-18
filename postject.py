@@ -268,7 +268,7 @@ def inject_into_macho(filename, segment_name, section_name, data, overwrite=Fals
             segment.add_section(section)
             app.add(segment)
         else:
-            segment.add_section(section)
+            app.add_section(segment, section)
 
         # TODO - Apple says a segment needs to be a multiple of 4096, but LIEF seems to
         # be creating a segment which matches the section size, which is way smaller? It
