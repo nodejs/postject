@@ -9,7 +9,7 @@ volatile void* _binary_postject_sht_start = (void*)POSTJECT_SHT_PTR_SENTINEL;
 
 int main() {
   size_t size;
-  void* ptr = postject_find_resource("foobar", &size, NULL);
+  const void* ptr = postject_find_resource("foobar", &size, NULL);
 
   if (ptr && size > 0) {
     char* str = (char*)malloc(size + 1);

@@ -44,7 +44,7 @@ static void postject_options_init(struct postject_options* options) {
   options->pe_resource_name = NULL;
 }
 
-static void* postject_find_resource(const char* name,
+static const void* postject_find_resource(const char* name,
                                     size_t* size,
                                     const struct postject_options* options) {
   // Always zero out the size pointer to start
