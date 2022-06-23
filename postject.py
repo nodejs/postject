@@ -59,19 +59,21 @@ def get_executable_format(filename):
 def inject_into_elf(filename, section_name, data, overwrite=False):
     app = lief.ELF.parse(filename)
 
-    existing_section = app.get_section(section_name)
+    existing_section = None
+    for note in app.notes:
+        if note.name == section_name:
+            existing_section = note
 
     if existing_section:
         if not overwrite:
             return False
 
-        app.remove_section(section_name, clear=True)
+        app.remove(note)
 
-    section = lief.ELF.Section()
-    section.name = section_name
-    section.content = data
-    section.add(lief.ELF.SECTION_FLAGS.ALLOC) # Ensure it's loaded into memory
-    section = app.add(section, loaded=True)
+    note = lief.ELF.Note()
+    note.name = section_name
+    note.description = data
+    note = app.add(note)
 
     app.write(filename)
 
