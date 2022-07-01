@@ -1,0 +1,116 @@
+version: 2.1
+
+common_parameters: &common_parameters
+  os:
+    type: enum
+    enum: [ alpine, debian, linux ]
+
+## EXECUTORS ##
+
+executors:
+  alpine:
+    resource_class: medium
+    docker:
+      - image: docker.io/library/alpine:3.16
+
+  debian:
+    resource_class: medium
+    docker:
+      - image: docker.io/library/debian:11
+
+  linux:
+    resource_class: medium
+    machine:
+      image: ubuntu-2004:202101-01
+
+## COMMANDS ##
+
+commands:
+  prepare:
+    parameters:
+      <<: *common_parameters
+    steps:
+      # NOTE: minimal effort to allow moving most conditionals out of ci config
+      - when:
+          condition:
+            equal: [ alpine, << parameters.os >> ]
+          steps:
+            - run: apk add -U make
+
+      - when:
+          condition:
+            or:
+              - equal: [ debian, << parameters.os >> ]
+              - equal: [ linux, << parameters.os >> ]
+          steps:
+            - run: apt-get update -y && apt-get install -y make
+
+      - run: make install-deps EXECUTOR=<< parameters.os >>
+
+  build:
+    steps:
+      - run:
+          # NOTE: the circle ci container executor reports the memory/cpu stats
+          # of the host machine (https://ideas.circleci.com/ideas/CCI-I-578),
+          # `nproc` will return 36 on docker/medium resource_class,
+          # ninja parallelizes accordingly, which leads to overloading
+          # and circleci eventually terminating the builds:
+          #
+          # ninja: job failed: /usr/bin/c++ [...]
+          # c++: fatal error: Killed signal terminated program cc1plus
+          # compilation terminated
+          #
+          # force overwrite job count here:
+          command: make lief JOBS=3
+
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/lief
+
+  test:
+    steps:
+      - attach_workspace:
+          at: .
+
+      - run: make check
+
+## JOBS ##
+
+jobs:
+  build:
+    parameters:
+      <<: *common_parameters
+    executor: { name: << parameters.os >> }
+    steps:
+      - checkout
+      - prepare:
+          os: << parameters.os >>
+      - build
+  
+  test:
+    parameters:
+      <<: *common_parameters
+    executor: { name: << parameters.os >> }
+    steps:
+      - checkout
+      - prepare:
+          os: << parameters.os >>
+      - test
+
+## WORKFLOWS ##
+
+matrix: &matrix
+  matrix:
+    parameters:
+      os: [ alpine, debian ]
+
+workflows:
+  postject:
+    jobs:
+      - build:
+          <<: *matrix
+      - test:
+          <<: *matrix
+          requires: [ build-<<matrix.os>> ]
+
