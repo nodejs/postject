@@ -87,6 +87,12 @@ jobs:
       - prepare:
           os: << parameters.os >>
       - build
+      - store_artifacts:
+          path: dist
+      - store_artifacts:
+          path: postject-api.h
+      - store_artifacts:
+          path: postject.py
   
   test:
     parameters:
