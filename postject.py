@@ -59,103 +59,21 @@ def get_executable_format(filename):
 def inject_into_elf(filename, section_name, data, overwrite=False):
     app = lief.ELF.parse(filename)
 
-    struct_endian_char = ">"
-
-    if app.header.identity_data == lief.ELF.ELF_DATA.LSB:
-        struct_endian_char = "<"
-
-    existing_section = app.get_section(section_name)
+    existing_section = None
+    for note in app.notes:
+        if note.name == section_name:
+            existing_section = note
 
     if existing_section:
         if not overwrite:
             return False
 
-        app.remove_section(section_name, clear=True)
+        app.remove(note)
 
-    # Create the new section we're injecting
-    section = lief.ELF.Section()
-    section.name = section_name
-    section.content = data
-    section.add(lief.ELF.SECTION_FLAGS.ALLOC)  # Ensure it's loaded into memory
-
-    # Important to use the return value to get the updated
-    # information like the virtual address, LIEF is returning
-    # a separate object instead of updating the existing one
-    section = app.add(section)
-
-    sections = [section]
-
-    # The contents of our SHT section are laid out as:
-    # * section count (uint32)
-    # * N sections:
-    #   * name as a null-terminated string
-    #   * virtual address (uint64)
-    #   * section size (uint32)
-    postject_sht = app.get_section("postject_sht")
-
-    if postject_sht:
-        contents = postject_sht.content
-
-        section_count = struct.unpack(f"{struct_endian_char}I", contents[:4])[0]
-        idx = 4
-
-        for _ in range(section_count):
-            name = ""
-
-            while True:
-                ch = contents[idx]
-                idx += 1
-
-                if ch != 0:
-                    name += chr(ch)
-                else:
-                    break
-
-            # We're already overwriting this section
-            if name == section_name:
-                continue
-
-            section = app.get_section(name)
-
-            if not section:
-                raise RuntimeError("Couldn't find section listed in our SHT")
-            else:
-                sections.append(section)
-
-            idx += 12  # Skip over the other info
-
-        app.remove_section("postject_sht", clear=True)
-
-    section_count = struct.pack(f"{struct_endian_char}I", len(sections))
-    content_bytes = section_count
-
-    for section in sections:
-        content_bytes += bytes(section.name, "ascii") + bytes([0])
-        content_bytes += struct.pack(f"{struct_endian_char}QI", section.virtual_address, section.size)
-
-    postject_sht = lief.ELF.Section()
-    postject_sht.name = "postject_sht"
-    postject_sht.add(lief.ELF.SECTION_FLAGS.ALLOC)  # Ensure it's loaded into memory
-    postject_sht.content = list(content_bytes)
-
-    postject_sht = app.add(postject_sht)
-
-    # TODO - How do we determine the size of void* from the ELF?
-    # TODO - Why does it appear to only be 4 bytes when sizeof(void*) is showing 8?
-    # TODO - Do we need to care or just let LIEF patch the address and assume it's fine?
-
-    symbol_found = False
-
-    # Find the symbol for our SHT pointer and update the value
-    for symbol in app.symbols:
-        if symbol.demangled_name == "_binary_postject_sht_start":
-            symbol_found = True
-            app.patch_address(symbol.value, postject_sht.virtual_address)
-            break
-
-    if not symbol_found:
-        print("ERROR: Couldn't find symbol")
-        sys.exit(1)
+    note = lief.ELF.Note()
+    note.name = section_name
+    note.description = data
+    note = app.add(note)
 
     app.write(filename)
 

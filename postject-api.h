@@ -11,21 +11,12 @@
 #include <mach-o/dyld.h>
 #include <mach-o/getsect.h>
 #elif defined(__linux__)
+#include <elf.h>
 #include <link.h>
+#include <sys/param.h>
+#include <sys/auxv.h>
 #elif defined(_WIN32)
 #include <windows.h>
-#endif
-
-#if defined(__linux__)
-// NOTE - This needs to be a sentinel value, if it's initialized to
-//        NULL then it won't have a spot in the executable to change
-#define POSTJECT_SHT_PTR_SENTINEL 0000000001
-extern volatile void* _binary_postject_sht_start;
-
-struct postject_elf_section {
-  uint64_t virtual_address;  // Don't use a pointer here, standardize size
-  uint32_t size;
-};
 #endif
 
 struct postject_options {
@@ -101,49 +92,53 @@ static const void* postject_find_resource(const char* name,
 
   return ptr;
 #elif defined(__linux__)
-  void* ptr = NULL;
+	void *ptr = NULL;
 
-  // This executable might be a Position Independent Executable (PIE), so
-  // the virtual address values need to be added to the relocation address
-  uintptr_t relocation_addr = _r_debug.r_map->l_addr;
+	if (options != NULL && options->elf_section_name != NULL) {
+		name = options->elf_section_name;
+	}
 
-  if (_binary_postject_sht_start != (void*)POSTJECT_SHT_PTR_SENTINEL) {
-#if defined(__POSTJECT_NO_SHT_PTR)
-    void* sht_ptr = (void*)&_binary_postject_sht_start;
-#else
-    void* sht_ptr =
-        (void*)(relocation_addr + (uintptr_t)_binary_postject_sht_start);
-#endif
+	uintptr_t p = getauxval(AT_PHDR);
+	size_t n = getauxval(AT_PHNUM);
+	uintptr_t base_addr = p - sizeof(ElfW(Ehdr));
 
-    // First read the section count
-    uint32_t section_count = *((uint32_t*)sht_ptr);
-    sht_ptr = (uint32_t*)sht_ptr + 1;
+	// iterate program header
+	for (; n > 0; n--, p += sizeof(ElfW(Phdr))) {
+		ElfW(Phdr) *phdr = (ElfW(Phdr) *)p;
 
-    uint32_t i;
-    for (i = 0; i < section_count; i++) {
-      // Read the section name as a null-terminated string
-      const char* section_name = (const char*)sht_ptr;
-      sht_ptr = (char*)sht_ptr + strlen(section_name) + 1;
+		// skip everything but notes
+		if (phdr->p_type != PT_NOTE) {
+			continue;
+		}
 
-      // Then read the virtual_address (8 bytes)
-      uint64_t virtual_address = *((uint64_t*)sht_ptr);
-      sht_ptr = (uint64_t*)sht_ptr + 1;
+		// note segment starts at base address + segment virtual address
+		uintptr_t pos = (base_addr + phdr->p_vaddr);
+		uintptr_t end = (pos + phdr->p_memsz);
 
-      // Finally read the section size (4 bytes)
-      uint32_t section_size = *((uint32_t*)sht_ptr);
-      sht_ptr = (uint32_t*)sht_ptr + 1;
+		// iterate through segment until we reach the end
+		while (pos < end) {
+			if (pos + sizeof(ElfW(Nhdr)) > end) {
+				break; // invalid
+			}
 
-      if (strcmp(section_name, name) == 0) {
-        if (size != NULL) {
-          *size = (size_t)section_size;
-        }
-        ptr = (void*)(relocation_addr + (uintptr_t)virtual_address);
-        break;
-      }
-    }
-  }
+			ElfW(Nhdr) *note = (ElfW(Nhdr) *)(uintptr_t)pos;
+			if (note->n_namesz != 0 && note->n_descsz != 0 &&
+			    strncmp((char *)(pos + sizeof(ElfW(Nhdr))),
+				    (char *)name, sizeof(name)) == 0) {
+				*size = note->n_descsz;
+				// advance past note header and aligned name
+				// to get to description data
+				return (void *)((uintptr_t)note +
+						sizeof(ElfW(Nhdr)) +
+						roundup(note->n_namesz, 4));
+			}
 
-  return ptr;
+			pos += (sizeof(ElfW(Nhdr)) + roundup(note->n_namesz, 4) +
+				roundup(note->n_descsz, 4));
+		}
+	}
+	return NULL;
+
 #elif defined(_WIN32)
   void* ptr = NULL;
   char* resource_name = NULL;

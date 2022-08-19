@@ -3,10 +3,6 @@
 
 #include "../postject-api.h"
 
-#if defined(__linux__) && !defined(__POSTJECT_NO_SHT_PTR)
-volatile void *_binary_postject_sht_start = (void *)POSTJECT_SHT_PTR_SENTINEL;
-#endif
-
 int main()
 {
 	size_t size;
