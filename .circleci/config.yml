@@ -73,7 +73,6 @@ commands:
             equal: [ "win/default", << parameters.os >> ]
           steps:
             - run: choco install cmake.install --installargs '"ADD_CMAKE_TO_PATH=User"'
-            - run: refreshenv
             - run: choco install ninja
 
   build:
@@ -104,7 +103,7 @@ commands:
             equal: [ "win/default", << parameters.os >> ]
           steps:
             - run:
-               command: cd vendor\lief & python ./setup.py --ninja build_ext -b ..\..\dist\lief
+               command: refreshenv & cd vendor\lief & python ./setup.py --ninja build_ext -b ..\..\dist\lief
                shell: cmd.exe
 
       - persist_to_workspace:
