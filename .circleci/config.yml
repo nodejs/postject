@@ -3,7 +3,7 @@ version: 2.1
 common_parameters: &common_parameters
   os:
     type: enum
-    enum: [ alpine, debian, linux, macos, win/default ]
+    enum: [ alpine, debian, linux, macos, "win/default" ]
 
 ## ORBS ##
 
@@ -61,23 +61,48 @@ commands:
           steps:
             - run: brew install cmake
 
-      - run: make install-deps EXECUTOR=<< parameters.os >>
+      - when:
+        condition:
+          not:
+            - equal: [ "win/default", << parameters.os >> ]
+        steps:
+          - run: make install-deps EXECUTOR=<< parameters.os >>
+
+      - when:
+          condition:
+            equal: [ "win/default", << parameters.os >> ]
+          steps:
+            - run: choco install cmake
+            - run: choco install ninja
 
   build:
     steps:
-      - run:
-          # NOTE: the circle ci container executor reports the memory/cpu stats
-          # of the host machine (https://ideas.circleci.com/ideas/CCI-I-578),
-          # `nproc` will return 36 on docker/medium resource_class,
-          # ninja parallelizes accordingly, which leads to overloading
-          # and circleci eventually terminating the builds:
-          #
-          # ninja: job failed: /usr/bin/c++ [...]
-          # c++: fatal error: Killed signal terminated program cc1plus
-          # compilation terminated
-          #
-          # force overwrite job count here:
-          command: make lief JOBS=3
+      - when:
+        condition:
+          not:
+            - equal: [ "win/default", << parameters.os >> ]
+        steps:
+          - run:
+              # NOTE: the circle ci container executor reports the memory/cpu stats
+              # of the host machine (https://ideas.circleci.com/ideas/CCI-I-578),
+              # `nproc` will return 36 on docker/medium resource_class,
+              # ninja parallelizes accordingly, which leads to overloading
+              # and circleci eventually terminating the builds:
+              #
+              # ninja: job failed: /usr/bin/c++ [...]
+              # c++: fatal error: Killed signal terminated program cc1plus
+              # compilation terminated
+              #
+              # force overwrite job count here:
+              command: make lief JOBS=3
+
+      - when:
+          condition:
+            equal: [ "win/default", << parameters.os >> ]
+          steps:
+            - run:
+              command: cd vendor\lief & python3 ./setup.py --ninja build_ext -b ..\..\dist\lief
+              shell: cmd.exe
 
       - persist_to_workspace:
           root: .
@@ -125,7 +150,7 @@ jobs:
 matrix: &matrix
   matrix:
     parameters:
-      os: [ alpine, debian, macos, win/default ]
+      os: [ alpine, debian, macos, "win/default" ]
 
 workflows:
   postject:
@@ -134,5 +159,7 @@ workflows:
           <<: *matrix
       - test:
           <<: *matrix
+          matrix:
+            exclude: "win/default"
           requires: [ build-<<matrix.os>> ]
 
