@@ -72,7 +72,7 @@ commands:
           condition:
             equal: [ "win/default", << parameters.os >> ]
           steps:
-            - run: choco install cmake
+            - run: choco install cmake.install --installargs '"ADD_CMAKE_TO_PATH=User"'
             - run: choco install ninja
 
   build:
