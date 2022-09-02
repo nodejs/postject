@@ -103,7 +103,7 @@ commands:
             equal: [ "win/default", << parameters.os >> ]
           steps:
             - run:
-               command: cd vendor\lief & python3 ./setup.py --ninja build_ext -b ..\..\dist\lief
+               command: cd vendor\lief & python ./setup.py --ninja build_ext -b ..\..\dist\lief
                shell: cmd.exe
 
       - persist_to_workspace:
