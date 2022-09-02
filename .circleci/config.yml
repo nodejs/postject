@@ -50,6 +50,12 @@ commands:
           steps:
             - run: apt-get update -y && apt-get install -y make
 
+      - when:
+          condition:
+            equal: [ macos, << parameters.os >> ]
+          steps:
+            - run: brew install cmake
+
       - run: make install-deps EXECUTOR=<< parameters.os >>
 
   build:
