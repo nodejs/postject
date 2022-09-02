@@ -3,7 +3,7 @@ version: 2.1
 common_parameters: &common_parameters
   os:
     type: enum
-    enum: [ alpine, debian, linux ]
+    enum: [ alpine, debian, linux, macos ]
 
 ## EXECUTORS ##
 
@@ -22,6 +22,11 @@ executors:
     resource_class: medium
     machine:
       image: ubuntu-2004:202101-01
+
+  macos:
+    resource_class: medium
+    macos:
+      xcode: 13.4.1
 
 ## COMMANDS ##
 
@@ -109,7 +114,7 @@ jobs:
 matrix: &matrix
   matrix:
     parameters:
-      os: [ alpine, debian ]
+      os: [ alpine, debian, macos ]
 
 workflows:
   postject:
