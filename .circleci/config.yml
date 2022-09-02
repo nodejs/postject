@@ -3,7 +3,12 @@ version: 2.1
 common_parameters: &common_parameters
   os:
     type: enum
-    enum: [ alpine, debian, linux, macos ]
+    enum: [ alpine, debian, linux, macos, win/default ]
+
+## ORBS ##
+
+orbs:
+  win: circleci/windows@4.1.1
 
 ## EXECUTORS ##
 
@@ -120,7 +125,7 @@ jobs:
 matrix: &matrix
   matrix:
     parameters:
-      os: [ alpine, debian, macos ]
+      os: [ alpine, debian, macos, win/default ]
 
 workflows:
   postject:
