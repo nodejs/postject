@@ -16,3 +16,6 @@ ifeq ($(EXECUTOR), alpine)
 		build-base ninja cmake \
 		python3 python3-dev py3-setuptools
 endif
+ifeq ($(EXECUTOR), macos)
+	brew install cmake
+endif

@@ -57,12 +57,6 @@ commands:
 
       - when:
           condition:
-            equal: [ macos, << parameters.os >> ]
-          steps:
-            - run: brew install cmake
-
-      - when:
-          condition:
             not:
               equal: [ "win/default", << parameters.os >> ]
           steps:
