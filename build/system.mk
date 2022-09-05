@@ -3,13 +3,9 @@ ifndef OS
 
 ifeq ($(shell uname), Linux)
 OS = linux
-endif
-
-ifeq ($(shell uname), Darwin)
+else ifeq ($(shell uname), Darwin)
 OS = macos
-endif
-
-ifeq ($(shell uname -o), Msys)
+else ifeq ($(shell uname -o), Msys)
 OS = windows
 endif
 
