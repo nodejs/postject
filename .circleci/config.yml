@@ -3,7 +3,12 @@ version: 2.1
 common_parameters: &common_parameters
   os:
     type: enum
-    enum: [ alpine, debian, linux ]
+    enum: [ alpine, debian, linux, macos, "win/default" ]
+
+## ORBS ##
+
+orbs:
+  win: circleci/windows@4.1.1
 
 ## EXECUTORS ##
 
@@ -22,6 +27,11 @@ executors:
     resource_class: medium
     machine:
       image: ubuntu-2004:202101-01
+
+  macos:
+    resource_class: medium
+    macos:
+      xcode: 13.4.1
 
 ## COMMANDS ##
 
@@ -45,23 +55,50 @@ commands:
           steps:
             - run: apt-get update -y && apt-get install -y make
 
-      - run: make install-deps EXECUTOR=<< parameters.os >>
+      - when:
+          condition:
+            not:
+              equal: [ "win/default", << parameters.os >> ]
+          steps:
+            - run: make install-deps EXECUTOR=<< parameters.os >>
+
+      - when:
+          condition:
+            equal: [ "win/default", << parameters.os >> ]
+          steps:
+            - run: choco install cmake.install --installargs '"ADD_CMAKE_TO_PATH=User"'
+            - run: choco install ninja
 
   build:
+    parameters:
+      <<: *common_parameters
     steps:
-      - run:
-          # NOTE: the circle ci container executor reports the memory/cpu stats
-          # of the host machine (https://ideas.circleci.com/ideas/CCI-I-578),
-          # `nproc` will return 36 on docker/medium resource_class,
-          # ninja parallelizes accordingly, which leads to overloading
-          # and circleci eventually terminating the builds:
-          #
-          # ninja: job failed: /usr/bin/c++ [...]
-          # c++: fatal error: Killed signal terminated program cc1plus
-          # compilation terminated
-          #
-          # force overwrite job count here:
-          command: make lief JOBS=3
+      - when:
+          condition:
+            not:
+              equal: [ "win/default", << parameters.os >> ]
+          steps:
+            - run:
+                # NOTE: the circle ci container executor reports the memory/cpu stats
+                # of the host machine (https://ideas.circleci.com/ideas/CCI-I-578),
+                # `nproc` will return 36 on docker/medium resource_class,
+                # ninja parallelizes accordingly, which leads to overloading
+                # and circleci eventually terminating the builds:
+                #
+                # ninja: job failed: /usr/bin/c++ [...]
+                # c++: fatal error: Killed signal terminated program cc1plus
+                # compilation terminated
+                #
+                # force overwrite job count here:
+                command: make lief JOBS=3
+
+      - when:
+          condition:
+            equal: [ "win/default", << parameters.os >> ]
+          steps:
+            - run:
+               command: refreshenv & cd vendor\lief & python ./setup.py --ninja build_ext -b ..\..\dist\lief
+               shell: cmd.exe
 
       - persist_to_workspace:
           root: .
@@ -86,7 +123,8 @@ jobs:
       - checkout
       - prepare:
           os: << parameters.os >>
-      - build
+      - build:
+          os: << parameters.os >>
       - store_artifacts:
           path: dist
       - store_artifacts:
@@ -106,17 +144,22 @@ jobs:
 
 ## WORKFLOWS ##
 
-matrix: &matrix
+build_matrix: &build_matrix
   matrix:
     parameters:
-      os: [ alpine, debian ]
+      os: [ alpine, debian, macos, "win/default" ]
+
+test_matrix: &test_matrix
+  matrix:
+    parameters:
+      os: [ alpine, debian, macos ]
 
 workflows:
   postject:
     jobs:
       - build:
-          <<: *matrix
+          <<: *build_matrix
       - test:
-          <<: *matrix
+          <<: *test_matrix
           requires: [ build-<<matrix.os>> ]
 
