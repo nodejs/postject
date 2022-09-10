@@ -131,7 +131,9 @@ emscripten::val inject_into_macho(const emscripten::val& executable,
     }
 
     // It will need to be signed again anyway, so remove the signature
-    binary.remove_signature();
+    if (binary.has_code_signature()) {
+      binary.remove_signature();
+    }
   }
 
   // Construct a new Uint8Array in JS
