@@ -88,6 +88,12 @@ commands:
 
       - run: npm install
 
+  lint:
+    parameters:
+      <<: *common_parameters
+    steps:
+      - run: npm run lint
+
   build:
     parameters:
       <<: *common_parameters
@@ -136,6 +142,17 @@ commands:
 ## JOBS ##
 
 jobs:
+  lint:
+    parameters:
+      <<: *common_parameters
+    executor: { name: << parameters.os >> }
+    steps:
+      - checkout
+      - prepare:
+          os: << parameters.os >>
+      - lint:
+          os: << parameters.os >>
+
   build:
     parameters:
       <<: *common_parameters
@@ -169,6 +186,8 @@ matrix: &matrix
 workflows:
   postject:
     jobs:
+      - lint:
+          <<: *matrix
       - build:
           <<: *matrix
       - test:
