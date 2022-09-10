@@ -37,5 +37,5 @@ if (!(await fs.exists("./test"))) {
 }
 
 cd("test");
-await $`cmake -G Ninja ../../test`;
+await $`cmake ../../test`;
 await $`cmake --build .`;
