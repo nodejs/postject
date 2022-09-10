@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const fs = require("fs/promises");
+const { constants } = require("fs");
 const path = require("path");
 
 const program = require("commander");
@@ -15,7 +16,19 @@ async function main(filename, resourceName, resource, options) {
     process.exit(0);
   }
 
-  // TODO - Check files exist
+  try {
+    await fs.access(filename, constants.R_OK | constants.W_OK);
+  } catch {
+    console.log("Can't read and write to target executable");
+    process.exit(1);
+  }
+
+  try {
+    await fs.access(resource, constants.R_OK);
+  } catch {
+    console.log("Can't read resource file");
+    process.exit(1);
+  }
 
   const postject = await loadPostjectModule();
   const executable = await fs.readFile(filename);
