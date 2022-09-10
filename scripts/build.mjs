@@ -13,7 +13,12 @@ if (!jobs) {
   }
 }
 
-// TODO - Check for emsdk before continuing
+try {
+  await which("emcmake");
+} catch {
+  console.log("ERROR: Couldn't find `emcmake`, is emsdk installed?");
+  process.exit(1);
+}
 
 // Create build folder if needed
 if (!(await fs.exists("./build"))) {
