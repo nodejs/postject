@@ -11,6 +11,7 @@ import { $, fs } from "zx";
 // TODO - More test coverage
 describe("postject CLI", () => {
   let filename;
+  let resourceContents;
   let resourceFilename;
   const IS_WINDOWS = os.platform() === "win32";
 
@@ -26,11 +27,9 @@ describe("postject CLI", () => {
     filename = temporaryFile({ extension: IS_WINDOWS ? "exe" : undefined });
     await fs.copy(originalFilename, filename);
 
+    resourceContents = crypto.randomBytes(64).toString("hex");
     resourceFilename = temporaryFile();
-    await fs.writeFile(
-      resourceFilename,
-      crypto.randomBytes(64).toString("hex")
-    );
+    await fs.writeFile(resourceFilename, resourceContents);
   });
 
   afterEach(async () => {
@@ -72,7 +71,7 @@ describe("postject CLI", () => {
     {
       const { exitCode, stdout } = await $`${filename}`;
       expect(exitCode).to.equal(0);
-      expect(stdout).to.have.string("test");
+      expect(stdout).to.have.string(resourceContents);
     }
   }).timeout(6000);
 });
