@@ -102,9 +102,9 @@ emscripten::val inject_into_macho(const emscripten::val& executable,
   }
 
   // Inject into all Mach-O binaries if there's more than one in a fat binary
-  for (LIEF::MachO::Binary& app : *fat_binary) {
+  for (LIEF::MachO::Binary& binary : *fat_binary) {
     LIEF::MachO::Section* existing_section =
-        app.get_section(segment_name, section_name);
+        binary.get_section(segment_name, section_name);
 
     if (existing_section) {
       if (!overwrite) {
@@ -112,10 +112,10 @@ emscripten::val inject_into_macho(const emscripten::val& executable,
         return object;
       }
 
-      app.remove_section(segment_name, section_name, true);
+      binary.remove_section(segment_name, section_name, true);
     }
 
-    LIEF::MachO::SegmentCommand* segment = app.get_segment(segment_name);
+    LIEF::MachO::SegmentCommand* segment = binary.get_segment(segment_name);
     LIEF::MachO::Section section(section_name, vec_from_val(data));
 
     if (!segment) {
@@ -126,13 +126,13 @@ emscripten::val inject_into_macho(const emscripten::val& executable,
       new_segment.init_protection(
           static_cast<uint32_t>(LIEF::MachO::VM_PROTECTIONS::VM_PROT_READ));
       new_segment.add_section(section);
-      app.add(new_segment);
+      binary.add(new_segment);
     } else {
-      app.add_section(*segment, section);
+      binary.add_section(*segment, section);
     }
 
     // It will need to be signed again anyway, so remove the signature
-    app.remove_signature();
+    binary.remove_signature();
   }
 
   // Construct a new Uint8Array in JS
