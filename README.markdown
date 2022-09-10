@@ -7,21 +7,20 @@ Easily inject arbitrary read-only resources into executable formats
 
 ## Building
 
-### Windows
+### Prerequisites
 
-You'll need CMake and Ninja to build LIEF.
+* CMake
+* Ninja
+* [Emscripten (emsdk)](https://emscripten.org/docs/getting_started/downloads.html)
 
-```sh
-$ cd vendor\lief
-$ python3 ./setup.py --ninja build_ext -b ..\..\dist\lief
-```
-
-### macOS / Linux
+### Build Command
 
 ```sh
-$ sudo make install-deps
-$ make lief
+$ npm run build
 ```
+
+The final output is placed in `dist/`, with `main.js` being the
+entrypoint.
 
 ## Usage
 
@@ -32,7 +31,7 @@ $ ./postject.py --macho-segment-name __ELECTRON /Users/dsanders/electron/src/out
 ### Testing
 
 ```sh
-$ make check
+$ npm test
 ```
 
 ## Design
