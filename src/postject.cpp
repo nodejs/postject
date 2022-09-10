@@ -41,8 +41,41 @@ emscripten::val inject_into_elf(const emscripten::val& executable,
   std::unique_ptr<LIEF::ELF::Binary> binary =
       LIEF::ELF::Parser::parse(vec_from_val(executable));
 
-  // TODO
+  if (!binary) {
+    object.set("result", emscripten::val(InjectResult::kError));
+    return object;
+  }
 
+  LIEF::ELF::Note* existing_note = nullptr;
+
+  for (LIEF::ELF::Note& note : binary->notes()) {
+    if (note.name() == note_name) {
+      existing_note = &note;
+    }
+  }
+
+  if (existing_note) {
+    if (!overwrite) {
+      object.set("result", emscripten::val(InjectResult::kAlreadyExists));
+      return object;
+    } else {
+      binary->remove(*existing_note);
+    }
+  }
+
+  LIEF::ELF::Note note;
+  note.name(note_name);
+  note.description(vec_from_val(data));
+  binary->add(note);
+
+  // Construct a new Uint8Array in JS
+  std::vector<uint8_t> output = binary->raw();
+  emscripten::val view{
+      emscripten::typed_memory_view(output.size(), output.data())};
+  auto output_data = emscripten::val::global("Uint8Array").new_(output.size());
+  output_data.call<void>("set", view);
+
+  object.set("data", output_data);
   object.set("result", emscripten::val(InjectResult::kSuccess));
 
   return object;
