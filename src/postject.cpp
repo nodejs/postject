@@ -84,7 +84,6 @@ emscripten::val inject_into_elf(const emscripten::val& executable,
   return object;
 }
 
-// TODO - There's a bug in here, resulting output segfaults
 emscripten::val inject_into_macho(const emscripten::val& executable,
                                   const std::string& segment_name,
                                   const std::string& section_name,
