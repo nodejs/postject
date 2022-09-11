@@ -25,7 +25,21 @@ entrypoint.
 ## Usage
 
 ```sh
-$ ./postject.py --macho-segment-name __ELECTRON /Users/dsanders/electron/src/out/Testing/Electron.app/Contents/Frameworks/Electron\ Framework.framework/Electron\ Framework app_asar /Users/dsanders/test.asar
+$ postject -h
+Usage: postject [options] <filename> <resource_name> <resource>
+
+Inject arbitrary read-only resources into an executable for use at runtime
+
+Arguments:
+  filename                             The executable to inject into
+  resource_name                        The resource name to use (section name on Mach-O and ELF, resource name for PE)
+  resource                             The resource to inject
+
+Options:
+  --macho-segment-name <segment_name>  Name for the Mach-O segment (default: "__POSTJECT")
+  --output-api-header                  Output the API header to stdout
+  --overwrite                          Overwrite the resource if it already exists
+  -h, --help                           display help for command
 ```
 
 ### Testing
