@@ -1,5 +1,7 @@
 # postject
 
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/postmanlabs/postject/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/postmanlabs/postject/tree/main)
+
 Easily inject arbitrary read-only resources into executable formats
 (Mach-O, PE, ELF) and use it at runtime.
 
