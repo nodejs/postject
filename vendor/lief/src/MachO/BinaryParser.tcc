@@ -887,16 +887,24 @@ ok_error_t BinaryParser::parse_load_commands() {
            * with the BinaryParser constructor
            */
           const size_t current_pos = stream_->pos();
+          if (!visited_.insert(cmd->fileoff).second) {
+            break;
+          }
+
           stream_->setpos(cmd->fileoff);
           BinaryParser bp;
-          bp.stream_ = std::move(stream_);
-          bp.config_ = config_;
+          bp.binary_  = std::unique_ptr<Binary>(new Binary{});
+          bp.stream_  = std::move(stream_);
+          bp.config_  = config_;
+          bp.visited_ = visited_;
+
           if (!bp.init_and_parse()) {
             LIEF_WARN("Parsing the Binary fileset raised error.");
           }
 
           stream_ = std::move(bp.stream_);
           stream_->setpos(current_pos);
+          visited_ = std::move(bp.visited_);
 
           if (bp.binary_ != nullptr) {
             std::unique_ptr<Binary> filset_bin = std::move(bp.binary_);
@@ -1004,6 +1012,7 @@ ok_error_t BinaryParser::parse_load_commands() {
     if (load_command != nullptr) {
       if (!stream_->peek_data(load_command->original_data_, loadcommands_offset, command->cmdsize)) {
         LIEF_ERR("Can't read the raw data of the load command");
+        load_command->size_ = 0;
       }
       load_command->command_offset(loadcommands_offset);
       binary_->commands_.push_back(std::move(load_command));
@@ -1625,6 +1634,10 @@ ok_error_t BinaryParser::parse_dyldinfo_generic_bind() {
             case BIND_SUBOPCODE_THREADED::BIND_SUBOPCODE_THREADED_APPLY:
               {
                 uint64_t delta = 0;
+                if (segment_idx >= segments.size()) {
+                  LIEF_ERR("Wrong index ({:d})", segment_idx);
+                  return make_error_code(lief_errors::corrupted);
+                }
                 const SegmentCommand& current_segment = segments[segment_idx];
                 do {
                   const uint64_t address = current_segment.virtual_address() + segment_offset;
@@ -1678,12 +1691,19 @@ ok_error_t BinaryParser::parse_dyldinfo_generic_bind() {
               }
             case BIND_SUBOPCODE_THREADED::BIND_SUBOPCODE_THREADED_SET_BIND_ORDINAL_TABLE_SIZE_ULEB:
               {
+                // Maxium number of elements according to dyld's MachOAnalyzer.cpp
+                static constexpr size_t MAX_COUNT = 65535;
                 auto val = stream_->read_uleb128();
                 if (!val) {
                   LIEF_ERR("Can't read BIND_SUBOPCODE_THREADED_SET_BIND_ORDINAL_TABLE_SIZE_ULEB count");
                   break;
                 }
                 count = *val;
+                if (count > MAX_COUNT) {
+                  LIEF_ERR("BIND_SUBOPCODE_THREADED_SET_BIND_ORDINAL_TABLE_SIZE_ULEB"
+                           "count is too large ({})", count);
+                  break;
+                }
                 ordinal_table_size = count + 1; // the +1 comes from: 'ld64 wrote the wrong value here and we need to offset by 1 for now.'
                 use_threaded_rebase_bind = true;
                 ordinal_table.reserve(ordinal_table_size);
@@ -3315,7 +3335,7 @@ ok_error_t BinaryParser::post_process(DynamicSymbolCommand& cmd) {
     }
 
     if (cmd.nb_external_define_symbols() > 0 &&
-        cmd.idx_external_define_symbol() <= isym  && isym < (cmd.idx_external_define_symbol() + cmd.nb_local_symbols()))
+        cmd.idx_external_define_symbol() <= isym  && isym < (cmd.idx_external_define_symbol() + cmd.nb_external_define_symbols()))
     {
       sym->category_ = Symbol::CATEGORY::EXTERNAL;
     }

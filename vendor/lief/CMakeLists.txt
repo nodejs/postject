@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
 
+# Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+  cmake_policy(SET CMP0135 NEW)
+endif()
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Modules
@@ -463,15 +468,6 @@ if(UNIX AND NOT APPLE)
 endif()
 
 target_compile_definitions(LIB_LIEF PUBLIC -D_GLIBCXX_USE_CXX11_ABI=1)
-
-# Enable support for MD2 and MD4 for parsing the Authenticode sigs of older
-# executables. Also, some older signed executables use certs with the
-# SpcSpAgencyInfo Critical Extension, which mbed TLS doesn't support, so set
-# MBEDTLS_X509_ALLOW_UNSUPPORTED_CRITICAL_EXTENSION to have it skip this
-# extension.
-add_definitions(-DMBEDTLS_FS_IO -DMBEDTLS_PEM_PARSE_C -DMBEDTLS_BIGNUM_C
-                -DMBEDTLS_X509_CRT_PARSE_C -DMBEDTLS_PEM_WRITE_C
-                -DMBEDTLS_PKCS1_V15 -DMBEDTLS_PKCS1_V21)
 
 # LIEF Sanitizer options
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

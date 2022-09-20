@@ -183,7 +183,7 @@ class LIEF_API Binary : public Object {
   virtual uint64_t imagebase() const = 0;
 
   //! Constructor functions that are called prior any other functions
-  virtual LIEF::Binary::functions_t ctor_functions() const = 0;
+  virtual functions_t ctor_functions() const = 0;
 
   //! Convert the given offset into a virtual address.
   //!
@@ -195,6 +195,7 @@ class LIEF_API Binary : public Object {
 
   //! Build & transform the Binary object representation into a *real* executable
   virtual void write(const std::string& name) = 0;
+  virtual void write(std::ostream& os) = 0;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Binary& binary);
 
