@@ -17,6 +17,7 @@ $ python3 ./setup.py --ninja build_ext -b ..\..\dist\lief
 ### macOS / Linux
 
 ```sh
+$ sudo make install-deps
 $ make lief
 ```
 
