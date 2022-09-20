@@ -168,6 +168,16 @@ add_test(ELF_PYTHON_issue_466
   ${PYTHON_EXECUTABLE} -m pytest -rsx
     ${CMAKE_CURRENT_SOURCE_DIR}/test_466.py)
 
+add_test(ELF_PYTHON_issue_747
+  ${CMAKE_COMMAND} -E env "PYTHONPATH=${PYTHONENV}"
+  ${PYTHON_EXECUTABLE} -m pytest -rsx
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_747.py)
+
+add_test(ELF_PYTHON_issue_760
+  ${CMAKE_COMMAND} -E env "PYTHONPATH=${PYTHONENV}"
+  ${PYTHON_EXECUTABLE} -m pytest -rsx
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_760.py)
+
 add_test(ELF_PYTHON_empty_gnu_hash
   ${CMAKE_COMMAND} -E env "PYTHONPATH=${PYTHONENV}"
   ${PYTHON_EXECUTABLE} -m pytest -rsx
@@ -192,6 +202,11 @@ add_test(ELF_binary_size
   ${CMAKE_COMMAND} -E env "PYTHONPATH=${PYTHONENV}"
   ${PYTHON_EXECUTABLE} -m pytest -rsx
     ${CMAKE_CURRENT_SOURCE_DIR}/test_binary_size.py)
+
+add_test(ELF_symbol_versions
+  ${CMAKE_COMMAND} -E env "PYTHONPATH=${PYTHONENV}"
+  ${PYTHON_EXECUTABLE} -m pytest -rsx
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_symbol_versions.py)
 
 
 # Examples

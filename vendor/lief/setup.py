@@ -9,8 +9,9 @@ import copy
 import distutils
 from pkg_resources import get_distribution
 from setuptools import setup, Extension
-from setuptools.command.build_ext import build_ext, copy_file
+from setuptools.command.build_ext import build_ext
 from distutils import log
+from shutil import copy2
 
 try:
     from packaging import version
@@ -249,7 +250,7 @@ class BuildLibrary(build_ext):
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
 
-        log.info(f"Platform: {platform.system()}", )
+        log.info(f"Platform: %s", platform.system())
         log.info("Wheel library: %s", self.get_ext_fullname(ext.name))
 
         # 1. Configure
@@ -282,21 +283,24 @@ class BuildLibrary(build_ext):
                 subprocess.check_call(['cmake', '--build', '.', '--target', targets['sdk']] + build_args, cwd=self.build_temp, env=env)
 
         else:
-            log.info(f"Using {jobs} jobs")
+            if self.parallel:
+                log.info(f"Using {jobs} jobs")
+
             if build_with_ninja:
+                jobs_opt = ["-j", str(jobs)] if self.parallel else []
                 if self.distribution.lief_test:
                     subprocess.check_call(configure_cmd, cwd=self.build_temp)
-                    subprocess.check_call(['ninja', '-j', str(jobs)], cwd=self.build_temp)
-                    subprocess.check_call(['ninja', '-j', str(jobs), "check-lief"], cwd=self.build_temp)
+                    subprocess.check_call(['ninja'] + jobs_opt, cwd=self.build_temp)
+                    subprocess.check_call(['ninja'] + jobs_opt + ["check-lief"], cwd=self.build_temp)
                 else:
-                    subprocess.check_call(['ninja', '-j', str(jobs), targets['python_bindings']], cwd=self.build_temp, env=env)
+                    subprocess.check_call(['ninja'] + jobs_opt + [targets['python_bindings']], cwd=self.build_temp, env=env)
 
                 if 'sdk' in targets:
-                    subprocess.check_call(['ninja', '-j', str(jobs), targets['sdk']], cwd=self.build_temp, env=env)
+                    subprocess.check_call(['ninja'] + jobs_opt + [targets['sdk']], cwd=self.build_temp, env=env)
 
                 if 'doc' in targets:
                     try:
-                        subprocess.check_call(['ninja', '-j', str(jobs), targets['doc']], cwd=self.build_temp, env=env)
+                        subprocess.check_call(['ninja'] + jobs_opt + [targets['doc']], cwd=self.build_temp, env=env)
                     except Exception as e:
                         log.error(f"Documentation failed: {e}")
             else:
@@ -331,9 +335,8 @@ class BuildLibrary(build_ext):
             os.makedirs(self.build_lib)
 
         log.info(f"Copying {pylief_path} into {pylief_dst}")
-        copy_file(
-                pylief_path, pylief_dst, verbose=self.verbose,
-                dry_run=self.dry_run)
+        if not self.dry_run:
+            copy2(pylief_path, pylief_dst)
 
 
         # SDK
@@ -346,10 +349,8 @@ class BuildLibrary(build_ext):
 
             sdk_path = str(sdk_path.pop())
             sdk_output = str(pathlib.Path(CURRENT_DIR) / "build")
-
-            copy_file(
-                sdk_path, sdk_output, verbose=self.verbose,
-                dry_run=self.dry_run)
+            if not self.dry_run:
+                copy2(sdk_path, sdk_output)
 
 def get_platform():
     out = get_platform_backup()

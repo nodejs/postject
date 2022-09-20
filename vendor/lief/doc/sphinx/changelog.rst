@@ -6,6 +6,10 @@ Changelog
 
 :ELF:
 
+  * Fix a heap overflow found by :github_user:`CCWANG19` (:issue:`763`)
+  * :github_user:`aeflores` fixed an issue when there are multiple versions associated with a symbol
+    (see: :issue:`749` for the details).
+  * Handle binaries compiled with the `-static-pie` flag correctly (see: :issue:`747`)
   * Add support for modifying section-less binaries. The ELF :class:`~lief.ELF.Section` objects gain
     the :meth:`lief.ELF.Section.as_frame` method which defines the section as a *framed* section.
 
@@ -27,6 +31,7 @@ Changelog
 
 :MachO:
 
+  * Fix a segfault when the Mach-O binary does not have segments (found by :github_user:`CCWANG19` via :issue:`764`)
   * Enable to create exports
   * Fix the layout of the binaries modified by LIEF such as they can be (re)signed.
   * Add support for `LC_DYLD_CHAINED_FIXUPS` and `LC_DYLD_EXPORTS_TRIE`
@@ -56,6 +61,8 @@ Changelog
 
 :General Design:
 
+  * :github_user:`ZehMatt` added the support to write LIEF binaries object through a `std::ostream` interface
+    (:commit:`9d55f538602989c69454639565910884c5c5ac7c`)
   * Remove the exceptions
 
 

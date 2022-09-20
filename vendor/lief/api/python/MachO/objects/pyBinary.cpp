@@ -424,7 +424,7 @@ void create<Binary>(py::module& m) {
         "address"_a)
 
     .def("write",
-        &Binary::write,
+        static_cast<void (Binary::*)(const std::string&)>(&Binary::write),
         "Rebuild the binary and write and write its content if the file given in parameter",
         "output"_a,
         py::return_value_policy::reference_internal)
@@ -584,7 +584,9 @@ void create<Binary>(py::module& m) {
         py::return_value_policy::reference_internal)
 
     .def("shift",
-         &Binary::shift,
+         [] (Binary& self, size_t width) {
+           return error_or(&Binary::shift, self, width);
+         },
          R"delim(
          Shift the content located right after the Load commands table.
          This operation can be used to add a new command

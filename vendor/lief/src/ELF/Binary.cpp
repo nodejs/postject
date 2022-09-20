@@ -1085,9 +1085,37 @@ bool Binary::is_pie() const {
                                        [] (const std::unique_ptr<Segment>& entry) {
                                          return entry->type() == SEGMENT_TYPES::PT_INTERP;
                                        });
+  if (header().file_type() != E_TYPE::ET_DYN) {
+    return false;
+  }
 
-  return it_segment != std::end(segments_) &&
-         header().file_type() == E_TYPE::ET_DYN;
+  /* If the ELF binary uses an interpreter, then it is position
+   * independant since the interpreter aims at loading the binary at a random base address
+   */
+  if (it_segment != std::end(segments_)) {
+    return true;
+  }
+  /* It also exists ELF executables which don't have PT_INTERP but are
+   * PIE (see: https://github.com/lief-project/LIEF/issues/747). That's
+   * the case, for instance, when compiling with the -static-pie flag
+   *
+   * While header().file_type() == E_TYPE::ET_DYN is a requirement
+   * for PIC binary (Position independant **CODE**), it does not enable
+   * to distinguish PI **Executables** from libraries.
+   *
+   * Therefore, we add the following checks:
+   * 1. The binary embeds a PT_DYNAMIC segment
+   * 2. The dynamic table contains a DT_FLAGS_1 set with PIE
+   */
+
+
+  if (has(SEGMENT_TYPES::PT_DYNAMIC)) {
+    if (const auto* flag = static_cast<const DynamicEntryFlags*>(get(DYNAMIC_TAGS::DT_FLAGS_1))) {
+      return flag->has(DYNAMIC_FLAGS_1::DF_1_PIE);
+    }
+  }
+
+  return false;
 }
 
 
@@ -1672,6 +1700,11 @@ void Binary::write(const std::string& filename) {
   builder.write(filename);
 }
 
+void Binary::write(std::ostream& os) {
+  Builder builder{*this};
+  builder.build();
+  builder.write(os);
+}
 
 uint64_t Binary::entrypoint() const {
   return header().entrypoint();
@@ -2094,8 +2127,8 @@ uint64_t Binary::last_offset_segment() const {
 
 uint64_t Binary::next_virtual_address() const {
 
-  uint64_t va = std::accumulate(std::begin(segments_), std::end(segments_), 0llu,
-            [] (uint32_t address, const std::unique_ptr<Segment>& segment) {
+  uint64_t va = std::accumulate(std::begin(segments_), std::end(segments_), uint64_t{ 0u },
+            [] (uint64_t address, const std::unique_ptr<Segment>& segment) {
               return std::max<uint64_t>(segment->virtual_address() + segment->virtual_size(), address);
             });
 

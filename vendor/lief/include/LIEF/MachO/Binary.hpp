@@ -1,3 +1,4 @@
+
 /* Copyright 2017 - 2022 R. Thomas
  * Copyright 2017 - 2022 Quarkslab
  *
@@ -225,6 +226,11 @@ class LIEF_API Binary : public LIEF::Binary  {
   //!
   //! @param filename Path to write the reconstructed binary
   void write(const std::string& filename) override;
+
+  //! Reconstruct the binary object and write the result in the given `os` stream
+  //!
+  //! @param os Output stream to write the reconstructed binary
+  void write(std::ostream& os) override;
 
   //! Reconstruct the binary object and return its content as bytes
   std::vector<uint8_t> raw();
@@ -642,7 +648,7 @@ class LIEF_API Binary : public LIEF::Binary  {
 
   //! Shift the content located right after the Load commands table.
   //! This operation can be used to add a new command
-  void shift(size_t value);
+  ok_error_t shift(size_t value);
 
   //! Shift the position on the __LINKEDIT data by `width`
   ok_error_t shift_linkedit(size_t width);
@@ -661,7 +667,7 @@ class LIEF_API Binary : public LIEF::Binary  {
   //! Default constructor
   Binary();
 
-  void shift_command(size_t width, size_t from_offset);
+  void shift_command(size_t width, uint64_t from_offset);
 
   //! Insert a Segment command in the cache field (segments_)
   //! and keep a consistent state of the indexes.
