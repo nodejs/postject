@@ -147,12 +147,12 @@ jobs:
 build_matrix: &build_matrix
   matrix:
     parameters:
-      os: [ alpine, debian, macos, "win/default" ]
+      os: [ alpine, debian, linux, macos, "win/default" ]
 
 test_matrix: &test_matrix
   matrix:
     parameters:
-      os: [ alpine, debian, macos ]
+      os: [ alpine, debian, linux, macos ]
 
 workflows:
   postject:
