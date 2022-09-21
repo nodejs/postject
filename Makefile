@@ -3,7 +3,7 @@ include vendor/vendorpull/targets.mk
 include build/system.mk
 include build/deps.mk
 
-all: vendor compile patch check
+all: vendor compile patch test
 
 .PHONY: lief
 lief: dist/lief
@@ -15,6 +15,6 @@ dist/lief:
 	cd vendor/lief && python3 ./setup.py $(BUILD_OPTS) build_ext -b ../../$@ -j $(JOBS)
 
 
-.PHONY: check
-check:
-	$(MAKE) -C examples/
+.PHONY: test
+test:
+	./test.sh

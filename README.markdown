@@ -32,7 +32,7 @@ $ ./postject.py --macho-segment-name __ELECTRON /Users/dsanders/electron/src/out
 ### Testing
 
 ```sh
-$ make check
+$ make test
 ```
 
 ## Design

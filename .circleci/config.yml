@@ -114,7 +114,7 @@ commands:
       - attach_workspace:
           at: .
 
-      - run: make check
+      - run: make test
 
 ## JOBS ##
 
