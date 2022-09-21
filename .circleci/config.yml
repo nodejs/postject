@@ -3,7 +3,7 @@ version: 2.1
 common_parameters: &common_parameters
   os:
     type: enum
-    enum: [ alpine, debian, linux, macos, "win/default" ]
+    enum: [ linux, macos, "win/default" ]
 
 ## ORBS ##
 
@@ -13,16 +13,6 @@ orbs:
 ## EXECUTORS ##
 
 executors:
-  alpine:
-    resource_class: medium
-    docker:
-      - image: docker.io/library/alpine:3.16
-
-  debian:
-    resource_class: medium
-    docker:
-      - image: docker.io/library/debian:11
-
   linux:
     resource_class: medium
     machine:
@@ -41,18 +31,6 @@ commands:
       <<: *common_parameters
     steps:
       # NOTE: minimal effort to allow moving most conditionals out of ci config
-      - when:
-          condition:
-            equal: [ alpine, << parameters.os >> ]
-          steps:
-            - run: apk add -U make
-
-      - when:
-          condition:
-            equal: [ debian, << parameters.os >> ]
-          steps:
-            - run: apt-get update -y && apt-get install -y make
-
       - when:
           condition:
             equal: [ linux, << parameters.os >> ]
@@ -151,12 +129,12 @@ jobs:
 build_matrix: &build_matrix
   matrix:
     parameters:
-      os: [ alpine, debian, linux, macos, "win/default" ]
+      os: [ linux, macos, "win/default" ]
 
 test_matrix: &test_matrix
   matrix:
     parameters:
-      os: [ alpine, debian, linux, macos ]
+      os: [ linux, macos ]
 
 workflows:
   postject:
