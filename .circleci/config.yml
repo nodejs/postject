@@ -56,6 +56,13 @@ commands:
 
       - when:
           condition:
+            equal: [ linux, << parameters.os >> ]
+          steps:
+            - run: sudo apt-get update
+            - run: sudo apt-get install --no-install-recommends -y ca-certificates build-essential git nodejs npm ninja-build cmake
+
+      - when:
+          condition:
             equal: [ macos, << parameters.os >> ]
           steps:
             - run: brew install cmake
