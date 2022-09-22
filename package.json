@@ -4,7 +4,7 @@
   "description": "Easily inject arbitrary read-only resources into executable formats (Mach-O, PE, ELF) and use it at runtime.",
   "license": "MIT",
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=14.0.0"
   },
   "repository": {
     "type": "git",

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-const fs = require("fs/promises");
-const { constants } = require("fs");
+const { constants, promises: fs } = require("fs");
 const path = require("path");
 
 const program = require("commander");
