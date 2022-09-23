@@ -69,11 +69,13 @@ describe("postject CLI", () => {
     }
 
     {
-      const { status } = spawnSync(
+      const { status, stdout, stderr } = spawnSync(
         "node",
         ["./dist/main.js", filename, "foobar", resourceFilename],
         { encoding: "utf-8" }
       );
+      expect(stderr).to.be.empty;
+      expect(stdout).to.be.empty;
       expect(status).to.equal(0);
     }
 
