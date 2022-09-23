@@ -75,7 +75,7 @@ async function main(filename, resourceName, resource, options) {
             `Segment and section with that name already exists: ${options.machoSegmentName}/${sectionName}`
           );
           console.log("Use --overwrite to overwrite the existing content");
-          process.exit(2);
+          process.exit(1);
         }
       }
       break;
@@ -96,7 +96,7 @@ async function main(filename, resourceName, resource, options) {
         if (result === postject.InjectResult.kAlreadyExists) {
           console.log(`Section with that name already exists: ${sectionName}`);
           console.log("Use --overwrite to overwrite the existing content");
-          process.exit(2);
+          process.exit(1);
         }
       }
       break;
@@ -118,7 +118,7 @@ async function main(filename, resourceName, resource, options) {
             `Resource with that name already exists: ${resourceName}`
           );
           console.log("Use --overwrite to overwrite the existing content");
-          process.exit(2);
+          process.exit(1);
         }
       }
       break;
@@ -126,7 +126,7 @@ async function main(filename, resourceName, resource, options) {
 
   if (result !== postject.InjectResult.kSuccess) {
     console.log("Error when injecting resource");
-    process.exit(3);
+    process.exit(1);
   }
 
   try {
