@@ -183,15 +183,14 @@ emscripten::val inject_into_pe(const emscripten::val& executable,
       std::begin(resources->childs()), std::end(resources->childs()),
       [](const LIEF::PE::ResourceNode& node) {
         return node.id() ==
-               static_cast<uint32_t>(LIEF::PE::ResourceNode::TYPE::DATA);
+               static_cast<uint32_t>(LIEF::PE::RESOURCE_TYPES::RCDATA);
       });
 
   if (rcdata_node_iter != std::end(resources->childs())) {
     rcdata_node = &*rcdata_node_iter;
   } else {
     LIEF::PE::ResourceDirectory new_rcdata_node;
-    new_rcdata_node.id(
-        static_cast<uint32_t>(LIEF::PE::ResourceNode::TYPE::DATA));
+    new_rcdata_node.id(static_cast<uint32_t>(LIEF::PE::RESOURCE_TYPES::RCDATA));
     rcdata_node = &resources->add_child(new_rcdata_node);
   }
 
