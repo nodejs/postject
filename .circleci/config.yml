@@ -74,6 +74,8 @@ commands:
           steps:
             - run: choco install cmake.install --installargs '"ADD_CMAKE_TO_PATH=User"'
             - run: choco install ninja
+            - run: git config --global core.autocrlf false
+            - run: git config --global core.eol lf
 
       - run: git clone https://github.com/emscripten-core/emsdk.git
 
