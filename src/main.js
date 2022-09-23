@@ -104,7 +104,7 @@ async function main(filename, resourceName, resource, options) {
     case postject.ExecutableFormat.kPE:
       {
         // PE resource names appear to only work if uppercase
-        resourceName = resourceName.uppercase();
+        resourceName = resourceName.toUpperCase();
 
         ({ result, data } = postject.injectIntoPE(
           executable,
