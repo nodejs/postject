@@ -8,6 +8,8 @@ if (!jobs) {
   if (platform === "darwin") {
     // nproc doesn't work on CircleCI
     jobs = await $`sysctl -n hw.logicalcpu`;
+  } else if (platform === "win32") {
+    jobs = process.env["NUMBER_OF_PROCESSORS"];
   } else {
     jobs = await $`nproc`;
   }
