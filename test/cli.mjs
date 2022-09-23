@@ -1,16 +1,20 @@
 import * as crypto from "crypto";
+import { promises as fs } from "fs";
+import * as path from "path";
 import * as os from "os";
 
 import { default as chai, expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
 chai.use(chaiAsPromised);
 
-import { temporaryFile } from "tempy";
-import { $, fs } from "zx";
+import rimraf from "rimraf";
+import { temporaryDirectory } from "tempy";
+import { $ } from "zx";
 
 // TODO - More test coverage
 describe("postject CLI", () => {
   let filename;
+  let tempDir;
   let resourceContents;
   let resourceFilename;
   const IS_WINDOWS = os.platform() === "win32";
@@ -18,23 +22,25 @@ describe("postject CLI", () => {
   beforeEach(async () => {
     let originalFilename;
 
+    tempDir = temporaryDirectory();
+
     if (IS_WINDOWS) {
       originalFilename = "./build/test/Debug/cpp_test.exe";
+      filename = path.join(tempDir, "cpp_test.exe");
     } else {
       originalFilename = "./build/test/cpp_test";
+      filename = path.join(tempDir, "cpp_test");
     }
 
-    filename = temporaryFile({ extension: IS_WINDOWS ? "exe" : undefined });
-    await fs.copy(originalFilename, filename);
+    await fs.copyFile(originalFilename, filename);
 
     resourceContents = crypto.randomBytes(64).toString("hex");
-    resourceFilename = temporaryFile();
+    resourceFilename = path.join(tempDir, "resource.bin");
     await fs.writeFile(resourceFilename, resourceContents);
   });
 
-  afterEach(async () => {
-    await fs.remove(filename);
-    await fs.remove(resourceFilename);
+  afterEach(() => {
+    rimraf.sync(tempDir);
   });
 
   it("should have help output", async () => {
