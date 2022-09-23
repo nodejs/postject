@@ -144,7 +144,10 @@ commands:
       - attach_workspace:
           at: .
 
-      - run: npm test
+      - run: npm test -- --reporter mocha-junit-reporter
+
+      - store_test_results:
+          path: .
 
 ## JOBS ##
 
