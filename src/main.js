@@ -22,15 +22,26 @@ async function main(filename, resourceName, resource, options) {
     process.exit(1);
   }
 
+  let resourceData;
+
   try {
     await fs.access(resource, constants.R_OK);
+    resourceData = await fs.readFile(resource);
   } catch {
     console.log("Can't read resource file");
     process.exit(1);
   }
 
+  let executable;
+
   const postject = await loadPostjectModule();
-  const executable = await fs.readFile(filename);
+
+  try {
+    executable = await fs.readFile(filename);
+  } catch {
+    console.log("Couldn't read target executable");
+    process.exit(1);
+  }
   const executableFormat = postject.getExecutableFormat(executable);
 
   if (!executableFormat) {
@@ -38,7 +49,8 @@ async function main(filename, resourceName, resource, options) {
     process.exit(1);
   }
 
-  const resourceData = await fs.readFile(resource);
+  let data;
+  let result;
 
   switch (executableFormat) {
     case postject.ExecutableFormat.kMachO:
@@ -50,13 +62,13 @@ async function main(filename, resourceName, resource, options) {
           sectionName = `__${sectionName}`;
         }
 
-        const { result, data } = postject.injectIntoMachO(
+        ({ result, data } = postject.injectIntoMachO(
           executable,
           options.machoSegmentName,
           sectionName,
           resourceData,
           options.overwrite
-        );
+        ));
 
         if (result === postject.InjectResult.kAlreadyExists) {
           console.log(
@@ -64,12 +76,7 @@ async function main(filename, resourceName, resource, options) {
           );
           console.log("Use --overwrite to overwrite the existing content");
           process.exit(2);
-        } else if (result !== postject.InjectResult.kSuccess) {
-          console.log("Error when injecting resource");
-          process.exit(3);
         }
-
-        await fs.writeFile(filename, data);
       }
       break;
 
@@ -79,23 +86,18 @@ async function main(filename, resourceName, resource, options) {
         // technically reserved for the system, so don't transform
         let sectionName = resourceName;
 
-        const { result, data } = postject.injectIntoELF(
+        ({ result, data } = postject.injectIntoELF(
           executable,
           sectionName,
           resourceData,
           options.overwrite
-        );
+        ));
 
         if (result === postject.InjectResult.kAlreadyExists) {
           console.log(`Section with that name already exists: ${sectionName}`);
           console.log("Use --overwrite to overwrite the existing content");
           process.exit(2);
-        } else if (result !== postject.InjectResult.kSuccess) {
-          console.log("Error when injecting resource");
-          process.exit(3);
         }
-
-        await fs.writeFile(filename, data);
       }
       break;
 
@@ -104,12 +106,12 @@ async function main(filename, resourceName, resource, options) {
         // PE resource names appear to only work if uppercase
         resourceName = resourceName.uppercase();
 
-        const { result, data } = postject.injectIntoPE(
+        ({ result, data } = postject.injectIntoPE(
           executable,
           resourceName,
           resourceData,
           options.overwrite
-        );
+        ));
 
         if (result === postject.InjectResult.kAlreadyExists) {
           console.log(
@@ -117,14 +119,21 @@ async function main(filename, resourceName, resource, options) {
           );
           console.log("Use --overwrite to overwrite the existing content");
           process.exit(2);
-        } else if (result !== postject.InjectResult.kSuccess) {
-          console.log("Error when injecting resource");
-          process.exit(3);
         }
-
-        await fs.writeFile(filename, data);
       }
       break;
+  }
+
+  if (result !== postject.InjectResult.kSuccess) {
+    console.log("Error when injecting resource");
+    process.exit(3);
+  }
+
+  try {
+    await fs.writeFile(filename, data);
+  } catch {
+    console.log("Couldn't write executable");
+    process.exit(1);
   }
 }
 
