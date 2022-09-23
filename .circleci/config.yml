@@ -21,7 +21,7 @@ executors:
   debian:
     resource_class: medium
     docker:
-      - image: docker.io/library/debian:11
+      - image: docker.io/library/debian:bookworm
 
   linux:
     resource_class: medium
@@ -190,19 +190,20 @@ jobs:
 
 ## WORKFLOWS ##
 
-matrix: &matrix
-  matrix:
-    parameters:
-      os: [ alpine, debian, linux, macos, "win/default" ]
-
 workflows:
   postject:
     jobs:
       - lint:
-          <<: *matrix
+          matrix:
+            parameters:
+              os: [ linux, macos, "win/default" ]
       - build:
-          <<: *matrix
+          matrix:
+            parameters:
+              os: [ debian, linux, macos, "win/default" ]
       - test:
-          <<: *matrix
-          requires: [ build-<<matrix.os>> ]
+          matrix:
+            parameters:
+              os: [ alpine, debian, linux, macos, "win/default" ]
+          requires: [ build-linux ]
 
