@@ -36,6 +36,40 @@ executors:
 ## COMMANDS ##
 
 commands:
+  npm_install:
+    parameters:
+      <<: *common_parameters
+    steps:
+      - when:
+          condition:
+            equal: [ alpine, << parameters.os >> ]
+          steps:
+            - run: apk update
+            - run: apk add --no-cache nodejs npm
+
+      - when:
+          condition:
+            equal: [ debian, << parameters.os >> ]
+          steps:
+            - run: apt-get update
+            - run: apt-get install --no-install-recommends -y ca-certificates nodejs npm
+
+      - when:
+          condition:
+            equal: [ linux, << parameters.os >> ]
+          steps:
+            - run: sudo apt-get update
+            - run: sudo apt-get install --no-install-recommends -y ca-certificates nodejs npm
+
+      - when:
+          condition:
+            equal: [ "win/default", << parameters.os >> ]
+          steps:
+            - run: git config --global core.autocrlf false
+            - run: git config --global core.eol lf
+
+      - run: npm install
+
   prepare:
     parameters:
       <<: *common_parameters
@@ -45,21 +79,21 @@ commands:
             equal: [ alpine, << parameters.os >> ]
           steps:
             - run: apk update
-            - run: apk add --no-cache build-base git nodejs npm ninja cmake python3 python3-dev py3-setuptools
+            - run: apk add --no-cache build-base git ninja cmake python3 python3-dev py3-setuptools
 
       - when:
           condition:
             equal: [ debian, << parameters.os >> ]
           steps:
             - run: apt-get update
-            - run: apt-get install --no-install-recommends -y ca-certificates build-essential git nodejs npm ninja-build cmake python3 python3-dev python3-setuptools
+            - run: apt-get install --no-install-recommends -y build-essential git ninja-build cmake python3 python3-dev python3-setuptools
 
       - when:
           condition:
             equal: [ linux, << parameters.os >> ]
           steps:
             - run: sudo apt-get update
-            - run: sudo apt-get install --no-install-recommends -y ca-certificates build-essential git nodejs npm ninja-build cmake
+            - run: sudo apt-get install --no-install-recommends -y build-essential git ninja-build cmake
 
       - when:
           condition:
@@ -74,8 +108,6 @@ commands:
           steps:
             - run: choco install cmake.install --installargs '"ADD_CMAKE_TO_PATH=User"'
             - run: choco install ninja
-            - run: git config --global core.autocrlf false
-            - run: git config --global core.eol lf
 
       - run: git clone https://github.com/emscripten-core/emsdk.git
 
@@ -95,11 +127,7 @@ commands:
             - run: cd emsdk && ./emsdk install latest
             - run: cd emsdk && ./emsdk activate latest
 
-      - run: npm install
-
   lint:
-    parameters:
-      <<: *common_parameters
     steps:
       - run: npm run lint
 
@@ -160,10 +188,9 @@ jobs:
     executor: { name: << parameters.os >> }
     steps:
       - checkout
-      - prepare:
+      - npm_install:
           os: << parameters.os >>
-      - lint:
-          os: << parameters.os >>
+      - lint
 
   build:
     parameters:
@@ -171,6 +198,8 @@ jobs:
     executor: { name: << parameters.os >> }
     steps:
       - checkout
+      - npm_install:
+          os: << parameters.os >>
       - prepare:
           os: << parameters.os >>
       - build:
@@ -184,11 +213,16 @@ jobs:
     executor: { name: << parameters.os >> }
     steps:
       - checkout
-      - prepare:
+      - npm_install:
           os: << parameters.os >>
       - test
 
 ## WORKFLOWS ##
+
+matrix: &matrix
+  matrix:
+    parameters:
+      os: [ debian, linux, macos, "win/default" ]
 
 workflows:
   postject:
@@ -196,14 +230,10 @@ workflows:
       - lint:
           matrix:
             parameters:
-              os: [ linux, macos, "win/default" ]
+              os: [ linux, macos ]
       - build:
-          matrix:
-            parameters:
-              os: [ debian, linux, macos, "win/default" ]
+          <<: *matrix
       - test:
-          matrix:
-            parameters:
-              os: [ alpine, debian, linux, macos, "win/default" ]
-          requires: [ build-linux ]
+          <<: *matrix
+          requires: [ build-<< matrix.os >> ]
 
