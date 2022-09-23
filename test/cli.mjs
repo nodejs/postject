@@ -1,5 +1,4 @@
 import * as crypto from "crypto";
-import { promises as fs } from "fs";
 import * as path from "path";
 import * as os from "os";
 
@@ -9,7 +8,7 @@ chai.use(chaiAsPromised);
 
 import rimraf from "rimraf";
 import { temporaryDirectory } from "tempy";
-import { $ } from "zx";
+import { $, fs } from "zx";
 
 // TODO - More test coverage
 describe("postject CLI", () => {
@@ -23,6 +22,7 @@ describe("postject CLI", () => {
     let originalFilename;
 
     tempDir = temporaryDirectory();
+    await fs.ensureDir(tempDir);
 
     if (IS_WINDOWS) {
       originalFilename = "./build/test/Debug/cpp_test.exe";
@@ -32,7 +32,7 @@ describe("postject CLI", () => {
       filename = path.join(tempDir, "cpp_test");
     }
 
-    await fs.copyFile(originalFilename, filename);
+    await fs.copy(originalFilename, filename);
 
     resourceContents = crypto.randomBytes(64).toString("hex");
     resourceFilename = path.join(tempDir, "resource.bin");
