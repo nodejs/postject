@@ -86,5 +86,5 @@ describe("postject CLI", () => {
       expect(status).to.equal(0);
       expect(stdout).to.have.string(resourceContents);
     }
-  }).timeout(15000);
+  }).timeout(30000);
 });
