@@ -7,32 +7,45 @@ Easily inject arbitrary read-only resources into executable formats
 
 ## Building
 
-### Windows
+### Prerequisites
 
-You'll need CMake and Ninja to build LIEF.
+* CMake
+* Ninja
+* [Emscripten (emsdk)](https://emscripten.org/docs/getting_started/downloads.html)
 
-```sh
-$ cd vendor\lief
-$ python3 ./setup.py --ninja build_ext -b ..\..\dist\lief
-```
-
-### macOS / Linux
+### Build Command
 
 ```sh
-$ sudo make install-deps
-$ make lief
+$ npm run build
 ```
+
+The final output is placed in `dist/`, with `main.js` being the
+entrypoint.
 
 ## Usage
 
 ```sh
-$ ./postject.py --macho-segment-name __ELECTRON /Users/dsanders/electron/src/out/Testing/Electron.app/Contents/Frameworks/Electron\ Framework.framework/Electron\ Framework app_asar /Users/dsanders/test.asar
+$ postject -h
+Usage: postject [options] <filename> <resource_name> <resource>
+
+Inject arbitrary read-only resources into an executable for use at runtime
+
+Arguments:
+  filename                             The executable to inject into
+  resource_name                        The resource name to use (section name on Mach-O and ELF, resource name for PE)
+  resource                             The resource to inject
+
+Options:
+  --macho-segment-name <segment_name>  Name for the Mach-O segment (default: "__POSTJECT")
+  --output-api-header                  Output the API header to stdout
+  --overwrite                          Overwrite the resource if it already exists
+  -h, --help                           display help for command
 ```
 
 ### Testing
 
 ```sh
-$ make check
+$ npm test
 ```
 
 ## Design

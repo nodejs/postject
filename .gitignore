@@ -50,6 +50,4 @@ Thumbs.db
 
 vendor/lief/lief.*.so
 vendor/lief/build/
-examples/data.txt
-examples/test
-examples/*.o
+build/
