@@ -172,6 +172,42 @@ commands:
       - store_test_results:
           path: .
 
+  publish:
+    steps:
+      - attach_workspace:
+          at: .
+
+      - run:
+          name: Remove unnecessary files
+          command: rm -rf emsdk
+
+      - run:
+          name: Update version if not on git tag
+          command: |
+            if ! git describe --exact-match HEAD 1>/dev/null 2>/dev/null
+            then
+              git describe --exact-match HEAD 1>/dev/null 2>/dev/null && exit
+              CURRENT_VERSION="$(node -p "require('./package.json').version")"
+              GIT_COMMIT_SHA="$(git rev-parse --short HEAD)"
+              npm version "$CURRENT_VERSION-$GIT_COMMIT_SHA"
+            fi
+
+      - run:
+          name: Login to npm
+          command: npm set //registry.npmjs.org/:_authToken=$NPM_TOKEN
+
+      - run:
+          name: Publish to npm
+          command: |
+            if git describe --exact-match HEAD 1>/dev/null 2>/dev/null
+            then
+              # Publish to latest when a git tag is pushed.
+              npm publish --tag latest
+            else
+              # Publish to beta when not run on a git tag.
+              npm publish --tag beta
+            fi
+
 ## JOBS ##
 
 jobs:
@@ -210,6 +246,14 @@ jobs:
           os: << parameters.os >>
       - test
 
+  publish:
+    parameters:
+      <<: *common_parameters
+    executor: { name: linux }
+    steps:
+      - checkout
+      - publish
+
 ## WORKFLOWS ##
 
 matrix: &matrix
@@ -229,4 +273,9 @@ workflows:
       - test:
           <<: *matrix
           requires: [ build-<< matrix.os >> ]
+      - publish:
+          matrix:
+            parameters:
+              os: [ linux ]
+          requires: [ test-<< matrix.os >> ]
 
