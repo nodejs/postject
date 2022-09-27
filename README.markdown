@@ -5,6 +5,12 @@
 Easily inject arbitrary read-only resources into executable formats
 (Mach-O, PE, ELF) and use it at runtime.
 
+## Install
+
+```sh
+npm i postject
+```
+
 ## Building
 
 ### Prerequisites
