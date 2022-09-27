@@ -223,7 +223,7 @@ workflows:
       - lint:
           matrix:
             parameters:
-              os: [ linux, macos ]
+              os: [ linux, macos, "win/default" ]
       - build:
           <<: *matrix
       - test:
