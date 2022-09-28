@@ -3,6 +3,8 @@ build/
 CMakeLists.txt
 CODEOWNERS
 DEPENDENCIES
+.gitattributes
+.github/
 postject-api.h
 scripts/
 src/
