@@ -13,8 +13,8 @@
 #elif defined(__linux__)
 #include <elf.h>
 #include <link.h>
-#include <sys/param.h>
 #include <sys/auxv.h>
+#include <sys/param.h>
 #elif defined(_WIN32)
 #include <windows.h>
 #endif
@@ -35,9 +35,10 @@ static void postject_options_init(struct postject_options* options) {
   options->pe_resource_name = NULL;
 }
 
-static const void* postject_find_resource(const char* name,
-                                    size_t* size,
-                                    const struct postject_options* options) {
+static const void* postject_find_resource(
+    const char* name,
+    size_t* size,
+    const struct postject_options* options) {
   // Always zero out the size pointer to start
   if (size != NULL) {
     *size = 0;
@@ -77,8 +78,8 @@ static const void* postject_find_resource(const char* name,
       // Add the "virtual memory address slide" amount to ensure a valid pointer
       // in cases where the virtual memory address have been adjusted by the OS.
       //
-      // NOTE - `getsectdataFromFramework` already handles this adjustment for us,
-      //        which is why we only do it for `getsectdata`, see:
+      // NOTE - `getsectdataFromFramework` already handles this adjustment for
+      //        us, which is why we only do it for `getsectdata`, see:
       //        https://web.archive.org/web/20220613234007/https://opensource.apple.com/source/cctools/cctools-590/libmacho/getsecbyname.c.auto.html
       ptr += _dyld_get_image_vmaddr_slide(0);
     }
@@ -92,52 +93,51 @@ static const void* postject_find_resource(const char* name,
 
   return ptr;
 #elif defined(__linux__)
-	void *ptr = NULL;
+  void* ptr = NULL;
 
-	if (options != NULL && options->elf_section_name != NULL) {
-		name = options->elf_section_name;
-	}
+  if (options != NULL && options->elf_section_name != NULL) {
+    name = options->elf_section_name;
+  }
 
-	uintptr_t p = getauxval(AT_PHDR);
-	size_t n = getauxval(AT_PHNUM);
-	uintptr_t base_addr = p - sizeof(ElfW(Ehdr));
+  uintptr_t p = getauxval(AT_PHDR);
+  size_t n = getauxval(AT_PHNUM);
+  uintptr_t base_addr = p - sizeof(ElfW(Ehdr));
 
-	// iterate program header
-	for (; n > 0; n--, p += sizeof(ElfW(Phdr))) {
-		ElfW(Phdr) *phdr = (ElfW(Phdr) *)p;
+  // iterate program header
+  for (; n > 0; n--, p += sizeof(ElfW(Phdr))) {
+    ElfW(Phdr)* phdr = (ElfW(Phdr)*)p;
 
-		// skip everything but notes
-		if (phdr->p_type != PT_NOTE) {
-			continue;
-		}
+    // skip everything but notes
+    if (phdr->p_type != PT_NOTE) {
+      continue;
+    }
 
-		// note segment starts at base address + segment virtual address
-		uintptr_t pos = (base_addr + phdr->p_vaddr);
-		uintptr_t end = (pos + phdr->p_memsz);
+    // note segment starts at base address + segment virtual address
+    uintptr_t pos = (base_addr + phdr->p_vaddr);
+    uintptr_t end = (pos + phdr->p_memsz);
 
-		// iterate through segment until we reach the end
-		while (pos < end) {
-			if (pos + sizeof(ElfW(Nhdr)) > end) {
-				break; // invalid
-			}
+    // iterate through segment until we reach the end
+    while (pos < end) {
+      if (pos + sizeof(ElfW(Nhdr)) > end) {
+        break;  // invalid
+      }
 
-			ElfW(Nhdr) *note = (ElfW(Nhdr) *)(uintptr_t)pos;
-			if (note->n_namesz != 0 && note->n_descsz != 0 &&
-			    strncmp((char *)(pos + sizeof(ElfW(Nhdr))),
-				    (char *)name, sizeof(name)) == 0) {
-				*size = note->n_descsz;
-				// advance past note header and aligned name
-				// to get to description data
-				return (void *)((uintptr_t)note +
-						sizeof(ElfW(Nhdr)) +
-						roundup(note->n_namesz, 4));
-			}
+      ElfW(Nhdr)* note = (ElfW(Nhdr)*)(uintptr_t)pos;
+      if (note->n_namesz != 0 && note->n_descsz != 0 &&
+          strncmp((char*)(pos + sizeof(ElfW(Nhdr))), (char*)name,
+                  sizeof(name)) == 0) {
+        *size = note->n_descsz;
+        // advance past note header and aligned name
+        // to get to description data
+        return (void*)((uintptr_t)note + sizeof(ElfW(Nhdr)) +
+                       roundup(note->n_namesz, 4));
+      }
 
-			pos += (sizeof(ElfW(Nhdr)) + roundup(note->n_namesz, 4) +
-				roundup(note->n_descsz, 4));
-		}
-	}
-	return NULL;
+      pos += (sizeof(ElfW(Nhdr)) + roundup(note->n_namesz, 4) +
+              roundup(note->n_descsz, 4));
+    }
+  }
+  return NULL;
 
 #elif defined(_WIN32)
   void* ptr = NULL;

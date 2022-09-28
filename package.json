@@ -20,10 +20,10 @@
     "build": "zx ./scripts/build.mjs",
     "clean": "rimraf ./build",
     "format": "npm run format:cpp && npm run format:js",
-    "format:cpp": "clang-format -style=chromium -i src/**.cpp test/**.c test/**.cpp",
+    "format:cpp": "clang-format -style=chromium -i postject-api.h src/**.cpp test/**.c test/**.cpp",
     "format:js": "prettier --write src/**.js scripts/**.mjs test/**.mjs",
     "lint": "npm run lint:cpp && npm run lint:js",
-    "lint:cpp": "clang-format -style=chromium --dry-run --Werror src/**.cpp test/**.c test/**.cpp",
+    "lint:cpp": "clang-format -style=chromium --dry-run --Werror postject-api.h src/**.cpp test/**.c test/**.cpp",
     "lint:js": "prettier --check src/**.js scripts/**.mjs test/**.mjs",
     "test": "mocha"
   },
