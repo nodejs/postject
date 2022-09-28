@@ -12,23 +12,6 @@ Easily inject arbitrary read-only resources into executable formats
 npm i -g postject
 ```
 
-## Building
-
-### Prerequisites
-
-* CMake
-* Ninja
-* [Emscripten (emsdk)](https://emscripten.org/docs/getting_started/downloads.html)
-
-### Build Command
-
-```sh
-$ npm run build
-```
-
-The final output is placed in `dist/`, with `main.js` being the
-entrypoint.
-
 ## Usage
 
 ```sh
@@ -48,6 +31,23 @@ Options:
   --overwrite                          Overwrite the resource if it already exists
   -h, --help                           display help for command
 ```
+
+## Building
+
+### Prerequisites
+
+* CMake
+* Ninja
+* [Emscripten (emsdk)](https://emscripten.org/docs/getting_started/downloads.html)
+
+### Build Command
+
+```sh
+$ npm run build
+```
+
+The final output is placed in `dist/`, with `main.js` being the
+entrypoint.
 
 ### Testing
 
