@@ -1,6 +1,7 @@
 # postject
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/postmanlabs/postject/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/postmanlabs/postject/tree/main)
+[![npm version](http://img.shields.io/npm/v/postject.svg)](https://npmjs.org/package/postject)
 
 Easily inject arbitrary read-only resources into executable formats
 (Mach-O, PE, ELF) and use it at runtime.
