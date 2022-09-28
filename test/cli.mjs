@@ -132,5 +132,5 @@ describe("Inject data into Node.js", () => {
       });
       expect(status).to.equal(0);
     }
-  }).timeout(50000);
+  }).timeout(60000);
 });
