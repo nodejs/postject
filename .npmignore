@@ -8,3 +8,4 @@ scripts/
 src/
 test/
 vendor/
+!dist/postject-api.h
