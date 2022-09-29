@@ -18,6 +18,7 @@
   "main": "dist/api.js",
   "scripts": {
     "build": "zx ./scripts/build.mjs",
+    "build:test": "zx ./scripts/build.mjs --target=test",
     "clean": "rimraf ./build",
     "format": "npm run format:cpp && npm run format:js",
     "format:cpp": "clang-format -style=chromium -i postject-api.h src/**.cpp test/**.c test/**.cpp",
