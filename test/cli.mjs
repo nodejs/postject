@@ -88,3 +88,49 @@ describe("postject CLI", () => {
     }
   }).timeout(30000);
 });
+
+describe("Inject data into Node.js", () => {
+  let filename;
+  let tempDir;
+  let resourceContents;
+  let resourceFilename;
+
+  beforeEach(async () => {
+    tempDir = temporaryDirectory();
+    await fs.ensureDir(tempDir);
+
+    filename = path.join(tempDir, path.basename(process.execPath));
+
+    await fs.copy(process.execPath, filename);
+
+    resourceContents = crypto.randomBytes(64).toString("hex");
+    resourceFilename = path.join(tempDir, "resource.bin");
+    await fs.writeFile(resourceFilename, resourceContents);
+  });
+
+  afterEach(() => {
+    rimraf.sync(tempDir);
+  });
+
+  it("should inject a resource successfully", async () => {
+    {
+      const { status, stdout, stderr } = spawnSync(
+        "node",
+        ["./dist/main.js", filename, "foobar", resourceFilename],
+        { encoding: "utf-8" }
+      );
+      // TODO(dsanders11) - Enable this once we squelch LIEF warnings
+      // expect(stderr).to.be.empty;
+      expect(stdout).to.be.empty;
+      expect(status).to.equal(0);
+    }
+
+    // After injection
+    {
+      const { status } = spawnSync(filename, ["-e", "process.exit()"], {
+        encoding: "utf-8",
+      });
+      expect(status).to.equal(0);
+    }
+  }).timeout(60000);
+});
