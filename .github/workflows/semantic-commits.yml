@@ -7,10 +7,16 @@ on:
       - edited
       - synchronize
 
+permissions:
+  contents: read
+
 jobs:
   main:
     name: Validate PR Title
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      statuses: write
     steps:
       - name: semantic-pull-request
         uses: amannn/action-semantic-pull-request@505e44b4f33b4c801f063838b3f053990ee46ea7  # v4.6
