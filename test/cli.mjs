@@ -229,5 +229,5 @@ describe("Inject data into Node.js using API", () => {
       });
       expect(status).to.equal(0);
     }
-  }).timeout(60000);
+  }).timeout(65000);
 });
