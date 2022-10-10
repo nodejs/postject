@@ -33,10 +33,14 @@ await $`emcmake cmake -G Ninja ..`;
 await $`cmake --build . -j ${jobs}`;
 
 // Copy artifacts to dist
-await fs.copy("postject.wasm", "../dist/postject.wasm");
 await fs.copy("postject.js", "../dist/postject.js");
-await fs.copy("../src/main.js", "../dist/main.js");
+await fs.copy("../src/api.js", "../dist/api.js");
+await fs.copy("../src/cli.js", "../dist/cli.js");
 await fs.copy("../postject-api.h", "../dist/postject-api.h");
+
+// Bundle ../dist/postject.js into ../dist/api.js
+await $`esbuild ../dist/api.js --allow-overwrite --bundle --platform=node --outfile=../dist/api.js`;
+await fs.rm("../dist/postject.js");
 
 // Build tests
 if (!(await fs.exists("./test"))) {
