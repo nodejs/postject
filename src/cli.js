@@ -2,12 +2,16 @@
 
 const program = require("commander");
 const { constants, promises: fs } = require("fs");
+const path = require("path");
 const { inject } = require("./api.js");
 
 async function main(filename, resourceName, resource, options) {
   if (options.outputApiHeader) {
     // Handles --output-api-header.
-    return await fs.readFile(path.join(__dirname, "postject-api.h"), "utf-8");
+    console.log(
+      await fs.readFile(path.join(__dirname, "postject-api.h"), "utf-8")
+    );
+    process.exit();
   }
 
   let resourceData;
