@@ -32,10 +32,10 @@ cd("build");
 await $`emcmake cmake -G Ninja ..`;
 await $`cmake --build . -j ${jobs}`;
 
-// Copy artifacts to dist
-await fs.copy("postject.wasm", "../dist/postject.wasm");
-await fs.copy("postject.js", "../dist/postject.js");
-await fs.copy("../src/main.js", "../dist/main.js");
+// Bundle api.js and copy artifacts to dist
+await fs.copy("../src/api.js", "api.js");
+await $`esbuild api.js --bundle --platform=node --outfile=../dist/api.js`;
+await fs.copy("../src/cli.js", "../dist/cli.js");
 await fs.copy("../postject-api.h", "../dist/postject-api.h");
 
 // Build tests

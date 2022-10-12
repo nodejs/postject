@@ -14,6 +14,8 @@ npm i -g postject
 
 ## Usage
 
+### Command line utility
+
 ```sh
 $ postject -h
 Usage: postject [options] <filename> <resource_name> <resource>
@@ -30,6 +32,14 @@ Options:
   --output-api-header                  Output the API header to stdout
   --overwrite                          Overwrite the resource if it already exists
   -h, --help                           display help for command
+```
+
+### Using Programatically
+
+```js
+const { inject } = require('postject');
+
+await inject('a.out', 'lol', Buffer.from('Hello, world!'));
 ```
 
 ## Building
