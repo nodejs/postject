@@ -38,6 +38,17 @@ await $`esbuild api.js --bundle --platform=node --outfile=../dist/api.js`;
 await fs.copy("../src/cli.js", "../dist/cli.js");
 await fs.copy("../postject-api.h", "../dist/postject-api.h");
 
+// Repace all occurrences of `__filename` and `__dirname` with "" because
+// Node.js core doesn't support it.
+// Refs: https://github.com/postmanlabs/postject/issues/50
+// TODO(RaisinTen): Send a PR to emsdk to get rid of these symbols from the
+// affected code paths when `SINGLE_FILE` is enabled.
+const contents = await fs.readFile("../dist/api.js", "utf-8");
+const replaced = contents
+  .replace(/__filename/gi, "''")
+  .replace(/__dirname/, "''");
+await fs.writeFile("../dist/api.js", replaced);
+
 // Build tests
 if (!(await fs.exists("./test"))) {
   await $`mkdir test`;
