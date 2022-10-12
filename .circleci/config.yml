@@ -208,14 +208,17 @@ jobs:
       - checkout
       - npm_install:
           os: << parameters.os >>
+      - when:
+          condition:
+            equal: [ "alpine", << parameters.os >> ]
+          steps:
+            - prepare:
+                os: << parameters.os >>
+            - run:
+                command: npm run build:test
       - test
 
 ## WORKFLOWS ##
-
-matrix: &matrix
-  matrix:
-    parameters:
-      os: [ debian, linux, macos, "win/default" ]
 
 workflows:
   postject:
@@ -225,8 +228,16 @@ workflows:
             parameters:
               os: [ linux, macos, "win/default" ]
       - build:
-          <<: *matrix
+          matrix:
+            parameters:
+              os: [ linux, macos, "win/default" ]
       - test:
-          <<: *matrix
+          matrix:
+            parameters:
+              os: [ macos, "win/default" ]
           requires: [ build-<< matrix.os >> ]
-
+      - test:
+          matrix:
+            parameters:
+              os: [ alpine, debian ]
+          requires: [ build-linux ]
