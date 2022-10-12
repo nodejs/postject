@@ -8,7 +8,7 @@ async function inject(filename, resourceName, resourceData, options) {
   const overwrite = options?.overwrite || false;
 
   if (!Buffer.isBuffer(resourceData)) {
-    throw new Error("resourceData must be a buffer");
+    throw new TypeError("resourceData must be a buffer");
   }
 
   try {
