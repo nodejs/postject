@@ -231,3 +231,19 @@ describe("Inject data into Node.js using API", () => {
     }
   }).timeout(70000);
 });
+
+describe("api.js should not contain __filename and __dirname", () => {
+  let contents;
+
+  before(async () => {
+    contents = await fs.readFile("./dist/api.js", "utf-8");
+  });
+
+  it("should not contain __filename", () => {
+    expect(contents).to.not.have.string("__filename");
+  });
+
+  it("should not contain __dirname", () => {
+    expect(contents).to.not.have.string("__dirname");
+  });
+});
