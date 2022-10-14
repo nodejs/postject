@@ -2,7 +2,7 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const { inject } = require("..");
 
-import { spawnSync } from "child_process";
+import { spawnSync, execSync } from "child_process";
 import * as crypto from "crypto";
 import * as path from "path";
 import * as os from "os";
@@ -84,6 +84,24 @@ describe("postject CLI", () => {
       expect(status).to.equal(0);
     }
 
+    // Verifying code signing using a self-signed certificate.
+    {
+      if (process.platform === "darwin") {
+        let codesignFound = false;
+        try {
+          execSync("command -v codesign");
+          codesignFound = true;
+        } catch (err) {
+          console.log(err.message);
+        }
+        if (codesignFound) {
+          execSync(`codesign --sign - ${filename}`);
+          execSync(`codesign --verify ${filename}`);
+        }
+      }
+      // TODO(RaisinTen): Test code signing on Windows.
+    }
+
     // After injection
     {
       const { status, stdout } = spawnSync(filename, { encoding: "utf-8" });
@@ -138,6 +156,24 @@ describe("postject API", () => {
       await inject(filename, "foobar", resourceData);
     }
 
+    // Verifying code signing using a self-signed certificate.
+    {
+      if (process.platform === "darwin") {
+        let codesignFound = false;
+        try {
+          execSync("command -v codesign");
+          codesignFound = true;
+        } catch (err) {
+          console.log(err.message);
+        }
+        if (codesignFound) {
+          execSync(`codesign --sign - ${filename}`);
+          execSync(`codesign --verify ${filename}`);
+        }
+      }
+      // TODO(RaisinTen): Test code signing on Windows.
+    }
+
     // After injection
     {
       const { status, stdout } = spawnSync(filename, { encoding: "utf-8" });
@@ -183,6 +219,24 @@ describe("Inject data into Node.js using CLI", () => {
       expect(status).to.equal(0);
     }
 
+    // Verifying code signing using a self-signed certificate.
+    {
+      if (process.platform === "darwin") {
+        let codesignFound = false;
+        try {
+          execSync("command -v codesign");
+          codesignFound = true;
+        } catch (err) {
+          console.log(err.message);
+        }
+        if (codesignFound) {
+          execSync(`codesign --sign - ${filename}`);
+          execSync(`codesign --verify ${filename}`);
+        }
+      }
+      // TODO(RaisinTen): Test code signing on Windows.
+    }
+
     // After injection
     {
       const { status } = spawnSync(filename, ["-e", "process.exit()"], {
@@ -220,6 +274,24 @@ describe("Inject data into Node.js using API", () => {
     {
       const resourceData = await fs.readFile(resourceFilename);
       await inject(filename, "foobar", resourceData);
+    }
+
+    // Verifying code signing using a self-signed certificate.
+    {
+      if (process.platform === "darwin") {
+        let codesignFound = false;
+        try {
+          execSync("command -v codesign");
+          codesignFound = true;
+        } catch (err) {
+          console.log(err.message);
+        }
+        if (codesignFound) {
+          execSync(`codesign --sign - ${filename}`);
+          execSync(`codesign --verify ${filename}`);
+        }
+      }
+      // TODO(RaisinTen): Test code signing on Windows.
     }
 
     // After injection
