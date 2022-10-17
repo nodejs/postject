@@ -90,7 +90,7 @@ describe("postject CLI", () => {
       expect(status).to.equal(0);
       expect(stdout).to.have.string(resourceContents);
     }
-  }).timeout(30000);
+  }).timeout(3_00_000);
 });
 
 describe("postject API", () => {
@@ -144,7 +144,7 @@ describe("postject API", () => {
       expect(status).to.equal(0);
       expect(stdout).to.have.string(resourceContents);
     }
-  }).timeout(30000);
+  }).timeout(3_00_000);
 });
 
 describe("Inject data into Node.js using CLI", () => {
@@ -190,7 +190,7 @@ describe("Inject data into Node.js using CLI", () => {
       });
       expect(status).to.equal(0);
     }
-  }).timeout(60000);
+  }).timeout(3_00_000);
 });
 
 describe("Inject data into Node.js using API", () => {
@@ -229,7 +229,7 @@ describe("Inject data into Node.js using API", () => {
       });
       expect(status).to.equal(0);
     }
-  }).timeout(70000);
+  }).timeout(3_00_000);
 });
 
 describe("api.js should not contain __filename and __dirname", () => {
