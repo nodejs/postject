@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.9)
 set(CMAKE_CXX_STANDARD 11)
 
-set(CMAKE_CXX_FLAGS "-Wall -Werror")
-set(CMAKE_C_FLAGS "-Wall -Werror")
+if(WIN32)
+  set(CMAKE_CXX_FLAGS "-Wall -WX")
+  set(CMAKE_C_FLAGS "-Wall -WX")
+else()
+  set(CMAKE_CXX_FLAGS "-Wall -Werror")
+  set(CMAKE_C_FLAGS "-Wall -Werror")
+endif()
 
 project(postject-tests)
 
