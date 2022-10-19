@@ -150,7 +150,7 @@ static const void* postject_find_resource(
     if (resource_name == NULL) {
       return NULL;
     }
-    strcpy(resource_name, name);
+    strcpy_s(resource_name, strlen(name) + 1, name);
     CharUpperA(resource_name);  // Uppercases inplace
   }
 
