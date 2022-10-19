@@ -93,7 +93,6 @@ static const void* postject_find_resource(
 
   return ptr;
 #elif defined(__linux__)
-  void* ptr = NULL;
 
   if (options != NULL && options->elf_section_name != NULL) {
     name = options->elf_section_name;
