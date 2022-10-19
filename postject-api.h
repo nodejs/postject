@@ -27,7 +27,7 @@ struct postject_options {
   const char* pe_resource_name;
 };
 
-static void postject_options_init(struct postject_options* options) {
+inline void postject_options_init(struct postject_options* options) {
   options->elf_section_name = NULL;
   options->macho_framework_name = NULL;
   options->macho_section_name = NULL;
