@@ -27,7 +27,7 @@ struct postject_options {
   const char* pe_resource_name;
 };
 
-static void postject_options_init(struct postject_options* options) {
+inline void postject_options_init(struct postject_options* options) {
   options->elf_section_name = NULL;
   options->macho_framework_name = NULL;
   options->macho_section_name = NULL;
@@ -93,7 +93,6 @@ static const void* postject_find_resource(
 
   return ptr;
 #elif defined(__linux__)
-  void* ptr = NULL;
 
   if (options != NULL && options->elf_section_name != NULL) {
     name = options->elf_section_name;
@@ -151,7 +150,7 @@ static const void* postject_find_resource(
     if (resource_name == NULL) {
       return NULL;
     }
-    strcpy(resource_name, name);
+    strcpy_s(resource_name, strlen(name) + 1, name);
     CharUpperA(resource_name);  // Uppercases inplace
   }
 
