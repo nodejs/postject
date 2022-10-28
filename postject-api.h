@@ -1,5 +1,3 @@
-// Copyright (c) 2022 Postman, Inc.
-
 #ifndef POSTJECT_API_H_
 #define POSTJECT_API_H_
 
