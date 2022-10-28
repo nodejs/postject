@@ -1,6 +1,7 @@
 #ifndef POSTJECT_API_H_
 #define POSTJECT_API_H_
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
