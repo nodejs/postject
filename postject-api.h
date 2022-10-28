@@ -33,6 +33,13 @@ inline void postject_options_init(struct postject_options* options) {
   options->pe_resource_name = NULL;
 }
 
+static inline bool postject_has_resource() {
+#define POSTJECT_SENTINEL_STRING \
+  "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:0"
+  return POSTJECT_SENTINEL_STRING[sizeof(POSTJECT_SENTINEL_STRING) - 2] == '1';
+#undef POSTJECT_SENTINEL_STRING
+}
+
 static const void* postject_find_resource(
     const char* name,
     size_t* size,
