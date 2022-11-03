@@ -39,7 +39,7 @@ Options:
 ```js
 const { inject } = require('postject');
 
-await inject('a.out', 'lol', Buffer.from('Hello, world!'));
+await inject('a.out', 'lol', '/path/to/resource/file');
 ```
 
 ## Building

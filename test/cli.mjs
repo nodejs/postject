@@ -72,6 +72,23 @@ describe("postject CLI", () => {
       expect(stdout).to.have.string("Hello world");
     }
 
+    // Code signing using a self-signed certificate.
+    {
+      if (process.platform === "darwin") {
+        let codesignFound = false;
+        try {
+          execSync("command -v codesign");
+          codesignFound = true;
+        } catch (err) {
+          console.log(err.message);
+        }
+        if (codesignFound) {
+          execSync(`codesign --sign - ${filename}`);
+        }
+      }
+      // TODO(RaisinTen): Test code signing on Windows.
+    }
+
     {
       const { status, stdout, stderr } = spawnSync(
         "node",
@@ -95,7 +112,6 @@ describe("postject CLI", () => {
           console.log(err.message);
         }
         if (codesignFound) {
-          execSync(`codesign --sign - ${filename}`);
           execSync(`codesign --verify ${filename}`);
         }
       }
@@ -151,9 +167,25 @@ describe("postject API", () => {
       expect(stdout).to.have.string("Hello world");
     }
 
+    // Code signing using a self-signed certificate.
     {
-      const resourceData = await fs.readFile(resourceFilename);
-      await inject(filename, "foobar", resourceData);
+      if (process.platform === "darwin") {
+        let codesignFound = false;
+        try {
+          execSync("command -v codesign");
+          codesignFound = true;
+        } catch (err) {
+          console.log(err.message);
+        }
+        if (codesignFound) {
+          execSync(`codesign --sign - ${filename}`);
+        }
+      }
+      // TODO(RaisinTen): Test code signing on Windows.
+    }
+
+    {
+      await inject(filename, "foobar", resourceFilename);
     }
 
     // Verifying code signing using a self-signed certificate.
@@ -167,7 +199,6 @@ describe("postject API", () => {
           console.log(err.message);
         }
         if (codesignFound) {
-          execSync(`codesign --sign - ${filename}`);
           execSync(`codesign --verify ${filename}`);
         }
       }

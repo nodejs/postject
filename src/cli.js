@@ -14,18 +14,15 @@ async function main(filename, resourceName, resource, options) {
     process.exit();
   }
 
-  let resourceData;
-
   try {
     await fs.access(resource, constants.R_OK);
-    resourceData = await fs.readFile(resource);
   } catch {
-    console.log("Can't read resource file");
+    console.log("Can't access resource file");
     process.exit(1);
   }
 
   try {
-    await inject(filename, resourceName, resourceData, {
+    await inject(filename, resourceName, resource, {
       machoSegmentName: options.machoSegmentName,
       overwrite: options.overwrite,
     });

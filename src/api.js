@@ -1,14 +1,18 @@
 const { constants, promises: fs } = require("fs");
+const { execSync } = require("child_process");
 const path = require("path");
 
 const loadPostjectModule = require("./postject.js");
 
-async function inject(filename, resourceName, resourceData, options) {
+async function inject(filename, resourceName, resource, options) {
   const machoSegmentName = options?.machoSegmentName || "__POSTJECT";
   const overwrite = options?.overwrite || false;
 
-  if (!Buffer.isBuffer(resourceData)) {
-    throw new TypeError("resourceData must be a buffer");
+  let resourceData;
+  try {
+    resourceData = await fs.readFile(resource);
+  } catch {
+    throw new Error("Can't access resource file");
   }
 
   try {
@@ -39,30 +43,10 @@ async function inject(filename, resourceName, resourceData, options) {
 
   switch (executableFormat) {
     case postject.ExecutableFormat.kMachO:
-      {
-        let sectionName = resourceName;
-
-        // Mach-O section names are conventionally of the style __foo
-        if (!sectionName.startsWith("__")) {
-          sectionName = `__${sectionName}`;
-        }
-
-        ({ result, data } = postject.injectIntoMachO(
-          executable,
-          machoSegmentName,
-          sectionName,
-          resourceData,
-          overwrite
-        ));
-
-        if (result === postject.InjectResult.kAlreadyExists) {
-          throw new Error(
-            `Segment and section with that name already exists: ${machoSegmentName}/${sectionName}\n` +
-              "Use --overwrite to overwrite the existing content"
-          );
-        }
-      }
-      break;
+      execSync(
+        `/usr/local/opt/llvm/bin/llvm-objcopy --add-section ${machoSegmentName},__${resourceName}=${resource} ${filename}`
+      );
+      return;
 
     case postject.ExecutableFormat.kELF:
       {
