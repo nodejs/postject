@@ -1,6 +1,7 @@
 const { constants, promises: fs } = require("fs");
-const { execSync } = require("child_process");
 const path = require("path");
+const util = require("util");
+const execFile = util.promisify(require("child_process").execFile);
 
 const loadPostjectModule = require("./postject.js");
 
@@ -43,9 +44,11 @@ async function inject(filename, resourceName, resource, options) {
 
   switch (executableFormat) {
     case postject.ExecutableFormat.kMachO:
-      execSync(
-        `/usr/local/opt/llvm/bin/llvm-objcopy --add-section ${machoSegmentName},__${resourceName}=${resource} ${filename}`
-      );
+      await execFile("/usr/local/opt/llvm/bin/llvm-objcopy", [
+        "--add-section",
+        `${machoSegmentName},__${resourceName}=${resource}`,
+        filename,
+      ]);
       return;
 
     case postject.ExecutableFormat.kELF:
