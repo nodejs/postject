@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-const program = require("commander");
 const { constants, promises: fs } = require("fs");
 const path = require("path");
 const { inject } = require("./api.js");
+const { argumentParser } = require("./argsParser.js");
 
 async function main(filename, resourceName, resource, options) {
   if (options.outputApiHeader) {
@@ -36,24 +36,5 @@ async function main(filename, resourceName, resource, options) {
 }
 
 if (require.main === module) {
-  program
-    .name("postject")
-    .description(
-      "Inject arbitrary read-only resources into an executable for use at runtime"
-    )
-    .argument("<filename>", "The executable to inject into")
-    .argument(
-      "<resource_name>",
-      "The resource name to use (section name on Mach-O and ELF, resource name for PE)"
-    )
-    .argument("<resource>", "The resource to inject")
-    .option(
-      "--macho-segment-name <segment_name>",
-      "Name for the Mach-O segment",
-      "__POSTJECT"
-    )
-    .option("--output-api-header", "Output the API header to stdout")
-    .option("--overwrite", "Overwrite the resource if it already exists")
-    .action(main)
-    .parse(process.argv);
+  argumentParser(main);
 }
