@@ -65,12 +65,19 @@ static const void* postject_find_resource(
   unsigned long section_size;
   char* ptr = NULL;
   if (options != NULL && options->macho_framework_name != NULL) {
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
     ptr = getsectdatafromFramework(options->macho_framework_name, segment_name,
                                    section_name != NULL ? section_name : name,
                                    &section_size);
   } else {
     ptr = getsectdata(segment_name, section_name != NULL ? section_name : name,
                       &section_size);
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
     if (ptr != NULL) {
       // Add the "virtual memory address slide" amount to ensure a valid pointer
