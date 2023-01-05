@@ -75,6 +75,12 @@ ability to inject the resources into pre-built executables, with the
 goal that the end result should be as close as possible to what is
 obtained by embedding them at build-time.
 
+Note: Other runtime injection implementers should search the binary
+compiled with `postject-api.h` for the
+`POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:0` string and
+flip the last character to `1` to indicate that a resource has been
+injected.
+
 ### Windows
 
 For PE executables, the resources are added into the `.rsrc` section,
