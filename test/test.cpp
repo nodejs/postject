@@ -1,4 +1,3 @@
-#include <cassert>
 #include <iostream>
 #include <string>
 
@@ -7,13 +6,27 @@
 int main() {
   size_t size = 0;
 
-  if (postject_has_resource() == true) {
+  if (postject_has_resource()) {
     const void* ptr = postject_find_resource("foobar", &size, nullptr);
-    assert(ptr && size > 0);
+    if (ptr == NULL) {
+      std::cerr << "ptr must not be NULL." << std::endl;
+      exit(1);
+    }
+    if (size == 0) {
+      std::cerr << "size must not be 0." << std::endl;
+      exit(1);
+    }
     std::cout << std::string(static_cast<const char*>(ptr), size) << std::endl;
   } else {
     const void* ptr = postject_find_resource("foobar", &size, nullptr);
-    assert(ptr == nullptr && size == 0);
+    if (ptr != nullptr) {
+      std::cerr << "ptr must be nullptr." << std::endl;
+      exit(1);
+    }
+    if (size > 0) {
+      std::cerr << "size must not be greater than 0." << std::endl;
+      exit(1);
+    }
     std::cout << "Hello world" << std::endl;
   }
 

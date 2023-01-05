@@ -35,8 +35,8 @@ inline void postject_options_init(struct postject_options* options) {
 }
 
 static inline bool postject_has_resource() {
-  const char* sentinel = "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:0";
-  return sentinel[strlen(sentinel) - 1] == '1';
+  static const volatile char* sentinel = "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:0";
+  return sentinel[51] == '1';
 }
 
 static const void* postject_find_resource(
