@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 
+#define POSTJECT_SENTINEL_FUSE "NODE_JS_FUSE_fce680ab2cc467b6e072b8b5df1996b2:0"
 #include "../dist/postject-api.h"
 
 int main() {

@@ -6,6 +6,13 @@ const loadPostjectModule = require("./postject.js");
 async function inject(filename, resourceName, resourceData, options) {
   const machoSegmentName = options?.machoSegmentName || "__POSTJECT";
   const overwrite = options?.overwrite || false;
+  let sentinelFuse =
+    options?.sentinelFuse ||
+    "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:0";
+  if (sentinelFuse.slice(-1) !== "0") {
+    throw new Error("Sentinel must end with '0'.");
+  }
+  sentinelFuse = sentinelFuse.slice(0, -1);
 
   if (!Buffer.isBuffer(resourceData)) {
     throw new TypeError("resourceData must be a buffer");
@@ -112,23 +119,24 @@ async function inject(filename, resourceName, resourceData, options) {
     throw new Error("Error when injecting resource");
   }
 
-  const SENTINEL = "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:";
   const buffer = Buffer.from(data.buffer);
-  const firstSentinel = buffer.indexOf(SENTINEL);
+  const firstSentinel = buffer.indexOf(sentinelFuse);
 
   if (firstSentinel === -1) {
-    throw new Error(`Could not find the sentinel ${SENTINEL} in the binary`);
-  }
-
-  const lastSentinel = buffer.lastIndexOf(SENTINEL);
-
-  if (firstSentinel !== lastSentinel) {
     throw new Error(
-      `Multiple occurences of sentinel "${SENTINEL}" found in the binary`
+      `Could not find the sentinel ${sentinelFuse} in the binary`
     );
   }
 
-  const hasResourceIndex = firstSentinel + SENTINEL.length;
+  const lastSentinel = buffer.lastIndexOf(sentinelFuse);
+
+  if (firstSentinel !== lastSentinel) {
+    throw new Error(
+      `Multiple occurences of sentinel "${sentinelFuse}" found in the binary`
+    );
+  }
+
+  const hasResourceIndex = firstSentinel + sentinelFuse.length;
   const hasResourceValue = buffer[hasResourceIndex];
   if (hasResourceValue === "0".charCodeAt(0)) {
     buffer[hasResourceIndex] = "1".charCodeAt(0);

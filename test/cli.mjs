@@ -75,7 +75,14 @@ describe("postject CLI", () => {
     {
       const { status, stdout, stderr } = spawnSync(
         "node",
-        ["./dist/cli.js", filename, "foobar", resourceFilename],
+        [
+          "./dist/cli.js",
+          filename,
+          "foobar",
+          resourceFilename,
+          "--sentinel-fuse",
+          "NODE_JS_FUSE_fce680ab2cc467b6e072b8b5df1996b2:0",
+        ],
         { encoding: "utf-8" }
       );
       // TODO(dsanders11) - Enable this once we squelch LIEF warnings
@@ -153,7 +160,9 @@ describe("postject API", () => {
 
     {
       const resourceData = await fs.readFile(resourceFilename);
-      await inject(filename, "foobar", resourceData);
+      await inject(filename, "foobar", resourceData, {
+        sentinelFuse: "NODE_JS_FUSE_fce680ab2cc467b6e072b8b5df1996b2:0",
+      });
     }
 
     // Verifying code signing using a self-signed certificate.

@@ -77,9 +77,12 @@ obtained by embedding them at build-time.
 
 Note: Other runtime injection implementers should search the binary
 compiled with `postject-api.h` for the
-`POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:0` string and
+`POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:0` fuse and
 flip the last character to `1` to indicate that a resource has been
-injected.
+injected. A different fuse can also be used by defining the
+`POSTJECT_SENTINEL_FUSE` macro before including `postject-api.h` and
+passing the same string to postject with
+`--sentinel-fuse <sentinel_fuse>`.
 
 ### Windows
 
