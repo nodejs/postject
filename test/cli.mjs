@@ -81,7 +81,7 @@ describe("postject CLI", () => {
           "foobar",
           resourceFilename,
           "--sentinel-fuse",
-          "NODE_JS_FUSE_fce680ab2cc467b6e072b8b5df1996b2:0",
+          "NODE_JS_FUSE_fce680ab2cc467b6e072b8b5df1996b2",
         ],
         { encoding: "utf-8" }
       );
@@ -161,7 +161,7 @@ describe("postject API", () => {
     {
       const resourceData = await fs.readFile(resourceFilename);
       await inject(filename, "foobar", resourceData, {
-        sentinelFuse: "NODE_JS_FUSE_fce680ab2cc467b6e072b8b5df1996b2:0",
+        sentinelFuse: "NODE_JS_FUSE_fce680ab2cc467b6e072b8b5df1996b2",
       });
     }
 
