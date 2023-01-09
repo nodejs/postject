@@ -20,7 +20,7 @@
 
 #ifndef POSTJECT_SENTINEL_FUSE
 #define POSTJECT_SENTINEL_FUSE \
-  "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:0"
+  "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2"
 #endif
 
 struct postject_options {
@@ -40,8 +40,8 @@ inline void postject_options_init(struct postject_options* options) {
 }
 
 static inline bool postject_has_resource() {
-  static const volatile char* sentinel = POSTJECT_SENTINEL_FUSE;
-  return sentinel[sizeof(POSTJECT_SENTINEL_FUSE) - 2] == '1';
+  static const volatile char* sentinel = POSTJECT_SENTINEL_FUSE ":0";
+  return sentinel[sizeof(POSTJECT_SENTINEL_FUSE)] == '1';
 }
 
 static const void* postject_find_resource(

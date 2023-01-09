@@ -8,11 +8,7 @@ async function inject(filename, resourceName, resourceData, options) {
   const overwrite = options?.overwrite || false;
   let sentinelFuse =
     options?.sentinelFuse ||
-    "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:0";
-  if (sentinelFuse.slice(-1) !== "0") {
-    throw new Error("Sentinel must end with '0'.");
-  }
-  sentinelFuse = sentinelFuse.slice(0, -1);
+    "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2";
 
   if (!Buffer.isBuffer(resourceData)) {
     throw new TypeError("resourceData must be a buffer");
@@ -136,13 +132,24 @@ async function inject(filename, resourceName, resourceData, options) {
     );
   }
 
-  const hasResourceIndex = firstSentinel + sentinelFuse.length;
+  const colonIndex = firstSentinel + sentinelFuse.length;
+  if (buffer[colonIndex] !== ":".charCodeAt(0)) {
+    throw new Error(
+      `Value at index ${colonIndex} must be ':' but '${buffer[
+        colonIndex
+      ].charCodeAt(0)}' was found`
+    );
+  }
+
+  const hasResourceIndex = firstSentinel + sentinelFuse.length + 1;
   const hasResourceValue = buffer[hasResourceIndex];
   if (hasResourceValue === "0".charCodeAt(0)) {
     buffer[hasResourceIndex] = "1".charCodeAt(0);
   } else if (hasResourceValue != "1".charCodeAt(0)) {
     throw new Error(
-      `Value at index ${hasResourceIndex} must be '0' or '1' but '${hasResourceValue}' was found`
+      `Value at index ${hasResourceIndex} must be '0' or '1' but '${hasResourceValue.charCodeAt(
+        0
+      )}' was found`
     );
   }
 

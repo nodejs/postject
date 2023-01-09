@@ -55,8 +55,8 @@ if (require.main === module) {
     )
     .option(
       "--sentinel-fuse <sentinel_fuse>",
-      "Sentinel fuse",
-      "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2:0"
+      "Sentinel fuse for resource presence detection",
+      "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2"
     )
     .option("--output-api-header", "Output the API header to stdout")
     .option("--overwrite", "Overwrite the resource if it already exists")
