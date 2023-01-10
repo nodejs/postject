@@ -1,6 +1,6 @@
 {
   "name": "postject",
-  "version": "1.0.0-alpha.3",
+  "version": "1.0.0-alpha.4",
   "description": "Easily inject arbitrary read-only resources into executable formats (Mach-O, PE, ELF) and use it at runtime.",
   "license": "MIT",
   "engines": {
