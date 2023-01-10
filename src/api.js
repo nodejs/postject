@@ -6,6 +6,9 @@ const loadPostjectModule = require("./postject.js");
 async function inject(filename, resourceName, resourceData, options) {
   const machoSegmentName = options?.machoSegmentName || "__POSTJECT";
   const overwrite = options?.overwrite || false;
+  let sentinelFuse =
+    options?.sentinelFuse ||
+    "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2";
 
   if (!Buffer.isBuffer(resourceData)) {
     throw new TypeError("resourceData must be a buffer");
@@ -112,8 +115,46 @@ async function inject(filename, resourceName, resourceData, options) {
     throw new Error("Error when injecting resource");
   }
 
+  const buffer = Buffer.from(data.buffer);
+  const firstSentinel = buffer.indexOf(sentinelFuse);
+
+  if (firstSentinel === -1) {
+    throw new Error(
+      `Could not find the sentinel ${sentinelFuse} in the binary`
+    );
+  }
+
+  const lastSentinel = buffer.lastIndexOf(sentinelFuse);
+
+  if (firstSentinel !== lastSentinel) {
+    throw new Error(
+      `Multiple occurences of sentinel "${sentinelFuse}" found in the binary`
+    );
+  }
+
+  const colonIndex = firstSentinel + sentinelFuse.length;
+  if (buffer[colonIndex] !== ":".charCodeAt(0)) {
+    throw new Error(
+      `Value at index ${colonIndex} must be ':' but '${buffer[
+        colonIndex
+      ].charCodeAt(0)}' was found`
+    );
+  }
+
+  const hasResourceIndex = firstSentinel + sentinelFuse.length + 1;
+  const hasResourceValue = buffer[hasResourceIndex];
+  if (hasResourceValue === "0".charCodeAt(0)) {
+    buffer[hasResourceIndex] = "1".charCodeAt(0);
+  } else if (hasResourceValue != "1".charCodeAt(0)) {
+    throw new Error(
+      `Value at index ${hasResourceIndex} must be '0' or '1' but '${hasResourceValue.charCodeAt(
+        0
+      )}' was found`
+    );
+  }
+
   try {
-    await fs.writeFile(filename, data);
+    await fs.writeFile(filename, buffer);
   } catch {
     throw new Error("Couldn't write executable");
   }

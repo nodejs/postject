@@ -1,6 +1,7 @@
 #ifndef POSTJECT_API_H_
 #define POSTJECT_API_H_
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,11 @@
 #include <windows.h>
 #endif
 
+#ifndef POSTJECT_SENTINEL_FUSE
+#define POSTJECT_SENTINEL_FUSE \
+  "POSTJECT_SENTINEL_fce680ab2cc467b6e072b8b5df1996b2"
+#endif
+
 struct postject_options {
   const char* elf_section_name;
   const char* macho_framework_name;
@@ -31,6 +37,11 @@ inline void postject_options_init(struct postject_options* options) {
   options->macho_section_name = NULL;
   options->macho_segment_name = NULL;
   options->pe_resource_name = NULL;
+}
+
+static inline bool postject_has_resource() {
+  static const volatile char* sentinel = POSTJECT_SENTINEL_FUSE ":0";
+  return sentinel[sizeof(POSTJECT_SENTINEL_FUSE)] == '1';
 }
 
 static const void* postject_find_resource(
