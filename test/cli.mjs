@@ -85,9 +85,8 @@ describe("postject CLI", () => {
         ],
         { encoding: "utf-8" }
       );
-      // TODO(dsanders11) - Enable this once we squelch LIEF warnings
-      // expect(stderr).to.be.empty;
-      expect(stdout).to.be.empty;
+      expect(stderr).to.be.empty;
+      expect(stdout.includes("Injection done!")).to.be.true;
       expect(status).to.equal(0);
     }
 
