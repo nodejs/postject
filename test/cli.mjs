@@ -115,6 +115,26 @@ describe("postject CLI", () => {
       expect(stdout).to.have.string(resourceContents);
     }
   }).timeout(3_00_000);
+
+  it("should display an error message when filename doesn't exist", async () => {
+    {
+      const { status, stdout, stderr } = spawnSync(
+        "node",
+        [
+          "./dist/cli.js",
+          "unknown-filename",
+          "foobar",
+          resourceFilename,
+          "--sentinel-fuse",
+          "NODE_JS_FUSE_fce680ab2cc467b6e072b8b5df1996b2",
+        ],
+        { encoding: "utf-8" }
+      );
+      expect(stdout).to.have.string("Error: Can't read and write to target executable");
+      expect(stdout).to.not.have.string("Injection done!");
+      expect(status).to.equal(1);
+    }
+  }).timeout(3_00_000);
 });
 
 describe("postject API", () => {
