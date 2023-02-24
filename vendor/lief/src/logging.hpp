@@ -91,15 +91,19 @@ class Logger {
 
   template <typename... Args>
   static void err(const char *fmt, const Args &... args) {
+    const char *prefix = "Error: ";
+    const std::string prefixed_fmt = std::string(prefix) + std::string(fmt);
     if /* constexpr */ (lief_logging_support) {
-      Logger::instance().sink_->error(fmt, args...);
+      Logger::instance().sink_->error(prefixed_fmt, args...);
     }
   }
 
   template <typename... Args>
   static void warn(const char *fmt, const Args &... args) {
+    const char *prefix = "Warning: ";
+    const std::string prefixed_fmt = std::string(prefix) + std::string(fmt);
     if /* constexpr */ (lief_logging_support) {
-      Logger::instance().sink_->warn(fmt, args...);
+      Logger::instance().sink_->warn(prefixed_fmt, args...);
     }
   }
 
