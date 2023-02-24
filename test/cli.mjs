@@ -86,7 +86,7 @@ describe("postject CLI", () => {
         { encoding: "utf-8" }
       );
       expect(stderr).to.be.empty;
-      expect(stdout.includes("Injection done!")).to.be.true;
+      expect(stdout).to.have.string("Injection done!");
       expect(status).to.equal(0);
     }
 
