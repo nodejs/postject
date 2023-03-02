@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Tony Gorez <gorez.tony@gmail.com>
+Date: Thu, 2 Mar 2023 09:53:36 +0100
+Subject: [PATCH] feat: add log level with %l
+
+---
+ src/logging.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/logging.cpp b/src/logging.cpp
+index 63e0e0e..3a4e567 100644
+--- a/src/logging.cpp
++++ b/src/logging.cpp
+@@ -52,7 +52,7 @@ Logger::Logger() {
+ 
+ 
+     sink_->set_level(spdlog::level::warn);
+-    sink_->set_pattern("%v");
++    sink_->set_pattern("%l: %v");
+     sink_->flush_on(spdlog::level::warn);
+   }
+ }
+-- 
+2.37.1 (Apple Git-137.1)
+
