@@ -52,7 +52,7 @@ Logger::Logger() {
 
 
     sink_->set_level(spdlog::level::warn);
-    sink_->set_pattern("%l: %v");
+    sink_->set_pattern("%v");
     sink_->flush_on(spdlog::level::warn);
   }
 }
