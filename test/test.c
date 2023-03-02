@@ -1,4 +1,6 @@
-#define _GNU_SOURCE
+#define _GNU_SOURCE  // This is needed because postject-api.h uses
+                     // dl_iterate_phdr and dl_phdr_info which are non-standard
+                     // GNU extensions.
 
 #include <stdio.h>
 #include <string.h>
