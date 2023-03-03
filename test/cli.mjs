@@ -130,7 +130,9 @@ describe("postject CLI", () => {
         ],
         { encoding: "utf-8" }
       );
-      expect(stdout).to.have.string("Error: Can't read and write to target executable");
+      expect(stdout).to.have.string(
+        "Error: Can't read and write to target executable"
+      );
       expect(stdout).to.not.have.string("Injection done!");
       expect(status).to.equal(1);
     }
