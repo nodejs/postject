@@ -10,4 +10,5 @@ scripts/
 src/
 test/
 vendor/
+patches/
 !dist/postject-api.h
