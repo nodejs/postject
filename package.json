@@ -8,10 +8,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:postmanlabs/postject.git"
+    "url": "git@github.com:nodejs/postject.git"
   },
-  "homepage": "https://github.com/postmanlabs/postject#readme",
-  "author": "Postman Labs <help@postman.com> (=)",
+  "homepage": "https://github.com/nodejs/postject#readme",
   "bin": {
     "postject": "./dist/cli.js"
   },
