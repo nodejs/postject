@@ -138,6 +138,29 @@ describe("postject CLI", () => {
       expect(status).to.equal(1);
     }
   }).timeout(3_00_000);
+
+  it("should display an error message when the file is not a supported executable type", async () => {
+    const bogusFile = path.join(tempDir, "bogus.exe");
+    await fs.writeFile(bogusFile, "#!/bin/bash");
+
+    const { status, stdout } = spawnSync(
+      "node",
+      [
+        "./dist/cli.js",
+        bogusFile,
+        "foobar",
+        resourceFilename,
+        "--sentinel-fuse",
+        "NODE_JS_FUSE_fce680ab2cc467b6e072b8b5df1996b2",
+      ],
+      { encoding: "utf-8" }
+    );
+    expect(stdout).to.have.string(
+      "Error: Executable must be a supported format: ELF, PE, or Mach-O"
+    );
+    expect(stdout).to.not.have.string("Injection done!");
+    expect(status).to.equal(1);
+  }).timeout(3_00_000);
 });
 
 describe("postject API", () => {

@@ -31,7 +31,7 @@ async function inject(filename, resourceName, resourceData, options) {
   }
   const executableFormat = postject.getExecutableFormat(executable);
 
-  if (!executableFormat) {
+  if (executableFormat === postject.ExecutableFormat.kUnknown) {
     throw new Error(
       "Executable must be a supported format: ELF, PE, or Mach-O"
     );
