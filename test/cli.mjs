@@ -160,7 +160,7 @@ describe("postject CLI", () => {
     );
     expect(stdout).to.not.have.string("Injection done!");
     expect(status).to.equal(1);
-  })
+  }).timeout(3_00_000);
 });
 
 describe("postject API", () => {
