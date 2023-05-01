@@ -141,9 +141,9 @@ describe("postject CLI", () => {
 
   it("should display an error message when the file is not a supported executable type", async () => {
     const bogusFile = path.join(tempDir, "bogus.exe");
-    await fs.writeFile(bogusFile, '#!/bin/bash');
+    await fs.writeFile(bogusFile, "#!/bin/bash");
 
-    const { status, stdout, } = spawnSync(
+    const { status, stdout } = spawnSync(
       "node",
       [
         "./dist/cli.js",
