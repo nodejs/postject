@@ -14,10 +14,12 @@ enum class ExecutableFormat { kELF, kMachO, kPE, kUnknown };
 enum class InjectResult { kAlreadyExists, kError, kSuccess };
 
 std::vector<uint8_t> vec_from_val(const emscripten::val& value) {
-  // TODO(dsanders11) - vecFromJSArray incurs a copy, so memory usage is higher
-  //                    than it needs to be. Explore ways to access the memory
-  //                    directly and avoid the copy.
-  return emscripten::vecFromJSArray<uint8_t>(value);
+  // We are using `convertJSArrayToNumberVector()` instead of `vecFromJSArray()`
+  // because it is faster. It is okay if we use it without additional type
+  // checking because this function is only called on Node.js Buffer instances
+  // which is expected to contain elements that are safe to pass to the JS
+  // function, `Number()`.
+  return emscripten::convertJSArrayToNumberVector<uint8_t>(value);
 }
 
 ExecutableFormat get_executable_format(const emscripten::val& executable) {

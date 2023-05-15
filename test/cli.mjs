@@ -115,7 +115,7 @@ describe("postject CLI", () => {
       expect(status).to.equal(0);
       expect(stdout).to.have.string(resourceContents);
     }
-  }).timeout(3_00_000);
+  }).timeout(10_000);
 
   it("should display an error message when filename doesn't exist", async () => {
     {
@@ -137,7 +137,7 @@ describe("postject CLI", () => {
       expect(stdout).to.not.have.string("Injection done!");
       expect(status).to.equal(1);
     }
-  }).timeout(3_00_000);
+  }).timeout(10_000);
 
   it("should display an error message when the file is not a supported executable type", async () => {
     const bogusFile = path.join(tempDir, "bogus.exe");
@@ -160,7 +160,7 @@ describe("postject CLI", () => {
     );
     expect(stdout).to.not.have.string("Injection done!");
     expect(status).to.equal(1);
-  }).timeout(3_00_000);
+  }).timeout(10_000);
 });
 
 describe("postject API", () => {
@@ -234,7 +234,7 @@ describe("postject API", () => {
       expect(status).to.equal(0);
       expect(stdout).to.have.string(resourceContents);
     }
-  }).timeout(3_00_000);
+  }).timeout(10_000);
 });
 
 describe("api.js should not contain __filename and __dirname", () => {
