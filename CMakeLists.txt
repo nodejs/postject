@@ -5,7 +5,9 @@ project(postject)
 
 # Disable unnecessary LIEF options
 option(LIEF_DOC "Build LIEF docs" OFF)
+option(LIEF_C_API "C API" OFF)
 option(LIEF_PYTHON_API "Build LIEF Python API" OFF)
+option(LIEF_ENABLE_JSON "Enable JSON-related APIs" OFF)
 option(LIEF_EXAMPLES "Build LIEF examples" OFF)
 option(LIEF_TESTS "Build LIEF tests" OFF)
 option(LIEF_ART "Build LIEF with ART module" OFF)
