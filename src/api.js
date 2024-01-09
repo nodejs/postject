@@ -1,7 +1,7 @@
 const { constants, promises: fs } = require("fs");
 const path = require("path");
 
-const loadPostjectModule = require("./postject.js");
+const loadPostjectModule = require("./postject_wasm.js");
 
 async function inject(filename, resourceName, resourceData, options) {
   const machoSegmentName = options?.machoSegmentName || "__POSTJECT";
@@ -38,7 +38,7 @@ async function inject(filename, resourceName, resourceData, options) {
   }
 
   let data;
-  let result;
+  let type;
 
   switch (executableFormat) {
     case postject.ExecutableFormat.kMachO:
@@ -50,7 +50,7 @@ async function inject(filename, resourceName, resourceData, options) {
           sectionName = `__${sectionName}`;
         }
 
-        ({ result, data } = postject.injectIntoMachO(
+        ({ type, data } = postject.injectIntoMachO(
           executable,
           machoSegmentName,
           sectionName,
@@ -58,7 +58,7 @@ async function inject(filename, resourceName, resourceData, options) {
           overwrite
         ));
 
-        if (result === postject.InjectResult.kAlreadyExists) {
+        if (type === postject.InjectResultType.kAlreadyExists) {
           throw new Error(
             `Segment and section with that name already exists: ${machoSegmentName}/${sectionName}\n` +
               "Use --overwrite to overwrite the existing content"
@@ -73,14 +73,14 @@ async function inject(filename, resourceName, resourceData, options) {
         // technically reserved for the system, so don't transform
         let sectionName = resourceName;
 
-        ({ result, data } = postject.injectIntoELF(
+        ({ type, data } = postject.injectIntoELF(
           executable,
           sectionName,
           resourceData,
           overwrite
         ));
 
-        if (result === postject.InjectResult.kAlreadyExists) {
+        if (type === postject.InjectResultType.kAlreadyExists) {
           throw new Error(
             `Section with that name already exists: ${sectionName}` +
               "Use --overwrite to overwrite the existing content"
@@ -94,14 +94,14 @@ async function inject(filename, resourceName, resourceData, options) {
         // PE resource names appear to only work if uppercase
         resourceName = resourceName.toUpperCase();
 
-        ({ result, data } = postject.injectIntoPE(
+        ({ type, data } = postject.injectIntoPE(
           executable,
           resourceName,
           resourceData,
           overwrite
         ));
 
-        if (result === postject.InjectResult.kAlreadyExists) {
+        if (type === postject.InjectResultType.kAlreadyExists) {
           throw new Error(
             `Resource with that name already exists: ${resourceName}\n` +
               "Use --overwrite to overwrite the existing content"
@@ -111,7 +111,7 @@ async function inject(filename, resourceName, resourceData, options) {
       break;
   }
 
-  if (result !== postject.InjectResult.kSuccess) {
+  if (type !== postject.InjectResultType.kSuccess) {
     throw new Error("Error when injecting resource");
   }
 

@@ -25,6 +25,7 @@ dist/
 
 # JetBrains IDE
 .idea/
+/cmake-*
 
 # Unit test reports
 TEST*.xml
