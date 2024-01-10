@@ -3,7 +3,6 @@
 
 #include "./postject.hpp"
 
-
 std::vector<uint8_t> vec_from_val(const emscripten::val& value) {
   // We are using `convertJSArrayToNumberVector()` instead of `vecFromJSArray()`
   // because it is faster. It is okay if we use it without additional type
@@ -13,7 +12,8 @@ std::vector<uint8_t> vec_from_val(const emscripten::val& value) {
   return emscripten::convertJSArrayToNumberVector<uint8_t>(value);
 }
 
-postject::ExecutableFormat get_executable_format(const emscripten::val& executable) {
+postject::ExecutableFormat get_executable_format(
+    const emscripten::val& executable) {
   return postject::get_executable_format(vec_from_val(executable));
 }
 
@@ -24,14 +24,14 @@ emscripten::val inject_result_to_val(postject::InjectResult injectResult) {
     std::vector<uint8_t> output = std::move(injectResult.output);
     emscripten::val view{
         emscripten::typed_memory_view(output.size(), output.data())};
-    auto output_data = emscripten::val::global("Uint8Array").new_(output.size());
+    auto output_data =
+        emscripten::val::global("Uint8Array").new_(output.size());
     output_data.call<void>("set", view);
     object.set("data", emscripten::val(output_data));
   } else {
     object.set("data", emscripten::val::undefined());
   }
   return object;
-
 }
 
 emscripten::val inject_into_elf(const emscripten::val& executable,
@@ -39,11 +39,7 @@ emscripten::val inject_into_elf(const emscripten::val& executable,
                                 const emscripten::val& data,
                                 bool overwrite) {
   return inject_result_to_val(postject::inject_into_elf(
-      vec_from_val(executable),
-      note_name,
-      vec_from_val(data),
-      overwrite
-  ));
+      vec_from_val(executable), note_name, vec_from_val(data), overwrite));
 }
 
 emscripten::val inject_into_macho(const emscripten::val& executable,
@@ -51,13 +47,9 @@ emscripten::val inject_into_macho(const emscripten::val& executable,
                                   const std::string& section_name,
                                   const emscripten::val& data,
                                   bool overwrite) {
-  return inject_result_to_val(postject::inject_into_macho(
-      vec_from_val(executable),
-      segment_name,
-      section_name,
-      vec_from_val(data),
-      overwrite
-  ));
+  return inject_result_to_val(
+      postject::inject_into_macho(vec_from_val(executable), segment_name,
+                                  section_name, vec_from_val(data), overwrite));
 }
 
 emscripten::val inject_into_pe(const emscripten::val& executable,
@@ -65,11 +57,7 @@ emscripten::val inject_into_pe(const emscripten::val& executable,
                                const emscripten::val& data,
                                bool overwrite) {
   return inject_result_to_val(postject::inject_into_pe(
-      vec_from_val(executable),
-      resource_name,
-      vec_from_val(data),
-      overwrite
-  ));
+      vec_from_val(executable), resource_name, vec_from_val(data), overwrite));
 }
 
 EMSCRIPTEN_BINDINGS(postject) {

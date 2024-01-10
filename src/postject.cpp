@@ -7,7 +7,8 @@
 
 #include "./postject.hpp"
 
-postject::ExecutableFormat postject::get_executable_format(const std::vector<uint8_t>& executable) {
+postject::ExecutableFormat postject::get_executable_format(
+    const std::vector<uint8_t>& executable) {
   if (LIEF::ELF::is_elf(executable)) {
     return ExecutableFormat::kELF;
   } else if (LIEF::MachO::is_macho(executable)) {
@@ -19,10 +20,11 @@ postject::ExecutableFormat postject::get_executable_format(const std::vector<uin
   return ExecutableFormat::kUnknown;
 }
 
-postject::InjectResult postject::inject_into_elf(const std::vector<uint8_t>& executable,
-                                const std::string& note_name,
-                                const std::vector<uint8_t>& data,
-                                bool overwrite) {
+postject::InjectResult postject::inject_into_elf(
+    const std::vector<uint8_t>& executable,
+    const std::string& note_name,
+    const std::vector<uint8_t>& data,
+    bool overwrite) {
   InjectResult result;
   std::unique_ptr<LIEF::ELF::Binary> binary =
       LIEF::ELF::Parser::parse(executable);
@@ -59,11 +61,12 @@ postject::InjectResult postject::inject_into_elf(const std::vector<uint8_t>& exe
   return result;
 }
 
-postject::InjectResult postject::inject_into_macho(const std::vector<uint8_t>& executable,
-                                  const std::string& segment_name,
-                                  const std::string& section_name,
-                                  const std::vector<uint8_t>& data,
-                                  bool overwrite) {
+postject::InjectResult postject::inject_into_macho(
+    const std::vector<uint8_t>& executable,
+    const std::string& segment_name,
+    const std::string& section_name,
+    const std::vector<uint8_t>& data,
+    bool overwrite) {
   InjectResult result;
   std::unique_ptr<LIEF::MachO::FatBinary> fat_binary =
       LIEF::MachO::Parser::parse(executable);
@@ -80,7 +83,6 @@ postject::InjectResult postject::inject_into_macho(const std::vector<uint8_t>& e
 
     if (existing_section) {
       if (!overwrite) {
-
         result.type = InjectResultType::kAlreadyExists;
         return result;
       }
@@ -115,10 +117,11 @@ postject::InjectResult postject::inject_into_macho(const std::vector<uint8_t>& e
   return result;
 }
 
-postject::InjectResult postject::inject_into_pe(const std::vector<uint8_t>& executable,
-                               const std::string& resource_name,
-                               const std::vector<uint8_t>& data,
-                               bool overwrite) {
+postject::InjectResult postject::inject_into_pe(
+    const std::vector<uint8_t>& executable,
+    const std::string& resource_name,
+    const std::vector<uint8_t>& data,
+    bool overwrite) {
   InjectResult result;
 
   std::unique_ptr<LIEF::PE::Binary> binary =
