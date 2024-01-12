@@ -2,6 +2,7 @@
 #define POSTJECT_POSTJECT_HPP
 
 #include <vector>
+#include <string>
 
 namespace postject {
 
