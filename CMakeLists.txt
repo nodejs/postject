@@ -21,11 +21,20 @@ endif()
 
 add_subdirectory(vendor/lief)
 
-add_executable(postject src/postject.cpp)
-set_target_properties(postject PROPERTIES LINK_FLAGS "-sSINGLE_FILE -sMODULARIZE=1 -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=268435456 -sMAXIMUM_MEMORY=4294967296 --bind")
+add_library(postject
+    src/postject.cpp
+    src/postject.hpp
+)
+target_link_libraries(postject PUBLIC LIEF::LIEF)
+
+add_executable(postject_wasm
+    src/postject_wasm.cpp
+)
+
+set_target_properties(postject_wasm PROPERTIES LINK_FLAGS "-sSINGLE_FILE -sMODULARIZE=1 -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=268435456 -sMAXIMUM_MEMORY=4294967296 --bind")
 
 if(MSVC)
-  set_property(TARGET postject PROPERTY LINK_FLAGS /NODEFAULTLIB:MSVCRT)
+  set_property(TARGET postject_wasm PROPERTY LINK_FLAGS /NODEFAULTLIB:MSVCRT)
 endif()
 
-target_link_libraries(postject PUBLIC LIEF::LIEF)
+target_link_libraries(postject_wasm postject)
