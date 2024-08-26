@@ -15,6 +15,7 @@
     "postject": "./dist/cli.js"
   },
   "main": "dist/api.js",
+  "types": "dist/api.d.ts",
   "scripts": {
     "build": "zx ./scripts/build.mjs",
     "clean": "rimraf ./build",
