@@ -123,6 +123,7 @@ describe("postject CLI", () => {
         "node",
         [
           "./dist/cli.js",
+          "--verbose",
           "unknown-filename",
           "foobar",
           resourceFilename,
@@ -133,6 +134,9 @@ describe("postject CLI", () => {
       );
       expect(stdout).to.have.string(
         "Error: Can't read and write to target executable"
+      );
+      expect(stdout).to.have.string(
+        "Error: ENOENT: no such file or directory"
       );
       expect(stdout).to.not.have.string("Injection done!");
       expect(status).to.equal(1);

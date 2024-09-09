@@ -3,15 +3,25 @@
 const program = require("commander");
 const { constants, promises: fs } = require("fs");
 const path = require("path");
+const { format } = require("util");
 const { inject } = require("./api.js");
 
 const logger = {
   info: (message) => console.log("\x1b[36m%s\x1b[0m", message),
   success: (message) => console.log("\x1b[32m%s\x1b[0m", message),
   error: (message) => console.log("\x1b[31mError: %s\x1b[0m", message),
+  verbose: () => {},
 };
 
+function setupVerboseLogger() {
+  logger.error = (message) => console.log("\x1b[31mError: %s\x1b[0m", format(message)),
+  logger.verbose = (message) => console.log("\x1b[36m%s\x1b[0m", format(message));
+}
+
 async function main(filename, resourceName, resource, options) {
+  if (options.verbose) {
+    setupVerboseLogger();
+  }
   if (options.outputApiHeader) {
     // Handles --output-api-header.
     console.log(
@@ -25,8 +35,9 @@ async function main(filename, resourceName, resource, options) {
   try {
     await fs.access(resource, constants.R_OK);
     resourceData = await fs.readFile(resource);
-  } catch {
+  } catch (err) {
     logger.error("Can't read resource file");
+    logger.verbose(err);
     process.exit(1);
   }
 
@@ -41,7 +52,7 @@ async function main(filename, resourceName, resource, options) {
     });
     logger.success("💉 Injection done!");
   } catch (err) {
-    logger.error(err.message);
+    logger.error(err);
     process.exit(1);
   }
 }
@@ -70,6 +81,7 @@ if (require.main === module) {
     )
     .option("--output-api-header", "Output the API header to stdout")
     .option("--overwrite", "Overwrite the resource if it already exists")
+    .option("--verbose", "Output verbose logs")
     .action(main)
     .parse(process.argv);
 }
