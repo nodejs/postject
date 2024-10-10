@@ -128,7 +128,7 @@ async function inject(filename, resourceName, resourceData, options) {
 
   if (firstSentinel !== lastSentinel) {
     throw new Error(
-      `Multiple occurences of sentinel "${sentinelFuse}" found in the binary`
+      `Multiple occurrences of sentinel "${sentinelFuse}" found in the binary`
     );
   }
 

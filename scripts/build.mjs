@@ -38,7 +38,7 @@ await $`esbuild api.js --bundle --platform=node --outfile=../dist/api.js`;
 await fs.copy("../src/cli.js", "../dist/cli.js");
 await fs.copy("../postject-api.h", "../dist/postject-api.h");
 
-// Repace all occurrences of `__filename` and `__dirname` with "" because
+// Replace all occurrences of `__filename` and `__dirname` with "" because
 // Node.js core doesn't support it. These uses are functionally dead when
 // `SINGLE_FILE` is enabled anyways.
 // Refs: https://github.com/postmanlabs/postject/issues/50
