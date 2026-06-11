@@ -2,6 +2,7 @@
 #include <codecvt>
 #include <locale>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <emscripten/bind.h>
@@ -20,6 +21,14 @@ std::vector<uint8_t> vec_from_val(const emscripten::val& value) {
   // which is expected to contain elements that are safe to pass to the JS
   // function, `Number()`.
   return emscripten::convertJSArrayToNumberVector<uint8_t>(value);
+}
+
+static emscripten::val to_uint8array(const std::vector<uint8_t>& output) {
+  emscripten::val view{
+      emscripten::typed_memory_view(output.size(), output.data())};
+  auto output_data = emscripten::val::global("Uint8Array").new_(output.size());
+  output_data.call<void>("set", view);
+  return output_data;
 }
 
 ExecutableFormat get_executable_format(const emscripten::val& executable) {
@@ -51,10 +60,11 @@ emscripten::val inject_into_elf(const emscripten::val& executable,
     return object;
   }
 
+  // LIEF can return a length longer than it actually is, so use compare here.
   LIEF::ELF::Note* existing_note = nullptr;
 
   for (LIEF::ELF::Note& note : binary->notes()) {
-    if (note.name() == note_name) {
+    if (note.name().compare(0, note_name.size(), note_name) == 0) {
       existing_note = &note;
     }
   }
@@ -68,21 +78,31 @@ emscripten::val inject_into_elf(const emscripten::val& executable,
     }
   }
 
-  LIEF::ELF::Note note;
-  note.name(note_name);
-  note.description(vec_from_val(data));
-  binary->add(note);
+  constexpr uint32_t kNoteType = 0;
+  std::unique_ptr<LIEF::ELF::Note> note = LIEF::ELF::Note::create(
+      note_name, kNoteType, vec_from_val(data), note_name);
 
-  // Construct a new Uint8Array in JS
-  std::vector<uint8_t> output = binary->raw();
-  emscripten::val view{
-      emscripten::typed_memory_view(output.size(), output.data())};
-  auto output_data = emscripten::val::global("Uint8Array").new_(output.size());
-  output_data.call<void>("set", view);
+  if (!note) {
+    object.set("result", emscripten::val(InjectResult::kError));
+    return object;
+  }
 
-  object.set("data", output_data);
+  binary->add(*note);
+
+  LIEF::ELF::Builder::config_t cfg;
+  cfg.notes = true;
+  cfg.dynamic_section = true;
+  LIEF::ELF::Builder builder(*binary, cfg);
+  builder.build();
+
+  const std::vector<uint8_t>& output = builder.get_build();
+  if (output.empty()) {
+    object.set("result", emscripten::val(InjectResult::kError));
+    return object;
+  }
+
+  object.set("data", to_uint8array(output));
   object.set("result", emscripten::val(InjectResult::kSuccess));
-
   return object;
 }
 
@@ -102,33 +122,34 @@ emscripten::val inject_into_macho(const emscripten::val& executable,
     return object;
   }
 
+  std::vector<uint8_t> payload = vec_from_val(data);
+
   // Inject into all Mach-O binaries if there's more than one in a fat binary
   for (LIEF::MachO::Binary& binary : *fat_binary) {
-    LIEF::MachO::Section* existing_section =
-        binary.get_section(segment_name, section_name);
-
-    if (existing_section) {
-      if (!overwrite) {
-        object.set("result", emscripten::val(InjectResult::kAlreadyExists));
-        return object;
-      }
-
-      binary.remove_section(segment_name, section_name, true);
-    }
-
     LIEF::MachO::SegmentCommand* segment = binary.get_segment(segment_name);
-    LIEF::MachO::Section section(section_name, vec_from_val(data));
 
     if (!segment) {
       // Create the segment and mark it read-only
       LIEF::MachO::SegmentCommand new_segment(segment_name);
-      new_segment.max_protection(
-          static_cast<uint32_t>(LIEF::MachO::VM_PROTECTIONS::VM_PROT_READ));
-      new_segment.init_protection(
-          static_cast<uint32_t>(LIEF::MachO::VM_PROTECTIONS::VM_PROT_READ));
+      new_segment.max_protection(static_cast<uint32_t>(
+          LIEF::MachO::SegmentCommand::VM_PROTECTIONS::READ));
+      new_segment.init_protection(static_cast<uint32_t>(
+          LIEF::MachO::SegmentCommand::VM_PROTECTIONS::READ));
+      LIEF::MachO::Section section(section_name, payload);
       new_segment.add_section(section);
       binary.add(new_segment);
     } else {
+      LIEF::MachO::Section* existing_section =
+          segment->get_section(section_name);
+      if (existing_section) {
+        if (!overwrite) {
+          object.set("result", emscripten::val(InjectResult::kAlreadyExists));
+          return object;
+        }
+        binary.remove_section(segment_name, section_name, true);
+        segment = binary.get_segment(segment_name);
+      }
+      LIEF::MachO::Section section(section_name, payload);
       binary.add_section(*segment, section);
     }
 
@@ -140,12 +161,7 @@ emscripten::val inject_into_macho(const emscripten::val& executable,
 
   // Construct a new Uint8Array in JS
   std::vector<uint8_t> output = fat_binary->raw();
-  emscripten::val view{
-      emscripten::typed_memory_view(output.size(), output.data())};
-  auto output_data = emscripten::val::global("Uint8Array").new_(output.size());
-  output_data.call<void>("set", view);
-
-  object.set("data", output_data);
+  object.set("data", to_uint8array(output));
   object.set("result", emscripten::val(InjectResult::kSuccess));
 
   return object;
@@ -181,29 +197,28 @@ emscripten::val inject_into_pe(const emscripten::val& executable,
   LIEF::PE::ResourceNode* id_node = nullptr;
 
   // First level => Type (ResourceDirectory node)
-  auto rcdata_node_iter = std::find_if(
-      std::begin(resources->childs()), std::end(resources->childs()),
-      [](const LIEF::PE::ResourceNode& node) {
-        return node.id() ==
-               static_cast<uint32_t>(LIEF::PE::RESOURCE_TYPES::RCDATA);
-      });
+  constexpr uint32_t kRcdataId =
+      static_cast<uint32_t>(LIEF::PE::ResourcesManager::TYPE::RCDATA);
+  auto rcdata_node_iter = std::find_if(std::begin(resources->childs()),
+                                       std::end(resources->childs()),
+                                       [](const LIEF::PE::ResourceNode& node) {
+                                         return node.id() == kRcdataId;
+                                       });
 
   if (rcdata_node_iter != std::end(resources->childs())) {
     rcdata_node = &*rcdata_node_iter;
   } else {
     LIEF::PE::ResourceDirectory new_rcdata_node;
-    new_rcdata_node.id(static_cast<uint32_t>(LIEF::PE::RESOURCE_TYPES::RCDATA));
+    new_rcdata_node.id(kRcdataId);
     rcdata_node = &resources->add_child(new_rcdata_node);
   }
 
-  // Second level => ID (ResourceDirectory node)
+  // Second level => ID (ResourceDirectory node).
+  std::u16string resource_name_u16(resource_name.begin(), resource_name.end());
   auto id_node_iter = std::find_if(
       std::begin(rcdata_node->childs()), std::end(rcdata_node->childs()),
-      [resource_name](const LIEF::PE::ResourceNode& node) {
-        return node.name() ==
-               std::wstring_convert<std::codecvt_utf8_utf16<char16_t>,
-                                    char16_t>{}
-                   .from_bytes(resource_name);
+      [&resource_name_u16](const LIEF::PE::ResourceNode& node) {
+        return node.name() == resource_name_u16;
       });
 
   if (id_node_iter != std::end(rcdata_node->childs())) {
@@ -228,49 +243,21 @@ emscripten::val inject_into_pe(const emscripten::val& executable,
     id_node->delete_child(*id_node->childs());
   }
 
-  LIEF::PE::ResourceData lang_node;
-  lang_node.content(vec_from_val(data));
+  LIEF::PE::ResourceData lang_node(vec_from_val(data));
   id_node->add_child(lang_node);
 
-  binary->remove_section(".rsrc", true);
+  // Rebuild only the resources, keeping the section named .rsrc.
+  LIEF::PE::Builder::config_t cfg;
+  cfg.resources = true;
+  cfg.rsrc_section = ".rsrc";
+  LIEF::PE::Builder builder(*binary, cfg);
+  if (!builder.build()) {
+    object.set("result", emscripten::val(InjectResult::kError));
+    return object;
+  }
 
-  // Write out the binary, only modifying the resources
-  LIEF::PE::Builder builder(*binary);
-  builder.build_dos_stub(true);
-  builder.build_imports(false);
-  builder.build_overlay(false);
-  builder.build_relocations(false);
-  builder.build_resources(true);
-  builder.build_tls(false);
-  builder.build();
-
-  // TODO - Why doesn't LIEF just replace the .rsrc section?
-  //        Can we at least change build_resources to take a section name?
-
-  // Re-parse the output so the .l2 section is available
-  binary = LIEF::PE::Parser::parse(builder.get_build());
-
-  // Rename the rebuilt resource section
-  LIEF::PE::Section* section = binary->get_section(".l2");
-  section->name(".rsrc");
-
-  LIEF::PE::Builder builder2(*binary);
-  builder2.build_dos_stub(true);
-  builder2.build_imports(false);
-  builder2.build_overlay(false);
-  builder2.build_relocations(false);
-  builder2.build_resources(false);
-  builder2.build_tls(false);
-  builder2.build();
-
-  // Construct a new Uint8Array in JS
-  const std::vector<uint8_t>& output = builder2.get_build();
-  emscripten::val view{
-      emscripten::typed_memory_view(output.size(), output.data())};
-  auto output_data = emscripten::val::global("Uint8Array").new_(output.size());
-  output_data.call<void>("set", view);
-
-  object.set("data", output_data);
+  const std::vector<uint8_t>& output = builder.get_build();
+  object.set("data", to_uint8array(output));
   object.set("result", emscripten::val(InjectResult::kSuccess));
 
   return object;
