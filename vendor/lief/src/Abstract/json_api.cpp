@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,25 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "LIEF/config.h"
-#include "logging.hpp"
 #include "LIEF/Abstract/json.hpp"
+#include "LIEF/Object.hpp"
+#include "LIEF/config.h"
 
 #ifdef LIEF_JSON_SUPPORT
-#include "Abstract/json_internal.hpp"
+  #include "Abstract/json_internal.hpp"
+#else
+  #include "logging.hpp"
 #endif
 
 namespace LIEF {
 
-std::string to_json_from_abstract(const Object& v) {
+std::string to_json_from_abstract([[maybe_unused]] const Object& v) {
 #if LIEF_JSON_SUPPORT
   AbstractJsonVisitor visitor;
   v.accept(visitor);
   return visitor.get().dump();
 #else
-  LIEF_WARN("JSON support is not enabled");
+  LIEF_WARN("JSON support not enabled");
   return "";
 #endif
 }
 
-} // namespace LIEF
+}

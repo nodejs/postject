@@ -1,0 +1,108 @@
+/* Copyright 2024 - 2026 R. Thomas
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#pragma once
+
+#include "LIEF/PE/Import.hpp"
+#include "LIEF/rust/Iterator.hpp"
+#include "LIEF/rust/Mirror.hpp"
+#include "LIEF/rust/PE/DataDirectories.hpp"
+#include "LIEF/rust/PE/ImportEntry.hpp"
+#include "LIEF/rust/helpers.hpp"
+
+#include <memory>
+
+class PE_Utils;
+
+class PE_Import : private Mirror<LIEF::PE::Import> {
+  friend class PE_Utils;
+
+  public:
+  using lief_t = LIEF::PE::Import;
+  using Mirror::Mirror;
+
+  class it_entries
+    : public Iterator<PE_ImportEntry, LIEF::PE::Import::it_const_entries> {
+    public:
+    it_entries(const PE_Import::lief_t& src) :
+      Iterator(src.entries()) {}
+    auto next() {
+      return Iterator::next();
+    }
+    auto size() const {
+      return Iterator::size();
+    }
+  };
+
+  uint32_t forwarder_chain() const {
+    return get().forwarder_chain();
+  }
+  uint32_t timedatestamp() const {
+    return get().timedatestamp();
+  }
+  uint32_t import_address_table_rva() const {
+    return get().import_address_table_rva();
+  }
+  uint32_t import_lookup_table_rva() const {
+    return get().import_lookup_table_rva();
+  }
+  auto name() const {
+    return to_unique_string(get().name());
+  }
+
+  auto name_rva() const {
+    return get().name_rva();
+  }
+
+  auto directory() const {
+    return details::try_unique<PE_DataDirectory>(
+        get().directory()
+    ); // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
+  }
+
+  auto iat_directory() const {
+    return details::try_unique<PE_DataDirectory>(
+        get().iat_directory()
+    ); // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
+  }
+
+  auto entries() const {
+    return std::make_unique<it_entries>(get());
+  }
+
+  auto entry_by_name(const std::string& name) const {
+    return details::try_unique<PE_ImportEntry>(
+        get().get_entry(name)
+    ); // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
+  }
+
+  auto remove_entry_by_name(const std::string& name) {
+    return get().remove_entry(name);
+  }
+
+  auto remove_entry_by_ordinal(uint32_t ord) {
+    return get().remove_entry(ord);
+  }
+
+  /// Add a new import entry with the given name (i.e. an imported function)
+  auto add_entry_by_name(const std::string& name) {
+    return std::make_unique<PE_ImportEntry>(get().add_entry(name));
+  }
+
+  auto set_name(const std::string& name) {
+    get().name(name);
+  }
+};
+
+using PE_Import_it_entries = PE_Import::it_entries;

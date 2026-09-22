@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,116 +13,122 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iostream>
-#include <iomanip>
+#include <ostream>
 
-#include "LIEF/PE/hash.hpp"
-#include "LIEF/exception.hpp"
-
-#include "LIEF/PE/Section.hpp"
+#include "LIEF/BinaryStream/SpanStream.hpp"
 #include "LIEF/PE/DataDirectory.hpp"
-#include "LIEF/PE/EnumToString.hpp"
+#include "LIEF/PE/Section.hpp"
+#include "LIEF/Visitor.hpp"
 #include "PE/Structures.hpp"
 
+#include "frozen.hpp"
 
-namespace LIEF {
-namespace PE {
-
-DataDirectory::~DataDirectory() = default;
-
-DataDirectory::DataDirectory() = default;
+#include <spdlog/fmt/fmt.h>
 
 
-DataDirectory::DataDirectory(DATA_DIRECTORY type) :
-  type_{type}
-{}
+namespace LIEF::PE {
 
-DataDirectory::DataDirectory(const details::pe_data_directory& header, DATA_DIRECTORY type) :
+DataDirectory::DataDirectory(const details::pe_data_directory& header,
+                             DataDirectory::TYPES type) :
   rva_{header.RelativeVirtualAddress},
   size_{header.Size},
-  type_{type}
-{}
-
-DataDirectory::DataDirectory(const DataDirectory& other) = default;
-
-DataDirectory& DataDirectory::operator=(DataDirectory other) {
-  swap(other);
-  return *this;
-}
-
-void DataDirectory::swap(DataDirectory& other) {
-  std::swap(rva_,     other.rva_);
-  std::swap(size_,    other.size_);
-  std::swap(type_,    other.type_);
-  std::swap(section_, other.section_);
-}
-
-uint32_t DataDirectory::RVA() const {
-  return rva_;
-}
-
-
-uint32_t DataDirectory::size() const {
-  return size_;
-}
-
-
-bool DataDirectory::has_section() const {
-  return section_ != nullptr;
-}
-
-
-const Section* DataDirectory::section() const {
-  return section_;
-}
-
-Section* DataDirectory::section() {
-  return const_cast<Section*>(static_cast<const DataDirectory*>(this)->section());
-}
-
-DATA_DIRECTORY DataDirectory::type() const {
-  return type_;
-}
-
-void DataDirectory::RVA(uint32_t rva) {
-  rva_ = rva;
-}
-
-
-void DataDirectory::size(uint32_t size) {
-  size_ = size;
-}
+  type_{type} {}
 
 void DataDirectory::accept(LIEF::Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-
-
-bool DataDirectory::operator==(const DataDirectory& rhs) const {
-  if (this == &rhs) {
-    return true;
+std::unique_ptr<SpanStream> DataDirectory::stream(bool sized) const {
+  if (sized) {
+    return std::make_unique<SpanStream>(content());
   }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
+
+  if (section_ == nullptr) {
+    return nullptr;
+  }
+
+  span<const uint8_t> section_content = section_->content();
+  if (section_content.empty()) {
+    return std::make_unique<SpanStream>(section_content);
+  }
+
+  if (RVA() < section_->virtual_address()) {
+    return std::make_unique<SpanStream>(nullptr, 0);
+  }
+
+  const uint64_t rel_offset = RVA() - section_->virtual_address();
+
+  if (rel_offset >= section_content.size() ||
+      size() > section_content.size() - rel_offset)
+  {
+    return std::make_unique<SpanStream>(nullptr, 0);
+  }
+
+  span<uint8_t> buffer = section_->writable_content().subspan(rel_offset);
+  return std::make_unique<SpanStream>(buffer);
 }
 
-bool DataDirectory::operator!=(const DataDirectory& rhs) const {
-  return !(*this == rhs);
+span<uint8_t> DataDirectory::content() {
+  if (section_ == nullptr) {
+    return {};
+  }
+
+  span<const uint8_t> section_content = section_->content();
+  if (section_content.empty()) {
+    return {};
+  }
+
+  if (RVA() < section_->virtual_address()) {
+    return {};
+  }
+
+  const uint64_t rel_offset = RVA() - section_->virtual_address();
+
+  if (rel_offset >= section_content.size() ||
+      size() > section_content.size() - rel_offset)
+  {
+    return {};
+  }
+
+  return section_->writable_content().subspan(rel_offset, size());
 }
 
 std::ostream& operator<<(std::ostream& os, const DataDirectory& entry) {
-  os << std::hex;
-  os << "Data directory \"" << to_string(entry.type()) << "\"" << std::endl;
-  os << std::setw(10) << std::left << std::setfill(' ') << "RVA: 0x"  << entry.RVA()  << std::endl;
-  os << std::setw(10) << std::left << std::setfill(' ') << "Size: 0x" << entry.size() << std::endl;
-  if (entry.has_section()) {
-    os << std::setw(10) << std::left << std::setfill(' ') << "Section: " << entry.section()->name() << std::endl;
+  os << fmt::format("[{:>24}] [{:#010x}, {:#010x}] ({} bytes)",
+                    to_string(entry.type()), entry.RVA(),
+                    entry.RVA() + entry.size(), entry.size());
+  if (const Section* section = entry.section()) {
+    os << fmt::format(" section: '{}'", section->name());
   }
-
   return os;
+}
 
+const char* to_string(DataDirectory::TYPES e) {
+#define ENTRY(X) std::pair(DataDirectory::TYPES::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(EXPORT_TABLE),
+      ENTRY(IMPORT_TABLE),
+      ENTRY(RESOURCE_TABLE),
+      ENTRY(EXCEPTION_TABLE),
+      ENTRY(CERTIFICATE_TABLE),
+      ENTRY(BASE_RELOCATION_TABLE),
+      ENTRY(DEBUG_DIR),
+      ENTRY(ARCHITECTURE),
+      ENTRY(GLOBAL_PTR),
+      ENTRY(TLS_TABLE),
+      ENTRY(LOAD_CONFIG_TABLE),
+      ENTRY(BOUND_IMPORT),
+      ENTRY(IAT),
+      ENTRY(DELAY_IMPORT_DESCRIPTOR),
+      ENTRY(CLR_RUNTIME_HEADER),
+      ENTRY(RESERVED),
+      ENTRY(UNKNOWN),
+  };
+#undef ENTRY
+  if (auto it = enums2str.find(e); it != enums2str.end()) {
+    return it->second;
+  }
+  return "UNKNOWN";
 }
-}
+
 }

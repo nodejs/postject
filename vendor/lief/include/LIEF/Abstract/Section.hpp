@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,65 +13,87 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ABSTRACT_SECTION_H_
-#define LIEF_ABSTRACT_SECTION_H_
+#ifndef LIEF_ABSTRACT_SECTION_H
+#define LIEF_ABSTRACT_SECTION_H
 
+#include <string_view>
+#include <ostream>
 #include <string>
 #include <vector>
-#include <iostream>
 
-#include "LIEF/types.hpp"
-#include "LIEF/span.hpp"
 #include "LIEF/Object.hpp"
+#include "LIEF/compiler_attributes.hpp"
+#include "LIEF/span.hpp"
 #include "LIEF/visibility.h"
 
 namespace LIEF {
-//! Class which represents an abstracted section
+/// Class which represents an abstracted section
 class LIEF_API Section : public Object {
   public:
   static constexpr size_t npos = -1;
 
-  Section();
-  Section(std::string name);
+  Section() = default;
+  Section(std::string name) :
+    name_(std::move(name)) {}
 
-  virtual ~Section();
+  ~Section() override = default;
 
-  Section& operator=(const Section&);
-  Section(const Section&);
+  Section& operator=(const Section&) = default;
+  Section(const Section&) = default;
 
-  //! section's name
-  virtual std::string name() const;
+  /// Section's name
+  virtual std::string_view name() const LIEF_LIFETIMEBOUND {
+    return fullname().substr(0, fullname().find_first_of('\0'));
+  }
 
-  //! Return the **complete** section's name which might
-  //! trailing (``0``) bytes
-  virtual const std::string& fullname() const;
+  /// Return the **complete** section's name which might include
+  /// trailing (``0``) bytes
+  virtual std::string_view fullname() const LIEF_LIFETIMEBOUND {
+    return name_;
+  }
 
-  //!  section's content
-  virtual span<const uint8_t> content() const;
+  /// Section's content
+  virtual span<const uint8_t> content() const LIEF_LIFETIMEBOUND {
+    return {};
+  }
 
-  //! Change the section size
-  virtual void size(uint64_t size);
+  /// Change the section size
+  virtual void size(uint64_t size) {
+    size_ = size;
+  }
 
-  //! section's size (size in the binary, not the virtual size)
-  virtual uint64_t size() const;
+  /// Section's size (size in the binary, not the virtual size)
+  virtual uint64_t size() const {
+    return size_;
+  }
 
-  //! Offset in the binary
-  virtual uint64_t offset() const;
+  /// Offset in the binary
+  virtual uint64_t offset() const {
+    return offset_;
+  }
 
-  //! Address where the section should be mapped
-  virtual uint64_t virtual_address() const;
+  /// Address where the section should be mapped
+  virtual uint64_t virtual_address() const {
+    return virtual_address_;
+  }
 
-  virtual void virtual_address(uint64_t virtual_address);
+  virtual void virtual_address(uint64_t virtual_address) {
+    virtual_address_ = virtual_address;
+  }
 
-  //! Change the section's name
-  virtual void name(const std::string& name);
+  /// Change the section's name
+  virtual void name(std::string name) {
+    name_ = std::move(name);
+  }
 
-  //! Change section content
-  virtual void content(const std::vector<uint8_t>& data);
+  /// Change section content
+  virtual void content(const std::vector<uint8_t>&) {}
 
-  virtual void offset(uint64_t offset);
+  virtual void offset(uint64_t offset) {
+    offset_ = offset;
+  }
 
-  //! Section's entropy
+  /// Section's entropy
   double entropy() const;
 
   // Search functions
@@ -89,25 +111,21 @@ class LIEF_API Section : public Object {
 
   std::vector<size_t> search_all(const std::string& v) const;
 
-  //! @brief Method so that the ``visitor`` can visit us
+  /// Method so that the ``visitor`` can visit us
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const Section& rhs) const;
-  bool operator!=(const Section& rhs) const;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Section& entry);
 
   protected:
   std::string name_;
-  uint64_t    virtual_address_ = 0;
-  uint64_t    size_ = 0;
-  uint64_t    offset_ = 0;
+  uint64_t virtual_address_ = 0;
+  uint64_t size_ = 0;
+  uint64_t offset_ = 0;
 
   private:
   template<typename T>
   std::vector<size_t> search_all_(const T& v) const;
-
-
 };
 }
 

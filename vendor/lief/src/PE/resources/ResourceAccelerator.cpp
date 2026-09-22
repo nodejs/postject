@@ -1,6 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
- * Copyright 2017 - 2021 K. Nakagawa
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,96 +13,65 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <algorithm>
 
-#include "LIEF/exception.hpp"
-#include "LIEF/PE/hash.hpp"
-#include "LIEF/PE/EnumToString.hpp"
+#include <spdlog/fmt/fmt.h>
+
+#include "LIEF/Visitor.hpp"
 #include "PE/Structures.hpp"
+#include "fmt_formatter.hpp"
 
 #include "LIEF/PE/resources/ResourceAccelerator.hpp"
 
-namespace LIEF {
-namespace PE {
+FMT_FORMATTER(LIEF::PE::ResourceAccelerator::FLAGS, LIEF::PE::to_string);
 
-ResourceAccelerator::ResourceAccelerator(const ResourceAccelerator&) = default;
-ResourceAccelerator& ResourceAccelerator::operator=(const ResourceAccelerator&) = default;
-ResourceAccelerator::~ResourceAccelerator() = default;
 
-ResourceAccelerator::ResourceAccelerator() :
-  flags_{0},
-  ansi_{0},
-  id_{0},
-  padding_{0} {}
+namespace LIEF::PE {
 
-ResourceAccelerator::ResourceAccelerator(const details::pe_resource_acceltableentry& entry) :
+static constexpr auto ARRAY_FLAGS = {
+    ResourceAccelerator::FLAGS::VIRTKEY, ResourceAccelerator::FLAGS::NOINVERT,
+    ResourceAccelerator::FLAGS::SHIFT,   ResourceAccelerator::FLAGS::CONTROL,
+    ResourceAccelerator::FLAGS::ALT,     ResourceAccelerator::FLAGS::END,
+};
+
+ResourceAccelerator::ResourceAccelerator(
+    const details::pe_resource_acceltableentry& entry
+) :
   flags_{entry.fFlags},
   ansi_{entry.wAnsi},
-  id_{static_cast<uint16_t>(entry.wId)},
+  id_{uint16_t(entry.wId)},
   padding_{entry.padding} {}
 
 void ResourceAccelerator::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool ResourceAccelerator::operator==(const ResourceAccelerator& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  const auto hash_lhs = Hash::hash(*this);
-  const auto hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool ResourceAccelerator::operator!=(const ResourceAccelerator& rhs) const {
-  return !(*this == rhs);
-}
-
 std::ostream& operator<<(std::ostream& os, const ResourceAccelerator& acc) {
-  os << "flags: ";
-  for (const ACCELERATOR_FLAGS c : acc.flags_list()) {
-    os << to_string(c) << " ";
-  }
-  os << std::endl;
-  os << "ansi: " << acc.ansi_str() << std::endl;
-  os << std::hex << "id: " << acc.id() << std::endl;
-  os << std::hex << "padding: " << acc.padding() << std::endl;
+  const auto& flags = acc.flags_list();
+  os << fmt::format("{} ({:#06x}) id: {:#06x}, flags: {}", acc.ansi_str(),
+                    acc.ansi(), acc.id(), fmt::to_string(flags));
   return os;
 }
 
-std::string ResourceAccelerator::ansi_str() const {
-  return to_string(static_cast<ACCELERATOR_VK_CODES>(ansi_));
+std::vector<ResourceAccelerator::FLAGS> ResourceAccelerator::flags_list() const {
+  std::vector<FLAGS> flags;
+  std::copy_if(ARRAY_FLAGS.begin(), ARRAY_FLAGS.end(), std::back_inserter(flags),
+               [this](FLAGS f) { return has(f); });
+  return flags;
 }
 
-std::set<ACCELERATOR_FLAGS> ResourceAccelerator::flags_list() const {
-  std::set<ACCELERATOR_FLAGS> flags_set;
+const char* to_string(ResourceAccelerator::FLAGS flag) {
+  switch (flag) {
+    case ResourceAccelerator::FLAGS::VIRTKEY: return "VIRTKEY";
+    case ResourceAccelerator::FLAGS::NOINVERT: return "NOINVERT";
+    case ResourceAccelerator::FLAGS::SHIFT: return "SHIFT";
+    case ResourceAccelerator::FLAGS::CONTROL: return "CONTROL";
+    case ResourceAccelerator::FLAGS::ALT: return "ALT";
+    case ResourceAccelerator::FLAGS::END: return "END";
+    default: return "UNKNOWN";
+  }
 
-  const auto flags_tmp = flags_;
-  std::copy_if(
-    std::cbegin(details::accelerator_array),
-    std::cend(details::accelerator_array),
-    std::inserter(flags_set, std::begin(flags_set)),
-    [flags_tmp](ACCELERATOR_FLAGS c) {
-      return (static_cast<uint16_t>(flags_tmp) & static_cast<uint16_t>(c)) > 0;
-    }
-  );
-  return flags_set;
+  return "UNKNOWN";
 }
 
-int16_t ResourceAccelerator::flags() const {
-  return flags_;
-}
-
-int16_t ResourceAccelerator::ansi() const {
-  return ansi_;
-}
-
-uint16_t ResourceAccelerator::id() const {
-  return id_;
-}
-
-int16_t ResourceAccelerator::padding() const {
-  return padding_;
-}
-
-}
 }

@@ -1,4 +1,8 @@
-sphinx
-alabaster
-breathe
-sphinx_rtd_theme
+requests==2.34.2
+sphinx==9.1.99
+myst-parser==5.1.0
+Pygments==2.20.0
+breathe==4.36.0
+sphinx-tabs==3.5.0
+markdownify==1.2.3
+lxml==6.1.0

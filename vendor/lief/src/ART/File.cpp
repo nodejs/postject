@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 #include "LIEF/ART/File.hpp"
 #include "LIEF/ART/hash.hpp"
 
-namespace LIEF {
-namespace ART {
+
+namespace LIEF::ART {
 
 File::File() = default;
 
@@ -35,19 +35,6 @@ void File::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool File::operator==(const File& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool File::operator!=(const File& rhs) const {
-  return !(*this == rhs);
-}
-
 
 File::~File() = default;
 
@@ -56,5 +43,4 @@ std::ostream& operator<<(std::ostream& os, const File& art_file) {
   return os;
 }
 
-} // Namespace ART
-} // Namespace LIEF
+}

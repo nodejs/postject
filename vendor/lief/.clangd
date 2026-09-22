@@ -1,0 +1,70 @@
+Documentation:
+  CommentFormat: Doxygen
+Diagnostics:
+  Includes:
+    IgnoreHeader:
+      - spdlog/fmt/.*
+      - nanobind/stl/.*
+      - third-party/.*
+  ClangTidy:
+    FastCheckFilter: Strict
+    Add: [
+      bugprone-*,
+      performance-*,
+      portability-*,
+      cppcoreguidelines-*,
+      modernize-*,
+      misc-*,
+      clang-taidy-*,
+    ]
+    Remove: [
+      bugprone-easily-swappable-parameters,
+      bugprone-narrowing-conversions,
+      bugprone-reserved-identifier,
+      bugprone-signed-char-misuse,
+      cppcoreguidelines-avoid-c-arrays,
+      cppcoreguidelines-avoid-const-or-ref-data-members,
+      cppcoreguidelines-avoid-do-while,
+      cppcoreguidelines-avoid-magic-numbers,
+      cppcoreguidelines-explicit-constructor,
+      cppcoreguidelines-missing-std-forward,
+      cppcoreguidelines-narrowing-conversions,
+      cppcoreguidelines-non-private-member-variables-in-classes,
+      cppcoreguidelines-owning-memory,
+      cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+      cppcoreguidelines-pro-bounds-constant-array-index,
+      cppcoreguidelines-pro-bounds-pointer-arithmetic,
+      cppcoreguidelines-pro-type-const-cast,
+      cppcoreguidelines-pro-type-reinterpret-cast,
+      cppcoreguidelines-pro-type-static-cast-downcast,
+      cppcoreguidelines-pro-type-union-access,
+      misc-explicit-constructor,
+      misc-misplaced-const,
+      misc-no-recursion,
+      misc-non-private-member-variables-in-classes,
+      misc-use-anonymous-namespace,
+      misc-use-internal-linkage,
+      misc-static-assert,
+      modernize-avoid-c-arrays,
+      modernize-concat-nested-namespaces,
+      modernize-make-unique,
+      modernize-use-nodiscard,
+      modernize-use-noexcept,
+      modernize-use-trailing-return-type,
+      performance-enum-size,
+      performance-no-int-to-ptr,
+    ]
+---
+If:
+  PathMatch:
+    - api/rust/include/LIEF/.*
+CompileFlags:
+  Remove: [-std=gnu++17]
+  Add: [-std=gnu++20]
+
+---
+If:
+  PathMatch:
+    - include/LIEF/.*
+  PathExclude:
+    - api/rust/.*

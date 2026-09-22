@@ -1,0 +1,167 @@
+/* Copyright 2024 - 2026 R. Thomas
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#pragma once
+#include <LIEF/Abstract/Binary.hpp>
+#include <LIEF/rust/Abstract/DebugInfo.hpp>
+#include <LIEF/rust/Abstract/Function.hpp>
+#include <LIEF/rust/Iterator.hpp>
+#include <LIEF/rust/Mirror.hpp>
+#include <LIEF/rust/asm/AssemblerConfig.hpp>
+#include <LIEF/rust/asm/Instruction.hpp>
+
+#include "LIEF/rust/error.hpp"
+
+class AbstractBinary : public Mirror<LIEF::Binary> {
+  public:
+  using lief_t = LIEF::Binary;
+  using Mirror::Mirror;
+
+  class it_instructions
+    : public ForwardIterator<asm_Instruction,
+                             LIEF::assembly::Instruction::Iterator> {
+    public:
+    it_instructions(const AbstractBinary::lief_t& src, uint64_t addr,
+                    size_t size) :
+      ForwardIterator(src.disassemble(addr, size)) {}
+
+    it_instructions(const AbstractBinary::lief_t& src, uint64_t addr) :
+      ForwardIterator(src.disassemble(addr)) {}
+
+    it_instructions(const AbstractBinary::lief_t& src, const std::string& func) :
+      ForwardIterator(src.disassemble(func)) {}
+
+    it_instructions(const AbstractBinary::lief_t& src, const uint8_t* ptr,
+                    size_t size, uint64_t address) :
+      ForwardIterator(src.disassemble(ptr, size, address)) {}
+
+    auto next() {
+      return ForwardIterator::next();
+    }
+  };
+
+
+  class it_functions
+    : public ContainerIterator<AbstractFunction, LIEF::Binary::functions_t> {
+    public:
+    it_functions(LIEF::Binary::functions_t content) :
+      ContainerIterator(std::move(content)) {}
+    auto next() {
+      return ContainerIterator::next();
+    }
+    auto size() const {
+      return ContainerIterator::size();
+    }
+  };
+
+  uint64_t entrypoint() const {
+    return get().entrypoint();
+  }
+  uint64_t imagebase() const {
+    return get().imagebase();
+  }
+  uint64_t virtual_size() const {
+    return get().virtual_size();
+  }
+  uint64_t original_size() const {
+    return get().original_size();
+  }
+  auto is_pie() const {
+    return get().is_pie();
+  }
+  auto has_nx() const {
+    return get().has_nx();
+  }
+
+  uint8_t get_u8(uint64_t addr, uint32_t& err) const {
+    return details::make_error(get().get_int_from_virtual_address<uint8_t>(addr),
+                               err);
+  }
+
+  uint16_t get_u16(uint64_t addr, uint32_t& err) const {
+    return details::make_error(get().get_int_from_virtual_address<uint16_t>(addr),
+                               err);
+  }
+
+  uint32_t get_u32(uint64_t addr, uint32_t& err) const {
+    return details::make_error(get().get_int_from_virtual_address<uint32_t>(addr),
+                               err);
+  }
+
+  uint64_t get_u64(uint64_t addr, uint32_t& err) const {
+    return details::make_error(get().get_int_from_virtual_address<uint64_t>(addr),
+                               err);
+  }
+
+  uint64_t offset_to_virtual_address(uint64_t offset, uint64_t slide,
+                                     uint32_t& err) const {
+    return details::make_error(get().offset_to_virtual_address(offset, slide),
+                               err);
+  }
+
+  auto debug_info() const {
+    return details::try_unique<AbstracDebugInfo>(
+        get().debug_info()
+    ); // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
+  }
+
+  auto disassemble(uint64_t addr, uint64_t size) const {
+    return std::make_unique<it_instructions>(get(), addr, size);
+  }
+
+  auto disassemble_address(uint64_t addr) const {
+    return std::make_unique<it_instructions>(get(), addr);
+  }
+
+  auto disassemble_buffer(const uint8_t* ptr, uint64_t size, uint64_t addr) const {
+    return std::make_unique<it_instructions>(get(), ptr, size, addr);
+  }
+
+  auto disassemble_function(const std::string& function) const {
+    return std::make_unique<it_instructions>(get(), function);
+  }
+
+  auto assemble(uint64_t address, const std::string& Asm) {
+    return make_unique_vector<uint8_t>(get().assemble(address, Asm));
+  }
+
+  auto assemble_with_config(uint64_t address, const std::string& Asm,
+                            const AssemblerConfig_r& ffi_config) {
+    std::unique_ptr<LIEF::assembly::AssemblerConfig> config =
+        from_rust(ffi_config);
+    assert(config != nullptr);
+    return make_unique_vector<uint8_t>(get().assemble(address, Asm, *config));
+  }
+
+  auto load_debug_info(const std::string& file) {
+    return details::try_unique<AbstracDebugInfo>(get().load_debug_info(file));
+  }
+
+  uint64_t page_size() const {
+    return get().page_size();
+  }
+
+  void patch_address_bytes(uint64_t address, const uint8_t* patch_value,
+                           uint64_t size) {
+    get().patch_address(address,
+                        std::vector<uint8_t>(patch_value, patch_value + size));
+  }
+
+  void patch_address_value(uint64_t address, uint64_t patch_value, uint64_t size) {
+    get().patch_address(address, patch_value, size);
+  }
+};
+
+using AbstractBinary_it_functions = AbstractBinary::it_functions;
+using AbstractBinary_it_instructions = AbstractBinary::it_instructions;

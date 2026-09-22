@@ -1,0 +1,224 @@
+name: 'macOS'
+on:
+  push:
+    branches:
+      - 'main'
+    tags-ignore:
+      - '**'
+
+env:
+  python-test-version: '3.13'
+
+jobs:
+  osx-sdk:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Install system dependencies
+        run: |
+          brew install cmake ninja ccache
+      - name: Get Date
+        id: get-date
+        run: |
+          echo "date=$(/bin/date -u "+%Y-%m-%d-%H;%M;%S")" >> $GITHUB_OUTPUT
+        shell: bash
+      - name: Setup cache dir
+        shell: bash
+        run: |
+          mkdir -p $RUNNER_TEMP/.ccache
+      - name: ccache cache files
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/.ccache
+          key: osx-${{ runner.os }}-sdk-${{ steps.get-date.outputs.date }}
+          restore-keys: |
+              osx-${{ runner.os }}-sdk
+      - name: Build SDK
+        shell: bash
+        env:
+          CLICOLOR_FORCE: "1"
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          CCACHE_DIR: ${{ runner.temp }}/.ccache
+          CCACHE_MAXSIZE: 10.0G
+          CCACHE_CPP2: 1
+          CCACHE_COMPRESS: 1
+        run: |
+          bash scripts/osx/package_sdk.sh
+      - name: 'Upload SDK Artifact'
+        uses: actions/upload-artifact@v7
+        with:
+          name: osx-sdk
+          path: build/*.tar.gz
+          retention-days: 3
+      - name: 'Upload install artifact [arm64]'
+        uses: actions/upload-artifact@v7
+        with:
+          name: osx-arm64-install
+          path: install/arm64
+          retention-days: 1
+      - name: 'Upload install artifact [x64]'
+        uses: actions/upload-artifact@v7
+        with:
+          name: osx-x64-install
+          path: install/x64
+          retention-days: 1
+  osx-testing:
+    runs-on: macos-14
+    if: "!contains(github.event.commits[0].message, '[skip-test]')"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Python ${{ env.python-test-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python-test-version }}
+      - name: Install system dependencies
+        run: |
+          brew install cmake ninja ccache
+      - name: Get Date
+        id: get-date
+        run: |
+          echo "date=$(/bin/date -u "+%Y-%m-%d-%H;%M;%S")" >> $GITHUB_OUTPUT
+        shell: bash
+      - name: Setup cache dir
+        shell: bash
+        run: |
+          mkdir -p $RUNNER_TEMP/.ccache
+      - name: ccache cache files
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/.ccache
+          key: osx-${{ runner.os }}-test-${{ steps.get-date.outputs.date }}
+          restore-keys: |
+              osx-${{ runner.os }}-test
+      - name: Upgrade pip
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+      - name: Build Python 3.13 with tests
+        shell: bash
+        env:
+          LIEF_SAMPLES_DIR: "/tmp/samples"
+          LIEF_BUILD_DIR: "/tmp/lief-build"
+          PYLIEF_CONF: "${{ github.workspace }}/scripts/osx/osx-testing-x64.toml"
+          CLICOLOR_FORCE: "1"
+          PYTEST_ADDOPTS: "--color=yes"
+          FORCE_COLOR: "1"
+          MACOSX_TARGET: "11.7"
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          CCACHE_DIR: ${{ runner.temp }}/.ccache
+          CCACHE_MAXSIZE: 10.0G
+          CCACHE_CPP2: 1
+          CCACHE_COMPRESS: 1
+        run: |
+          python -m pip install -r tests/requirements.txt
+          python -m pip -vvv install api/python
+          python tests/dl_samples.py ${LIEF_SAMPLES_DIR}
+      - name: Run tests
+        shell: bash
+        timeout-minutes: 20
+        env:
+          LIEF_SAMPLES_DIR: "/tmp/samples"
+          LIEF_BUILD_DIR: "/tmp/lief-build"
+          PYTEST_ADDOPTS: "--color=yes"
+        run: |
+          python tests/run_pytest.py
+          python tests/run_tools_check.py ${LIEF_BUILD_DIR}/
+          ctest --output-on-failure --test-dir ${LIEF_BUILD_DIR}/
+  wheels:
+    runs-on: macos-14
+    needs: osx-sdk
+    strategy:
+      matrix:
+        python-version: ['3.12', '3.13', '3.14']
+        arch: ['x64', 'arm64']
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install system dependencies
+        run: |
+          brew install cmake ninja ccache
+          python -m pip install --upgrade pip
+      - name: Get Date
+        id: get-date
+        run: |
+          echo "date=$(/bin/date -u "+%Y-%m-%d-%H;%M;%S")" >> $GITHUB_OUTPUT
+        shell: bash
+      - name: Setup cache dir
+        shell: bash
+        run: |
+          mkdir -p $RUNNER_TEMP/.ccache
+      - name: ccache cache files
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/.ccache
+          key: osx-${{ runner.os }}-${{ matrix.arch }}-${{ matrix.python-version }}-${{ steps.get-date.outputs.date }}
+          restore-keys: |
+              osx-${{ runner.os }}-${{ matrix.arch }}-${{ matrix.python-version }}
+      - name: Download LIEF install dir
+        uses: actions/download-artifact@v8
+        with:
+          name: osx-${{ matrix.arch }}-install
+          path: ~/lief-${{ matrix.arch }}-install
+      - name: Build Python ${{ matrix.python-version }} [${{ matrix.arch }}]
+        shell: bash
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          FORCE_COLOR: "1"
+          CLICOLOR_FORCE: "1"
+          CCACHE_DIR: ${{ runner.temp }}/.ccache
+          CCACHE_MAXSIZE: 10.0G
+          CCACHE_CPP2: 1
+          CCACHE_COMPRESS: 1
+          PYLIEF_CONF: "${{ github.workspace }}/scripts/osx/py-${{ matrix.arch }}.toml"
+        run: |
+          python -m pip -vv wheel --wheel-dir=dist/ api/python
+      - name: 'Upload Python wheel artifact - ${{ matrix.python-version }}'
+        uses: actions/upload-artifact@v7
+        with:
+          name: osx-wheel-${{ matrix.arch }}-${{ matrix.python-version }}
+          path: dist/*.whl
+          retention-days: 3
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: [wheels]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: osx-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/artifacts
+      - name: Display artifacts
+        run: ls -R
+        working-directory: ${{ runner.temp }}/artifacts
+      - name: Deploy
+        env:
+          LIEF_S3_KEY: ${{ secrets.LIEF_S3_KEY }}
+          LIEF_S3_SECRET: ${{ secrets.LIEF_S3_SECRET }}
+        shell: bash
+        run: |
+          docker run --rm                                     \
+            -v $GITHUB_WORKSPACE:/src                         \
+            -v $RUNNER_TEMP:/runner_tmp                       \
+            -e GITHUB_ACTIONS="true"                          \
+            -e GITHUB_WORKSPACE=$GITHUB_WORKSPACE             \
+            -e GITHUB_REF=$GITHUB_REF                         \
+            -e GITHUB_REPOSITORY=$GITHUB_REPOSITORY           \
+            -e LIEF_S3_KEY=$LIEF_S3_KEY                       \
+            -e LIEF_S3_SECRET=$LIEF_S3_SECRET                 \
+            liefproject/deploy                                \
+            python3 /src/.github/deploy.py --skip-sdk /runner_tmp/artifacts

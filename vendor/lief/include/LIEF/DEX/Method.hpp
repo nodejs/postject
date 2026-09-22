@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,27 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_DEX_METHOD_H_
-#define LIEF_DEX_METHOD_H_
+#ifndef LIEF_DEX_METHOD_H
+#define LIEF_DEX_METHOD_H
 
+#include <string_view>
 #include <climits>
+#include <vector>
 
-#include "LIEF/visibility.h"
 #include "LIEF/Object.hpp"
+#include "LIEF/visibility.h"
 
-#include "LIEF/DEX/enums.hpp"
 #include "LIEF/DEX/CodeInfo.hpp"
 #include "LIEF/DEX/deopt.hpp"
+#include "LIEF/DEX/enums.hpp"
 
-namespace LIEF {
-namespace DEX {
+
+namespace LIEF::DEX {
 class Parser;
 class Class;
 class Prototype;
 
-//! Class which represents a DEX::Method
+/// Class which represents a DEX::Method
 class LIEF_API Method : public Object {
   friend class Parser;
+
   public:
   using access_flags_list_t = std::vector<ACCESS_FLAGS>;
 
@@ -45,31 +48,31 @@ class LIEF_API Method : public Object {
   Method(const Method&);
   Method& operator=(const Method&);
 
-  //! Name of the Method
-  const std::string& name() const;
+  /// Name of the Method
+  std::string_view name() const;
 
-  //! True if a class is associated with this method
+  /// True if a class is associated with this method
   bool has_class() const;
 
-  //! DEX::Class associated with this Method or a nullptr
-  //! if not resolved
+  /// DEX::Class associated with this Method or a nullptr
+  /// if not resolved
   const Class* cls() const;
   Class* cls();
 
-  //! Offset to the Dalvik Bytecode
+  /// Offset to the Dalvik Bytecode
   uint64_t code_offset() const;
 
-  //! Dalvik Bytecode as bytes
+  /// Dalvik Bytecode as bytes
   const bytecode_t& bytecode() const;
 
-  //! Index in the DEX Methods pool
+  /// Index in the DEX Methods pool
   size_t index() const;
 
-  //! True if this method is a virtual one.
-  //! i.e. not **static**, **private**, **finale** or constructor
+  /// True if this method is a virtual one.
+  /// i.e. not **static**, **private**, **final** or constructor
   bool is_virtual() const;
 
-  //! Method's prototype or a nullptr if it is not resolved
+  /// Method's prototype or a nullptr if it is not resolved
   const Prototype* prototype() const;
   Prototype* prototype();
 
@@ -79,18 +82,18 @@ class LIEF_API Method : public Object {
 
   const dex2dex_method_info_t& dex2dex_info() const;
 
-  //! Check if the current method has the given ACCESS_FLAGS
+  /// Check if the current method has the given ACCESS_FLAGS
   bool has(ACCESS_FLAGS f) const;
 
-  //! ACCESS_FLAGS as an std::set
+  /// ACCESS_FLAGS as an std::set
   access_flags_list_t access_flags() const;
 
-  bool operator==(const Method& rhs) const;
-  bool operator!=(const Method& rhs) const;
+  // CodeInfo to get additional data about a method i.e. argument count
+  const CodeInfo& code_info() const;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Method& mtd);
 
-  virtual ~Method();
+  ~Method() override;
 
   private:
   void set_virtual(bool v);
@@ -109,9 +112,8 @@ class LIEF_API Method : public Object {
   CodeInfo code_info_;
 
   dex2dex_method_info_t dex2dex_info_;
-
 };
 
 } // Namespace DEX
-} // Namespace LIEF
+// Namespace LIEF
 #endif

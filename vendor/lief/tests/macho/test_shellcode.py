@@ -1,123 +1,141 @@
-
-#!/usr/bin/env python
-import lief
-import pathlib
 import re
-import sys
+from pathlib import Path
+from typing import cast
+
+import lief
 import pytest
-from utils import is_osx, get_sample, is_apple_m1, is_github_ci
+from utils import get_sample, is_apple_m1, is_github_ci, is_osx
 
-from test_builder import run_program
+from .test_builder import run_program
 
-def patch(tmp_path: str, bin_path: pathlib.Path) -> str:
-    original = lief.parse(bin_path.as_posix())
-    shellcode_path = None
 
-    output = f"{tmp_path}/{bin_path.name}"
+def patch(tmp_path: Path, bin_path: Path) -> Path:
+    original = lief.MachO.parse(bin_path)
+    assert original is not None
+    target = original.at(0)
+    assert target is not None
 
-    cpu = original.header.cpu_type
-    if cpu == lief.MachO.CPU_TYPES.ARM64:
-        shellcode_path = pathlib.Path(get_sample("MachO/shellcode-stub/lief_hello_darwin_arm64.bin"))
-    elif cpu == lief.MachO.CPU_TYPES.x86_64:
-        shellcode_path = pathlib.Path(get_sample("MachO/shellcode-stub/lief_hello_darwin_x86_64.bin"))
+    output = tmp_path / bin_path.name
+
+    cpu = target.header.cpu_type
+    if cpu == lief.MachO.Header.CPU_TYPE.ARM64:
+        shellcode_path = Path(
+            get_sample("MachO/shellcode-stub/lief_hello_darwin_arm64.bin")
+        )
+    elif cpu == lief.MachO.Header.CPU_TYPE.X86_64:
+        shellcode_path = Path(
+            get_sample("MachO/shellcode-stub/lief_hello_darwin_x86_64.bin")
+        )
     else:
-        print(f"Unsupported architecture {cpu!s} for {bin_path}")
-        sys.exit(1)
+        raise RuntimeError(f"Unsupported architecture {cpu} for {bin_path}")
 
+    shellcode_fat = lief.MachO.parse(shellcode_path)
+    assert shellcode_fat is not None
+    shellcode = shellcode_fat.at(0)
+    assert shellcode is not None
 
-    shellcode = lief.parse(shellcode_path.as_posix())
-
-    #lief.logging.set_level(lief.logging.LOGGING_LEVEL.DEBUG)
-
-    __TEXT  = shellcode.get_segment("__TEXT")
+    __TEXT = shellcode.get_segment("__TEXT")
+    assert __TEXT is not None
     __STEXT = lief.MachO.SegmentCommand("__STEXT", list(__TEXT.content))
-    __STEXT = original.add(__STEXT)
-    print(__STEXT)
+    __STEXT_added = cast(lief.MachO.SegmentCommand, target.add(__STEXT))
 
-    __STEXT.init_protection = __TEXT.init_protection
-    __STEXT.max_protection  = __TEXT.max_protection
+    __STEXT_added.init_protection = __TEXT.init_protection
+    __STEXT_added.max_protection = __TEXT.max_protection
 
-    __DATA  = shellcode.get_segment("__DATA")
+    __DATA = shellcode.get_segment("__DATA")
+    assert __DATA is not None
     __SDATA = lief.MachO.SegmentCommand("__SDATA", list(__DATA.content))
-    __SDATA = original.add(__SDATA)
+    __SDATA_added = cast(lief.MachO.SegmentCommand, target.add(__SDATA))
 
-    __SDATA.init_protection = __DATA.init_protection
-    __SDATA.max_protection  = __DATA.max_protection
+    __SDATA_added.init_protection = __DATA.init_protection
+    __SDATA_added.max_protection = __DATA.max_protection
 
     shellcode_ep = shellcode.entrypoint - shellcode.imagebase
-    new_ep = shellcode_ep + __STEXT.virtual_address - original.imagebase
-    print(f"New entrypoint: 0x{new_ep:x}")
+    new_ep = shellcode_ep + __STEXT_added.virtual_address - target.imagebase
 
-    original.main_command.entrypoint = new_ep
-    print(original.main_command)
+    main_cmd = target.main_command
+    assert main_cmd is not None
+    main_cmd.entrypoint = new_ep
 
-    print(f"Written in {output}")
-    original.write(output)
+    target.write(output)
     return output
 
 
-def test_crypt_and_hash(tmp_path):
-    bin_path = pathlib.Path(get_sample("MachO/9edfb04c55289c6c682a25211a4b30b927a86fe50b014610d04d6055bd4ac23d_crypt_and_hash.macho"))
+def test_crypt_and_hash(tmp_path: Path):
+    bin_path = Path(
+        get_sample(
+            "MachO/9edfb04c55289c6c682a25211a4b30b927a86fe50b014610d04d6055bd4ac23d_crypt_and_hash.macho"
+        )
+    )
     output = patch(tmp_path, bin_path)
-    new = lief.parse(output)
+    new = lief.MachO.parse(output)
+    assert new is not None
 
     checked, err = lief.MachO.check_layout(new)
     assert checked, err
 
     if is_apple_m1():
         stdout = run_program(output)
-        print(stdout)
-        assert re.search(r'LIEF says hello :\)', stdout) is not None
+        lief.logging.info(stdout)
+        assert re.search(r"LIEF says hello :\)", stdout) is not None
 
-def test_all(tmp_path):
-    bin_path = pathlib.Path(get_sample("MachO/MachO64_x86-64_binary_all.bin"))
+
+def test_all(tmp_path: Path):
+    bin_path = Path(get_sample("MachO/MachO64_x86-64_binary_all.bin"))
     output = patch(tmp_path, bin_path)
-    new = lief.parse(output)
+    new = lief.MachO.parse(output)
+    assert new is not None
 
     checked, err = lief.MachO.check_layout(new)
     assert checked, err
 
     if is_osx():
         stdout = run_program(output)
-        print(stdout)
-        assert re.search(r'LIEF says hello :\)', stdout) is not None
+        lief.logging.info(stdout)
+        assert re.search(r"LIEF says hello :\)", stdout) is not None
+
 
 @pytest.mark.skipif(is_github_ci(), reason="sshd does not work on Github Action")
-def test_ssh(tmp_path):
-    bin_path = pathlib.Path(get_sample("MachO/MachO64_x86-64_binary_sshd.bin"))
+def test_ssh(tmp_path: Path):
+    bin_path = Path(get_sample("MachO/MachO64_x86-64_binary_sshd.bin"))
     output = patch(tmp_path, bin_path)
-    new = lief.parse(output)
+    new = lief.MachO.parse(output)
+    assert new is not None
 
     checked, err = lief.MachO.check_layout(new)
     assert checked, err
 
     if is_osx():
         stdout = run_program(output, args=["--help"])
-        print(stdout)
-        assert re.search(r'LIEF says hello :\)', stdout) is not None
+        lief.logging.info(stdout)
+        assert re.search(r"LIEF says hello :\)", stdout) is not None
 
-def test_nm(tmp_path):
-    bin_path = pathlib.Path(get_sample("MachO/MachO64_x86-64_binary_nm.bin"))
+
+def test_nm(tmp_path: Path):
+    bin_path = Path(get_sample("MachO/MachO64_x86-64_binary_nm.bin"))
     output = patch(tmp_path, bin_path)
-    new = lief.parse(output)
+    new = lief.MachO.parse(output)
+    assert new is not None
 
     checked, err = lief.MachO.check_layout(new)
     assert checked, err
 
     if is_osx():
         stdout = run_program(output)
-        print(stdout)
-        assert re.search(r'LIEF says hello :\)', stdout) is not None
+        lief.logging.info(stdout)
+        assert re.search(r"LIEF says hello :\)", stdout) is not None
 
-def test_arm64_all(tmp_path):
-    bin_path = pathlib.Path(get_sample("MachO/MachO64_AArch64_binary_all.bin"))
+
+def test_arm64_all(tmp_path: Path):
+    bin_path = Path(get_sample("MachO/MachO64_AArch64_binary_all.bin"))
     output = patch(tmp_path, bin_path)
-    new = lief.parse(output)
+    new = lief.MachO.parse(output)
+    assert new is not None
 
     checked, err = lief.MachO.check_layout(new)
     assert checked, err
 
     if is_apple_m1():
         stdout = run_program(output)
-        print(stdout)
-        assert re.search(r'LIEF says hello :\)', stdout) is not None
+        lief.logging.info(stdout)
+        assert re.search(r"LIEF says hello :\)", stdout) is not None

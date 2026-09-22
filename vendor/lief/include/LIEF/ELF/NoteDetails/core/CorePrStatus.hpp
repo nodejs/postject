@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,213 +13,278 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_CORE_PRSTATUS_H_
-#define LIEF_ELF_CORE_PRSTATUS_H_
+#ifndef LIEF_ELF_CORE_PRSTATUS_H
+#define LIEF_ELF_CORE_PRSTATUS_H
 
-#include <vector>
-#include <iostream>
-#include <map>
+#include <memory>
+#include <ostream>
 #include <utility>
+#include <vector>
 
-#include "LIEF/Object.hpp"
+#include "LIEF/ELF/Note.hpp"
+#include "LIEF/ELF/enums.hpp"
 #include "LIEF/visibility.h"
 
-#include "LIEF/ELF/NoteDetails.hpp"
 
-namespace LIEF {
-namespace ELF {
+namespace LIEF::ELF {
 
 class Parser;
 class Builder;
 class Binary;
 
-//! Class representing core PrPsInfo object
-class LIEF_API CorePrStatus : public NoteDetails {
-
+/// Class representing core PrPsInfo object
+class LIEF_API CorePrStatus : public Note {
   public:
-  using NoteDetails::NoteDetails;
   struct siginfo_t {
-    int32_t si_signo;
-    int32_t si_code;
-    int32_t si_errno;
+    int32_t signo = 0;
+    int32_t code = 0;
+    int32_t err = 0;
   };
 
   struct timeval_t {
-    uint64_t sec;
-    uint64_t usec;
+    uint64_t sec = 0;
+    uint64_t usec = 0;
   };
 
+  /// Status information from a core dump
+  ///
+  /// This structure mirrors the kernel's `prstatus` data embedded in
+  /// `NT_PRSTATUS` core-dump notes and exposes signal state, process
+  /// identifiers, and CPU-time accounting.
+  struct pr_status_t {
+    siginfo_t info;
 
-  enum class REGISTERS  {
-    UNKNOWN,
+    uint16_t cursig = 0;
+    uint16_t reserved = 0;
 
-    // x86
-    // ===
-    X86_START,
-      X86_EBX, X86_ECX, X86_EDX, X86_ESI, X86_EDI, X86_EBP, X86_EAX,
-      X86_DS, X86_ES, X86_FS, X86_GS, X86__, X86_EIP, X86_CS, X86_EFLAGS, X86_ESP, X86_SS,
-    X86_END,
+    uint64_t sigpend = 0;
+    uint64_t sighold = 0;
 
-    // x86-64
-    // ======
-    X86_64_START,
-      X86_64_R15, X86_64_R14, X86_64_R13, X86_64_R12, X86_64_RBP, X86_64_RBX, X86_64_R11, X86_64_R10,
-      X86_64_R9, X86_64_R8, X86_64_RAX, X86_64_RCX, X86_64_RDX, X86_64_RSI, X86_64_RDI, X86_64__,
-      X86_64_RIP, X86_64_CS, X86_64_EFLAGS, X86_64_RSP, X86_64_SS,
-    X86_64_END,
+    int32_t pid = 0;
+    int32_t ppid = 0;
+    int32_t pgrp = 0;
+    int32_t sid = 0;
 
-    // ARM
-    // ===
-    ARM_START,
-      ARM_R0, ARM_R1, ARM_R2,  ARM_R3,  ARM_R4,  ARM_R5,  ARM_R6,  ARM_R7,
-      ARM_R8, ARM_R9, ARM_R10, ARM_R11, ARM_R12, ARM_R13, ARM_R14, ARM_R15,
-      ARM_CPSR,
-    ARM_END,
-
-    // AArch64
-    // =======
-    AARCH64_START,
-      AARCH64_X0,  AARCH64_X1,  AARCH64_X2,  AARCH64_X3,  AARCH64_X4,  AARCH64_X5,  AARCH64_X6,  AARCH64_X7,
-      AARCH64_X8,  AARCH64_X9,  AARCH64_X10, AARCH64_X11, AARCH64_X12, AARCH64_X13, AARCH64_X14, AARCH64_X15,
-      AARCH64_X16, AARCH64_X17, AARCH64_X18, AARCH64_X19, AARCH64_X20, AARCH64_X21, AARCH64_X22, AARCH64_X23,
-      AARCH64_X24, AARCH64_X25, AARCH64_X26, AARCH64_X27, AARCH64_X28, AARCH64_X29, AARCH64_X30, AARCH64_X31,
-      AARCH64_PC, AARCH64__,
-    AARCH64_END,
+    timeval_t utime;
+    timeval_t stime;
+    timeval_t cutime;
+    timeval_t cstime;
   };
-  using reg_context_t = std::map<REGISTERS, uint64_t>;
+
+  struct Registers {
+    /// Register for the x86 architecture (ARCH::I386).
+    enum class X86 {
+      EBX = 0,
+      ECX,
+      EDX,
+      ESI,
+      EDI,
+      EBP,
+      EAX,
+      DS,
+      ES,
+      FS,
+      GS,
+      ORIG_EAX,
+      EIP,
+      CS,
+      EFLAGS,
+      ESP,
+      SS,
+      _COUNT,
+    };
+
+    /// Register for the x86-64 architecture (ARCH::X86_64).
+    enum class X86_64 {
+      R15 = 0,
+      R14,
+      R13,
+      R12,
+      RBP,
+      RBX,
+      R11,
+      R10,
+      R9,
+      R8,
+      RAX,
+      RCX,
+      RDX,
+      RSI,
+      RDI,
+      ORIG_RAX,
+      RIP,
+      CS,
+      EFLAGS,
+      RSP,
+      SS,
+      FS_BASE,
+      GS_BASE,
+      DS,
+      ES,
+      _COUNT,
+    };
+
+    /// Register for the ARM architecture (ARCH::ARM).
+    enum class ARM {
+      R0 = 0,
+      R1,
+      R2,
+      R3,
+      R4,
+      R5,
+      R6,
+      R7,
+      R8,
+      R9,
+      R10,
+      R11,
+      R12,
+      R13,
+      R14,
+      R15,
+      CPSR,
+      _COUNT,
+    };
+
+    /// Register for the AARCH64 architecture (ARCH::AARCH64).
+    enum class AARCH64 {
+      X0 = 0,
+      X1,
+      X2,
+      X3,
+      X4,
+      X5,
+      X6,
+      X7,
+      X8,
+      X9,
+      X10,
+      X11,
+      X12,
+      X13,
+      X14,
+      X15,
+      X16,
+      X17,
+      X18,
+      X19,
+      X20,
+      X21,
+      X22,
+      X23,
+      X24,
+      X25,
+      X26,
+      X27,
+      X28,
+      X29,
+      X30,
+      X31,
+      PC,
+      PSTATE,
+      _COUNT,
+    };
+  };
 
   public:
-  static CorePrStatus make(Note& note);
+  CorePrStatus(ARCH arch, Header::CLASS cls, std::string name, uint32_t type,
+               description_t description) :
+    Note(std::move(name), TYPE::CORE_PRSTATUS, type, std::move(description), ""),
+    arch_(arch),
+    class_(cls) {}
 
-  CorePrStatus* clone() const override;
+  std::unique_ptr<Note> clone() const override {
+    return std::make_unique<CorePrStatus>(*this);
+  }
 
-  //! Info associated with the signal
-  const siginfo_t& siginfo() const;
+  /// Return the pr_status_t structure
+  pr_status_t status() const;
+  void status(const pr_status_t& status);
 
-  //! Current Signal
-  uint16_t current_sig() const;
+  ARCH architecture() const {
+    return arch_;
+  }
 
-  //! Set of pending signals
-  uint64_t sigpend() const;
+  /// The program counter or an error if not found
+  result<uint64_t> pc() const;
 
-  //! Set of held signals
-  uint64_t sighold() const;
+  /// The stack pointer or an error if not found
+  result<uint64_t> sp() const;
 
-  //! Process ID
-  int32_t pid() const;
+  /// The value of the register that holds the return value according to
+  /// the calling convention.
+  result<uint64_t> return_value() const;
 
-  //! Process parent ID
-  int32_t ppid() const;
+  /// Get the value for the given X86 register or return an error
+  result<uint64_t> get(Registers::X86 reg) const;
+  /// Get the value for the given X86_64 register or return an error
+  result<uint64_t> get(Registers::X86_64 reg) const;
+  /// Get the value for the given ARM register or return an error
+  result<uint64_t> get(Registers::ARM reg) const;
+  /// Get the value for the given AARCH64 register or return an error
+  result<uint64_t> get(Registers::AARCH64 reg) const;
 
-  //! Process group ID
-  int32_t pgrp() const;
+  ok_error_t set(Registers::X86 reg, uint64_t value);
+  ok_error_t set(Registers::X86_64 reg, uint64_t value);
+  ok_error_t set(Registers::ARM reg, uint64_t value);
+  ok_error_t set(Registers::AARCH64 reg, uint64_t value);
 
-  //! Process session ID
-  int32_t sid() const;
+  /// A list of the register values.
+  /// This list is **guarantee** to be as long as the Registers::ARM::_COUNT or
+  /// empty if it can't be resolved. Thus, one can access a specific register
+  /// with:
+  /// ```cpp
+  /// if (architecture() == ARCH::AARCH64) {
+  ///   auto reg_vals = register_values()
+  ///   if (!reg_vals.empty()) {
+  ///     auto x20 = reg_vals[static_cast<size_t>(Register::AARCH64::X20)]
+  ///   }
+  /// }
+  /// ```
+  std::vector<uint64_t> register_values() const;
 
-  //! User time
-  timeval_t utime() const;
+  result<uint64_t> operator[](Registers::X86 reg) const {
+    return get(reg);
+  }
 
-  //! System time
-  timeval_t stime() const;
+  result<uint64_t> operator[](Registers::X86_64 reg) const {
+    return get(reg);
+  }
 
-  //! Cumulative user time
-  timeval_t cutime() const;
+  result<uint64_t> operator[](Registers::ARM reg) const {
+    return get(reg);
+  }
 
-  //! Cumulative system time
-  timeval_t cstime() const;
-
-  //! GP registers state
-  const reg_context_t& reg_context() const;
-
-  //! Return the program counter
-  uint64_t pc() const;
-
-  //! Return the stack pointer
-  uint64_t sp() const;
-
-  //! Get register value. If ``error`` is set,
-  //! this function and the register exists, the function set the boolean value to ``false``
-  //! Otherwise it set the value to ``true``
-  uint64_t get(REGISTERS reg, bool* error = nullptr) const;
-
-  //! Check if the given register is present in the info
-  bool has(REGISTERS reg) const;
-
-  void siginfo(const siginfo_t& siginfo);
-  void current_sig(uint16_t current_sig);
-
-  void sigpend(uint64_t sigpend);
-  void sighold(uint64_t sighold);
-
-  void pid(int32_t pid);
-  void ppid(int32_t ppid);
-  void pgrp(int32_t pgrp);
-  void sid(int32_t sid);
-
-  void utime(timeval_t utime);
-  void stime(timeval_t stime);
-  void cutime(timeval_t cutime);
-  void cstime(timeval_t cstime);
-
-  void reg_context(const reg_context_t& ctx);
-
-  bool set(REGISTERS reg, uint64_t value);
-
-  bool operator==(const CorePrStatus& rhs) const;
-  bool operator!=(const CorePrStatus& rhs) const;
-
-  uint64_t& operator[](REGISTERS reg);
+  result<uint64_t> operator[](Registers::AARCH64 reg) const {
+    return get(reg);
+  }
 
   void dump(std::ostream& os) const override;
-  static std::ostream& dump(std::ostream& os, const timeval_t& time);
-  static std::ostream& dump(std::ostream& os, const siginfo_t& siginfo);
-  static std::ostream& dump(std::ostream& os, const reg_context_t& ctx);
-
   void accept(Visitor& visitor) const override;
 
-  virtual ~CorePrStatus();
+  static bool classof(const Note* note) {
+    return note->type() == Note::TYPE::CORE_PRSTATUS;
+  }
 
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const CorePrStatus& note);
+  ~CorePrStatus() override = default;
 
-  protected:
-  template <typename ELF_T>
-  LIEF_LOCAL void parse_();
-
-  template <typename ELF_T>
-  LIEF_LOCAL void build_();
-
-  void parse() override;
-  void build() override;
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const CorePrStatus& note) {
+    note.dump(os);
+    return os;
+  }
 
   private:
-  CorePrStatus(Note& note);
-
-  std::pair<size_t, size_t> reg_enum_range() const;
-
-  siginfo_t siginfo_;
-  uint16_t  cursig_;
-
-  uint64_t sigpend_;
-  uint64_t sighold_;
-
-  int32_t pid_;
-  int32_t ppid_;
-  int32_t pgrp_;
-  int32_t sid_;
-
-  timeval_t utime_;
-  timeval_t stime_;
-  timeval_t cutime_;
-  timeval_t cstime_;
-
-  reg_context_t ctx_;
+  ARCH arch_ = ARCH::NONE;
+  Header::CLASS class_ = Header::CLASS::NONE;
 };
 
+LIEF_API const char* to_string(CorePrStatus::Registers::X86 e);
+LIEF_API const char* to_string(CorePrStatus::Registers::X86_64 e);
+LIEF_API const char* to_string(CorePrStatus::Registers::ARM e);
+LIEF_API const char* to_string(CorePrStatus::Registers::AARCH64 e);
 
-LIEF_API const char* to_string(CorePrStatus::REGISTERS e);
+}
 
-} // namepsace ELF
-} // namespace LIEF
 
 #endif

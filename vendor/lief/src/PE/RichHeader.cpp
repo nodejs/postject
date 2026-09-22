@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,107 +13,59 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iomanip>
-
-#include "LIEF/PE/hash.hpp"
 #include "LIEF/PE/RichHeader.hpp"
-#include "LIEF/iostream.hpp"
 #include "LIEF/PE/EnumToString.hpp"
+#include "LIEF/PE/hash.hpp"
+#include "LIEF/iostream.hpp"
 
-
+#include "frozen.hpp"
 #include "logging.hpp"
 
-#define LIEF_PE_FORCE_UNDEF
-#include "LIEF/PE/undef.h"
-
-#include "PE/Structures.hpp"
 #include "hash_stream.hpp"
 
-namespace LIEF {
-namespace PE {
 
-RichHeader::~RichHeader() = default;
-RichHeader::RichHeader(const RichHeader&) = default;
-RichHeader& RichHeader::operator=(const RichHeader&) = default;
-
-RichHeader::RichHeader() = default;
-
-uint32_t RichHeader::key() const {
-  return key_;
-}
-
-RichHeader::it_entries RichHeader::entries() {
-  return entries_;
-}
-
-RichHeader::it_const_entries RichHeader::entries() const {
-  return entries_;
-}
-
-void RichHeader::key(uint32_t key) {
-  key_ = key;
-}
-
-void RichHeader::add_entry(const RichEntry& entry) {
-  entries_.push_back(entry);
-}
-
-void RichHeader::add_entry(uint16_t id, uint16_t build_id, uint32_t count) {
-  entries_.emplace_back(id, build_id, count);
-}
+namespace LIEF::PE {
 
 void RichHeader::accept(LIEF::Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-std::vector<uint8_t> RichHeader::raw() const {
-  return raw(0);
-}
-
 std::vector<uint8_t> RichHeader::raw(uint32_t xor_key) const {
-  static constexpr uint32_t RICH_MAGIC = 0x68636952;
   vector_iostream wstream;
 
   wstream
-    .write(details::DanS_Magic_number ^ xor_key)
-    /*
-     * The first chunk needs to be aligned on 64-bit and padded
-     * with 0-xor. We can't use vector_iostream::align as it would not
-     * be encoded.
-     */
-    .write<uint32_t>(0 ^ xor_key)
-    .write<uint32_t>(0 ^ xor_key)
-    .write<uint32_t>(0 ^ xor_key);
+      .write(DANS_MAGIC_NUMBER ^ xor_key)
+      /*
+       * The first chunk needs to be aligned on 64-bit and padded
+       * with 0-xor. We can't use vector_iostream::align as it would not
+       * be encoded.
+       */
+      .write<uint32_t>(0 ^ xor_key)
+      .write<uint32_t>(0 ^ xor_key)
+      .write<uint32_t>(0 ^ xor_key);
 
   for (auto it = entries_.crbegin(); it != entries_.crend(); ++it) {
     const RichEntry& entry = *it;
-    const uint32_t value = (static_cast<uint32_t>(entry.id()) << 16) | entry.build_id();
-    wstream
-      .write(value ^ xor_key).write(entry.count() ^ xor_key);
+    const uint32_t value = (uint32_t{entry.id()} << 16) | entry.build_id();
+    wstream.write(value ^ xor_key).write(entry.count() ^ xor_key);
   }
-
-  wstream
-    .write(RICH_MAGIC).write(xor_key);
+  wstream.write(RICH_MAGIC, std::size(RICH_MAGIC)).write(xor_key);
 
   return wstream.raw();
 }
 
-
-std::vector<uint8_t> RichHeader::hash(ALGORITHMS algo) const {
-  return hash(algo, 0);
-}
-
 std::vector<uint8_t> RichHeader::hash(ALGORITHMS algo, uint32_t xor_key) const {
-  static const std::map<ALGORITHMS, hashstream::HASH> HMAP = {
-    {ALGORITHMS::MD5,     hashstream::HASH::MD5},
-    {ALGORITHMS::SHA_1,   hashstream::HASH::SHA1},
-    {ALGORITHMS::SHA_256, hashstream::HASH::SHA256},
-    {ALGORITHMS::SHA_384, hashstream::HASH::SHA384},
-    {ALGORITHMS::SHA_512, hashstream::HASH::SHA512},
+  CONST_MAP(ALGORITHMS, hashstream::HASH, 5)
+  HMAP = {
+      {ALGORITHMS::MD5, hashstream::HASH::MD5},
+      {ALGORITHMS::SHA_1, hashstream::HASH::SHA1},
+      {ALGORITHMS::SHA_256, hashstream::HASH::SHA256},
+      {ALGORITHMS::SHA_384, hashstream::HASH::SHA384},
+      {ALGORITHMS::SHA_512, hashstream::HASH::SHA512},
   };
 
-  auto it_hash = HMAP.find(algo);
-  if (it_hash == std::end(HMAP)) {
+  const auto it_hash = HMAP.find(algo);
+  if (it_hash == HMAP.end()) {
     LIEF_WARN("Unsupported hash algorithm: {}", to_string(algo));
     return {};
   }
@@ -125,27 +77,13 @@ std::vector<uint8_t> RichHeader::hash(ALGORITHMS algo, uint32_t xor_key) const {
   return hs.raw();
 }
 
-bool RichHeader::operator==(const RichHeader& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool RichHeader::operator!=(const RichHeader& rhs) const {
-  return !(*this == rhs);
-}
-
-
 std::ostream& operator<<(std::ostream& os, const RichHeader& rich_header) {
-  os << "Key: " << std::hex << rich_header.key() << std::endl;
+  os << fmt::format("Key: {:#010x} ({} entries)\n", rich_header.key(),
+                    rich_header.entries().size());
   for (const RichEntry& entry : rich_header.entries()) {
-    os << "  - " << entry << std::endl;
+    os << "  " << entry << '\n';
   }
   return os;
 }
 
-}
 }

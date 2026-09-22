@@ -1,6 +1,6 @@
 
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_SIZING_INFO_H_
-#define LIEF_ELF_SIZING_INFO_H_
-#include "LIEF/visibility.h"
-#include "LIEF/types.hpp"
-namespace LIEF {
-namespace ELF {
+#ifndef LIEF_ELF_SIZING_INFO_H
+#define LIEF_ELF_SIZING_INFO_H
+
+#include <cstdint>
+
+namespace LIEF::ELF {
 struct sizing_info_t {
   uint64_t dynsym = 0;
   uint64_t dynstr = 0;
@@ -28,6 +28,8 @@ struct sizing_info_t {
   uint64_t gnu_hash = 0;
   uint64_t hash = 0;
   uint64_t rela = 0;
+  uint64_t relr = 0;
+  uint64_t android_rela = 0;
   uint64_t jmprel = 0;
   uint64_t versym = 0;
   uint64_t verdef = 0;
@@ -38,5 +40,5 @@ struct sizing_info_t {
   uint64_t preinit_array = 0;
 };
 }
-}
+
 #endif

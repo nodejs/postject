@@ -3,6 +3,37 @@
   max-height: 500px;
 }
 
+html[data-theme="dark"] .highlight .hll {
+  margin-inline-start: -0.55rem;
+  padding-inline-start: 0.55rem;
+}
+
+html[data-theme="light"] .docs-content dt.sig .property {
+  color: #007681;
+}
+
 .center {
   text-align: center;
+}
+
+.fixed-paragraph {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+li .fixed-paragraph {
+  margin-top: 0;
+  margin-bottom: 0rem;
+}
+
+.align-default {
+  text-align: inherit;
+}
+
+a.btn:visited {
+  color: #fff;
+}
+
+.img-comparison-slider-div {
+    overflow-y: auto;
 }

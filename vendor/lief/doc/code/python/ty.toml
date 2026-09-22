@@ -1,0 +1,5 @@
+[rules]
+unused-type-ignore-comment = "ignore"
+unused-ignore-comment = "ignore"
+unresolved-attribute = "ignore"
+unsupported-operator = "ignore"

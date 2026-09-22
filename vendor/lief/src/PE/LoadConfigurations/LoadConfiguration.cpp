@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,281 +13,1245 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iomanip>
+#include <sstream>
 
-#include "LIEF/PE/hash.hpp"
-#include "LIEF/exception.hpp"
+#include <spdlog/fmt/fmt.h>
 
-#include "LIEF/PE/LoadConfigurations.hpp"
-#include "LIEF/PE/EnumToString.hpp"
+#include "LIEF/BinaryStream/BinaryStream.hpp"
+#include "LIEF/BinaryStream/SpanStream.hpp"
+#include "LIEF/Visitor.hpp"
+
+#include "LIEF/PE/Binary.hpp"
+#include "LIEF/PE/LoadConfigurations/CHPEMetadata/Metadata.hpp"
+#include "LIEF/PE/LoadConfigurations/DynamicRelocation/DynamicRelocationV1.hpp"
+#include "LIEF/PE/LoadConfigurations/EnclaveConfiguration.hpp"
+#include "LIEF/PE/LoadConfigurations/LoadConfiguration.hpp"
+#include "LIEF/PE/LoadConfigurations/VolatileMetadata.hpp"
+#include "LIEF/PE/Parser.hpp"
+#include "LIEF/PE/Section.hpp"
+
 #include "PE/Structures.hpp"
 
-namespace LIEF {
-namespace PE {
+#include "fmt_formatter.hpp"
+#include "frozen.hpp"
+#include "internal_utils.hpp"
+#include "logging.hpp"
+#include "overload_cast.hpp"
 
-LoadConfiguration& LoadConfiguration::operator=(const LoadConfiguration&) = default;
-LoadConfiguration::LoadConfiguration(const LoadConfiguration&)            = default;
-LoadConfiguration::~LoadConfiguration()                               = default;
+FMT_FORMATTER(LIEF::PE::LoadConfiguration::IMAGE_GUARD, LIEF::PE::to_string);
 
-decltype(details::PE32::load_configuration_sizes) details::PE32::load_configuration_sizes = {
-  {WIN_VERSION::WIN_UNKNOWN,   sizeof(PE32::load_configuration_t)},
-  {WIN_VERSION::WIN_SEH,       sizeof(PE32::load_configuration_v0_t)},
-  {WIN_VERSION::WIN8_1,        sizeof(PE32::load_configuration_v1_t)},
-  {WIN_VERSION::WIN10_0_9879,  sizeof(PE32::load_configuration_v2_t)},
-  {WIN_VERSION::WIN10_0_14286, sizeof(PE32::load_configuration_v3_t)},
-  {WIN_VERSION::WIN10_0_14383, sizeof(PE32::load_configuration_v4_t)},
-  {WIN_VERSION::WIN10_0_14901, sizeof(PE32::load_configuration_v5_t)},
-  {WIN_VERSION::WIN10_0_15002, sizeof(PE32::load_configuration_v6_t)},
-  {WIN_VERSION::WIN10_0_16237, sizeof(PE32::load_configuration_v7_t)},
+
+namespace LIEF::PE {
+
+LoadConfiguration::LoadConfiguration() = default;
+LoadConfiguration::LoadConfiguration(LoadConfiguration&&) = default;
+LoadConfiguration& LoadConfiguration::operator=(LoadConfiguration&&) = default;
+LoadConfiguration::~LoadConfiguration() = default;
+
+static constexpr std::array IMAGE_GUARD_LIST = {
+    LoadConfiguration::IMAGE_GUARD::NONE,
+    LoadConfiguration::IMAGE_GUARD::CF_INSTRUMENTED,
+    LoadConfiguration::IMAGE_GUARD::CFW_INSTRUMENTED,
+    LoadConfiguration::IMAGE_GUARD::CF_FUNCTION_TABLE_PRESENT,
+    LoadConfiguration::IMAGE_GUARD::SECURITY_COOKIE_UNUSED,
+    LoadConfiguration::IMAGE_GUARD::PROTECT_DELAYLOAD_IAT,
+    LoadConfiguration::IMAGE_GUARD::DELAYLOAD_IAT_IN_ITS_OWN_SECTION,
+    LoadConfiguration::IMAGE_GUARD::CF_EXPORT_SUPPRESSION_INFO_PRESENT,
+    LoadConfiguration::IMAGE_GUARD::CF_ENABLE_EXPORT_SUPPRESSION,
+    LoadConfiguration::IMAGE_GUARD::CF_LONGJUMP_TABLE_PRESENT,
+    LoadConfiguration::IMAGE_GUARD::RF_INSTRUMENTED,
+    LoadConfiguration::IMAGE_GUARD::RF_ENABLE,
+    LoadConfiguration::IMAGE_GUARD::RF_STRICT,
+    LoadConfiguration::IMAGE_GUARD::RETPOLINE_PRESENT,
+    LoadConfiguration::IMAGE_GUARD::EH_CONTINUATION_TABLE_PRESENT,
 };
 
-
-decltype(details::PE64::load_configuration_sizes) details::PE64::load_configuration_sizes = {
-  {WIN_VERSION::WIN_UNKNOWN,   sizeof(PE64::load_configuration_t)},
-  {WIN_VERSION::WIN_SEH,       sizeof(PE64::load_configuration_v0_t)},
-  {WIN_VERSION::WIN8_1,        sizeof(PE64::load_configuration_v1_t)},
-  {WIN_VERSION::WIN10_0_9879,  sizeof(PE64::load_configuration_v2_t)},
-  {WIN_VERSION::WIN10_0_14286, sizeof(PE64::load_configuration_v3_t)},
-  {WIN_VERSION::WIN10_0_14383, sizeof(PE64::load_configuration_v4_t)},
-  {WIN_VERSION::WIN10_0_14901, sizeof(PE64::load_configuration_v5_t)},
-  {WIN_VERSION::WIN10_0_15002, sizeof(PE64::load_configuration_v6_t)},
-  {WIN_VERSION::WIN10_0_16237, sizeof(PE64::load_configuration_v7_t)},
-};
-
-LoadConfiguration::LoadConfiguration() :
-  characteristics_{0},
-  timedatestamp_{0},
-  major_version_{0},
-  minor_version_{0},
-  global_flags_clear_{0},
-  global_flags_set_{0},
-  critical_section_default_timeout_{0},
-  decommit_free_block_threshold_{0},
-  decommit_total_free_threshold_{0},
-  lock_prefix_table_{0},
-  maximum_allocation_size_{0},
-  virtual_memory_threshold_{0},
-  process_affinity_mask_{0},
-  process_heap_flags_{0},
-  csd_version_{0},
-  reserved1_{0},
-  editlist_{0},
-  security_cookie_{0}
-{}
-
-WIN_VERSION LoadConfiguration::version() const {
-  return LoadConfiguration::VERSION;
+inline bool should_quit(uint64_t start, BinaryStream& stream, uint32_t size) {
+  return (stream.pos() - start) >= size;
 }
 
-uint32_t LoadConfiguration::characteristics() const {
-  return characteristics_;
+template<class T, class Func>
+inline bool read_lc(Func f, LoadConfiguration* thiz, BinaryStream& stream,
+                    uint32_t start, uint32_t size) {
+  auto value = stream.read<T>();
+  if (!value) {
+    return false;
+  }
+
+  std::mem_fn(f)(thiz, *value);
+
+  return !should_quit(start, stream, size);
 }
 
-uint32_t LoadConfiguration::size() const {
-  return characteristics_;
+template<class PE_T>
+std::unique_ptr<LoadConfiguration> LoadConfiguration::parse(Parser& ctx,
+                                                            BinaryStream& stream) {
+  using ptr_t = typename PE_T::uint;
+
+  const uint64_t start_off = stream.pos();
+
+  auto Characteristics = stream.read<uint32_t>();
+  if (!Characteristics) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto TimeDateStamp = stream.read<uint32_t>();
+  if (!TimeDateStamp) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto MajorVersion = stream.read<uint16_t>();
+  if (!MajorVersion) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto MinorVersion = stream.read<uint16_t>();
+  if (!MinorVersion) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto GlobalFlagsClear = stream.read<uint32_t>();
+  if (!GlobalFlagsClear) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto GlobalFlagsSet = stream.read<uint32_t>();
+  if (!GlobalFlagsSet) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto CriticalSectionDefaultTimeout = stream.read<uint32_t>();
+  if (!CriticalSectionDefaultTimeout) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto DeCommitFreeBlockThreshold = stream.read<ptr_t>();
+  if (!DeCommitFreeBlockThreshold) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto DeCommitTotalFreeThreshold = stream.read<ptr_t>();
+  if (!DeCommitTotalFreeThreshold) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto LockPrefixTable = stream.read<ptr_t>();
+  if (!LockPrefixTable) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto MaximumAllocationSize = stream.read<ptr_t>();
+  if (!MaximumAllocationSize) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto VirtualMemoryThreshold = stream.read<ptr_t>();
+  if (!VirtualMemoryThreshold) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto ProcessAffinityMask = stream.read<ptr_t>();
+  if (!ProcessAffinityMask) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto ProcessHeapFlags = stream.read<uint32_t>();
+  if (!ProcessHeapFlags) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto CSDVersion = stream.read<uint16_t>();
+  if (!CSDVersion) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto DependentLoadFlags = stream.read<uint16_t>();
+  if (!DependentLoadFlags) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto EditList = stream.read<ptr_t>();
+  if (!EditList) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto SecurityCookie = stream.read<ptr_t>();
+  if (!SecurityCookie) {
+    LIEF_DEBUG("LoadConfiguration error (line={})", __LINE__);
+    return nullptr;
+  }
+
+  auto config = std::make_unique<LoadConfiguration>();
+
+  (*config)
+      .characteristics(*Characteristics)
+      .timedatestamp(*TimeDateStamp)
+      .major_version(*MajorVersion)
+      .minor_version(*MinorVersion)
+      .global_flags_clear(*GlobalFlagsClear)
+      .global_flags_set(*GlobalFlagsSet)
+      .critical_section_default_timeout(*CriticalSectionDefaultTimeout)
+      .decommit_free_block_threshold(*DeCommitFreeBlockThreshold)
+      .decommit_total_free_threshold(*DeCommitTotalFreeThreshold)
+      .lock_prefix_table(*LockPrefixTable)
+      .maximum_allocation_size(*MaximumAllocationSize)
+      .virtual_memory_threshold(*VirtualMemoryThreshold)
+      .process_affinity_mask(*ProcessAffinityMask)
+      .process_heap_flags(*ProcessHeapFlags)
+      .csd_version(*CSDVersion)
+      .dependent_load_flags(*DependentLoadFlags)
+      .editlist(*EditList)
+      .security_cookie(*SecurityCookie);
+
+  if (should_quit(start_off, stream, *Characteristics)) {
+    return config;
+  }
+
+  /* V0 */ {
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(&LoadConfiguration::se_handler_table),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(&LoadConfiguration::se_handler_count),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+  }
+
+  /* V1 */ {
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_cf_check_function_pointer
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_cf_dispatch_function_pointer
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(&LoadConfiguration::guard_cf_function_table),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(&LoadConfiguration::guard_cf_function_count),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+
+    if (!read_lc<uint32_t>(
+            overload_cast<uint32_t>(&LoadConfiguration::guard_flags), config.get(),
+            stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+  }
+
+  /* V2 */ {
+    auto code_integrity = CodeIntegrity::parse(ctx, stream);
+    if (!code_integrity) {
+      return config;
+    }
+
+    config->code_integrity(std::move(*code_integrity));
+
+    if (should_quit(start_off, stream, *Characteristics)) {
+      return config;
+    }
+  }
+
+  /* V3 */ {
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_address_taken_iat_entry_table
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_address_taken_iat_entry_count
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_long_jump_target_table
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_long_jump_target_count
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+  }
+
+  /* V4 */ {
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(&LoadConfiguration::dynamic_value_reloc_table),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(&LoadConfiguration::hybrid_metadata_pointer),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+  }
+
+  /* V5 */ {
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(&LoadConfiguration::guard_rf_failure_routine),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(
+                &LoadConfiguration::guard_rf_failure_routine_function_pointer
+            ),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+
+    if (!read_lc<uint32_t>(overload_cast<uint32_t>(
+                               &LoadConfiguration::dynamic_value_reloctable_offset
+                           ),
+                           config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<uint16_t>(overload_cast<uint16_t>(
+                               &LoadConfiguration::dynamic_value_reloctable_section
+                           ),
+                           config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<uint16_t>(overload_cast<uint16_t>(&LoadConfiguration::reserved2),
+                           config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+  }
+
+  /* V6 */ {
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(
+                &LoadConfiguration::guard_rf_verify_stackpointer_function_pointer
+            ),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+
+    if (!read_lc<uint32_t>(
+            overload_cast<uint32_t>(&LoadConfiguration::hotpatch_table_offset),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+  }
+
+  /* V7 */ {
+    if (!read_lc<uint32_t>(overload_cast<uint32_t>(&LoadConfiguration::reserved3),
+                           config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(&LoadConfiguration::enclave_configuration_ptr),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+  }
+
+  /* V8 */ {
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(&LoadConfiguration::volatile_metadata_pointer),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+  }
+
+  /* V9 */ {
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_eh_continuation_table
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_eh_continuation_count
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+  }
+
+  /* V10 */ {
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_xfg_check_function_pointer
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_xfg_dispatch_function_pointer
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(
+                &LoadConfiguration::guard_xfg_table_dispatch_function_pointer
+            ),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+  }
+
+  /* V11 */ {
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(
+                &LoadConfiguration::cast_guard_os_determined_failure_mode
+            ),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+  }
+
+  /* V12 */ {
+    if (!read_lc<ptr_t>(overload_cast<uint64_t>(
+                            &LoadConfiguration::guard_memcpy_function_pointer
+                        ),
+                        config.get(), stream, start_off, *Characteristics))
+    {
+      return config;
+    }
+  }
+
+  /* V13 */ {
+    if (!read_lc<ptr_t>(
+            overload_cast<uint64_t>(&LoadConfiguration::uma_function_pointers),
+            config.get(), stream, start_off, *Characteristics
+        ))
+    {
+      return config;
+    }
+  }
+  return config;
 }
 
-uint32_t LoadConfiguration::timedatestamp() const {
-  return timedatestamp_;
+ok_error_t LoadConfiguration::parse_seh_table(Parser& /*ctx*/,
+                                              BinaryStream& stream,
+                                              LoadConfiguration& config) {
+  static constexpr auto MAX_RESERVE = 1000;
+  const uint64_t count = config.se_handler_count().value_or(0);
+  if (count == 0) {
+    return ok();
+  }
+
+  const uint64_t available =
+      stream.size() - std::min<uint64_t>(stream.pos(), stream.size());
+
+  const uint64_t nb = std::min<uint64_t>(count, available / sizeof(uint32_t));
+
+  LIEF_DEBUG("SEH Table parsing (#{}, bounded to #{})", count, nb);
+
+  config.seh_rva_.reserve(std::min<uint64_t>(MAX_RESERVE, nb));
+  for (size_t i = 0; i < nb; ++i) {
+    auto rva = stream.read<uint32_t>();
+    if (!rva) {
+      return make_error_code(rva.error());
+    }
+
+    config.seh_rva_.push_back(*rva);
+  }
+
+  return ok();
 }
 
-uint16_t LoadConfiguration::major_version() const {
-  return major_version_;
+ok_error_t LoadConfiguration::parse_guard_functions(
+    Parser& /*ctx*/, BinaryStream& stream, LoadConfiguration& config, size_t count,
+    guard_functions_t LoadConfiguration::* dst
+) {
+  static constexpr auto MAX_RESERVE = 1000;
+  if (count == 0) {
+    return ok();
+  }
+
+  const uint32_t stride = config.guard_flags().value_or(0) >> 28;
+
+
+  uint64_t entry_size = sizeof(uint32_t);
+  if (stride >= 1) {
+    entry_size += stride;
+  }
+
+  const uint64_t available =
+      stream.size() - std::min<uint64_t>(stream.pos(), stream.size());
+
+  const uint64_t nb = std::min<uint64_t>(count, available / entry_size);
+
+  LIEF_DEBUG("Parsing GF (#{}, bounded to #{}, stride={})", count, nb, stride);
+
+  (config.*dst).reserve(std::min<uint64_t>(MAX_RESERVE, nb));
+
+  bool once_stride = false;
+  for (size_t i = 0; i < nb; ++i) {
+    auto rva = stream.read<uint32_t>();
+    if (!rva) {
+      LIEF_DEBUG("Failed to read RVA at index {} ({}:{})", i, __FUNCTION__,
+                 __LINE__);
+      return make_error_code(rva.error());
+    }
+
+    uint32_t extra = 0;
+
+    if (stride == 1) {
+      auto value = stream.read<uint8_t>();
+      if (!value) {
+        LIEF_WARN("Failed to read stride for RVA: {:#x}", *rva);
+        return make_error_code(value.error());
+      }
+      extra = *value;
+    }
+
+    (config.*dst).push_back({*rva, extra});
+
+    if (stride > 1) {
+      if (!once_stride) {
+        LIEF_WARN("Stride '{}' is not supported", stride);
+        once_stride = true;
+      }
+      stream.increment_pos(stride);
+    }
+  }
+
+  return ok();
 }
 
-uint16_t LoadConfiguration::minor_version() const {
-  return minor_version_;
+ok_error_t LoadConfiguration::parse_dyn_relocs(Parser& ctx,
+                                               LoadConfiguration& lconf) {
+  auto dyn_reloc_off = lconf.dynamic_value_reloctable_offset();
+  uint16_t dyn_reloc_sec = lconf.dynamic_value_reloctable_section().value_or(0);
+
+  if (dyn_reloc_sec < 1) {
+    return ok();
+  }
+
+  if (!dyn_reloc_off) {
+    return make_error_code(lief_errors::corrupted);
+  }
+
+  const uint16_t sec_idx = dyn_reloc_sec - 1;
+  auto sections = ctx.bin().sections();
+  if (sec_idx >= sections.size()) {
+    return make_error_code(lief_errors::corrupted);
+  }
+  Section& sec = sections[sec_idx];
+
+  span<const uint8_t> content = sec.content();
+  if (content.empty()) {
+    return make_error_code(lief_errors::corrupted);
+  }
+
+  if (*dyn_reloc_off >= content.size()) {
+    return make_error_code(lief_errors::corrupted);
+  }
+
+  span<const uint8_t> payload = content.subspan(*dyn_reloc_off);
+  SpanStream strm(payload);
+
+  auto version = strm.read<uint32_t>();
+  auto size = strm.read<uint32_t>();
+
+  if (!version || !size) {
+    return make_error_code(lief_errors::corrupted);
+  }
+
+  LIEF_DEBUG("Dynamic relocations. arch={}, version={}, size={:#x}",
+             PE::to_string(ctx.bin().header().machine()), *version, *size);
+  const bool supported_version = *version == 1 || *version == 2;
+  if (!supported_version) {
+    LIEF_WARN("Dynamic relocations version {} is not supported", *version);
+    return make_error_code(lief_errors::not_supported);
+  }
+
+  if (ctx.bin().type() == PE_TYPE::PE32) {
+    return *version == 1 ?
+               parse_dyn_relocs_entries</*version=*/1, details::PE32>(ctx, strm,
+                                                                      lconf,
+                                                                      *size) :
+               parse_dyn_relocs_entries</*version=*/2, details::PE32>(ctx, strm,
+                                                                      lconf,
+                                                                      *size);
+  }
+  assert(ctx.bin().type() == PE_TYPE::PE32_PLUS);
+
+  return *version == 1 ?
+             parse_dyn_relocs_entries</*version=*/1, details::PE64>(ctx, strm,
+                                                                    lconf, *size) :
+             parse_dyn_relocs_entries</*version=*/2, details::PE64>(ctx, strm,
+                                                                    lconf, *size);
 }
 
-uint32_t LoadConfiguration::global_flags_clear() const {
-  return global_flags_clear_;
+
+template<uint8_t version, class PE_T>
+ok_error_t LoadConfiguration::parse_dyn_relocs_entries(Parser& ctx,
+                                                       BinaryStream& stream,
+                                                       LoadConfiguration& config,
+                                                       size_t size) {
+  const size_t stream_start = stream.pos();
+  while (stream && stream.pos() < (stream_start + size)) {
+    if constexpr (version == 1) {
+      auto v1 = DynamicRelocationV1::parse<PE_T>(ctx, stream);
+      if (v1 == nullptr) {
+        LIEF_WARN("Dynamic (v1) relocation parsing failed at offset={:#06x}",
+                  stream.pos());
+        break;
+      }
+      config.dynamic_relocs_.push_back(std::move(v1));
+      continue;
+    }
+
+    if constexpr (version == 2) {
+      LIEF_WARN("Dynamic (v2) dynamic relocation parsing not implemented");
+      break;
+    }
+  }
+  return ok();
 }
 
-uint32_t LoadConfiguration::global_flags_set() const {
-  return global_flags_set_;
-}
+template<class PE_T>
+ok_error_t LoadConfiguration::parse_enclave_config(Parser& ctx,
+                                                   LoadConfiguration& config) {
+  const uint64_t enclave_config_ptr =
+      config.enclave_configuration_ptr().value_or(0);
+  if (enclave_config_ptr == 0) {
+    return ok();
+  }
 
-uint32_t LoadConfiguration::critical_section_default_timeout() const {
-  return critical_section_default_timeout_;
-}
+  const uint64_t imagebase = ctx.bin().optional_header().imagebase();
 
-uint64_t LoadConfiguration::decommit_free_block_threshold() const {
-  return decommit_free_block_threshold_;
-}
+  if (enclave_config_ptr < imagebase) {
+    LIEF_DEBUG("Error: {}:{}", __FUNCTION__, __LINE__);
+    return make_error_code(lief_errors::corrupted);
+  }
 
-uint64_t LoadConfiguration::decommit_total_free_threshold() const {
-  return decommit_total_free_threshold_;
-}
+  uint64_t offset = ctx.bin().va_to_offset(enclave_config_ptr);
 
-uint64_t LoadConfiguration::lock_prefix_table() const {
-  return lock_prefix_table_;
-}
+  ScopedStream stream(ctx.stream(), offset);
+  auto enclave_config = EnclaveConfiguration::parse<PE_T>(ctx, *stream);
+  if (enclave_config == nullptr) {
+    return make_error_code(lief_errors::read_error);
+  }
 
-uint64_t LoadConfiguration::maximum_allocation_size() const {
-  return maximum_allocation_size_;
-}
-
-uint64_t LoadConfiguration::virtual_memory_threshold() const {
-  return virtual_memory_threshold_;
-}
-
-uint64_t LoadConfiguration::process_affinity_mask() const {
-  return process_affinity_mask_;
-}
-
-uint32_t LoadConfiguration::process_heap_flags() const {
-  return process_heap_flags_;
-}
-
-uint16_t LoadConfiguration::csd_version() const {
-  return csd_version_;
-}
-
-uint16_t LoadConfiguration::reserved1() const {
-  return reserved1_;
-}
-
-uint16_t LoadConfiguration::dependent_load_flags() const {
-  return reserved1_;
-}
-
-uint32_t LoadConfiguration::editlist() const {
-  return editlist_;
-}
-
-uint32_t LoadConfiguration::security_cookie() const {
-  return security_cookie_;
+  config.enclave_config_ = std::move(enclave_config);
+  return ok();
 }
 
 
+ok_error_t LoadConfiguration::parse_volatile_metadata(Parser& ctx,
+                                                      LoadConfiguration& config) {
+  const uint64_t volatile_metadata =
+      config.volatile_metadata_pointer().value_or(0);
+  if (volatile_metadata == 0) {
+    return ok();
+  }
 
-void LoadConfiguration::characteristics(uint32_t characteristics) {
-  characteristics_ = characteristics;
+  const uint64_t imagebase = ctx.bin().optional_header().imagebase();
+
+  if (volatile_metadata < imagebase) {
+    LIEF_DEBUG("Error: {}:{}", __FUNCTION__, __LINE__);
+    return make_error_code(lief_errors::corrupted);
+  }
+
+  uint64_t offset = ctx.bin().va_to_offset(volatile_metadata);
+
+  ScopedStream stream(ctx.stream(), offset);
+  auto metadata = VolatileMetadata::parse(ctx, *stream);
+  if (metadata == nullptr) {
+    return make_error_code(lief_errors::read_error);
+  }
+
+  config.volatile_metadata_ = std::move(metadata);
+  return ok();
 }
 
-void LoadConfiguration::timedatestamp(uint32_t timedatestamp) {
-  timedatestamp_ = timedatestamp;
+LoadConfiguration::LoadConfiguration(const LoadConfiguration& other) :
+  Object(other),
+  characteristics_(other.characteristics_),
+  timedatestamp_(other.timedatestamp_),
+  major_version_(other.major_version_),
+  minor_version_(other.minor_version_),
+  global_flags_clear_(other.global_flags_clear_),
+  global_flags_set_(other.global_flags_set_),
+  critical_section_default_timeout_(other.critical_section_default_timeout_),
+  decommit_free_block_threshold_(other.decommit_free_block_threshold_),
+  decommit_total_free_threshold_(other.decommit_total_free_threshold_),
+  lock_prefix_table_(other.lock_prefix_table_),
+  maximum_allocation_size_(other.maximum_allocation_size_),
+  virtual_memory_threshold_(other.virtual_memory_threshold_),
+  process_affinity_mask_(other.process_affinity_mask_),
+  process_heap_flags_(other.process_heap_flags_),
+  csd_version_(other.csd_version_),
+  reserved1_(other.reserved1_),
+  editlist_(other.editlist_),
+  security_cookie_(other.security_cookie_),
+  se_handler_table_(other.se_handler_table_),
+  se_handler_count_(other.se_handler_count_),
+  guard_cf_check_function_pointer_(other.guard_cf_check_function_pointer_),
+  guard_cf_dispatch_function_pointer_(other.guard_cf_dispatch_function_pointer_),
+  guard_cf_function_table_(other.guard_cf_function_table_),
+  guard_cf_function_count_(other.guard_cf_function_count_),
+  flags_(other.flags_),
+  code_integrity_(other.code_integrity_),
+  guard_address_taken_iat_entry_table_(other.guard_address_taken_iat_entry_table_),
+  guard_address_taken_iat_entry_count_(other.guard_address_taken_iat_entry_count_),
+  guard_long_jump_target_table_(other.guard_long_jump_target_table_),
+  guard_long_jump_target_count_(other.guard_long_jump_target_count_),
+  dynamic_value_reloc_table_(other.dynamic_value_reloc_table_),
+  hybrid_metadata_pointer_(other.hybrid_metadata_pointer_),
+  guard_rf_failure_routine_(other.guard_rf_failure_routine_),
+  guard_rf_failure_routine_function_pointer_(
+      other.guard_rf_failure_routine_function_pointer_
+  ),
+  dynamic_value_reloctable_offset_(other.dynamic_value_reloctable_offset_),
+  dynamic_value_reloctable_section_(other.dynamic_value_reloctable_section_),
+  reserved2_(other.reserved2_),
+  guardrf_verify_stackpointer_function_pointer_(
+      other.guardrf_verify_stackpointer_function_pointer_
+  ),
+  hotpatch_table_offset_(other.hotpatch_table_offset_),
+  reserved3_(other.reserved3_),
+  enclave_configuration_ptr_(other.enclave_configuration_ptr_),
+  volatile_metadata_pointer_(other.volatile_metadata_pointer_),
+  guard_eh_continuation_table_(other.guard_eh_continuation_table_),
+  guard_eh_continuation_count_(other.guard_eh_continuation_count_),
+  guard_xfg_check_function_pointer_(other.guard_xfg_check_function_pointer_),
+  guard_xfg_dispatch_function_pointer_(other.guard_xfg_dispatch_function_pointer_),
+  guard_xfg_table_dispatch_function_pointer_(
+      other.guard_xfg_table_dispatch_function_pointer_
+  ),
+  cast_guard_os_determined_failure_mode_(
+      other.cast_guard_os_determined_failure_mode_
+  ),
+  guard_memcpy_function_pointer_(other.guard_memcpy_function_pointer_),
+  uma_function_pointers_(other.uma_function_pointers_),
+
+  seh_rva_(other.seh_rva_),
+  guard_cf_functions_(other.guard_cf_functions_),
+  guard_address_taken_iat_entries_(other.guard_address_taken_iat_entries_),
+  guard_long_jump_targets_(other.guard_long_jump_targets_),
+  guard_eh_continuation_functions_(other.guard_eh_continuation_functions_) {
+  if (other.chpe_ != nullptr) {
+    chpe_ = other.chpe_->clone();
+  }
+
+  if (other.enclave_config_ != nullptr) {
+    enclave_config_ = other.enclave_config_->clone();
+  }
+
+  if (other.volatile_metadata_ != nullptr) {
+    volatile_metadata_ = other.volatile_metadata_->clone();
+  }
+
+  if (other.dynamic_relocs_.empty()) {
+    dynamic_relocs_.reserve(other.dynamic_relocs_.size());
+    std::transform(other.dynamic_relocs_.begin(), other.dynamic_relocs_.end(),
+                   std::back_inserter(dynamic_relocs_),
+                   [](const std::unique_ptr<DynamicRelocation>& R) {
+                     return R->clone();
+                   });
+  }
 }
 
-void LoadConfiguration::major_version(uint16_t major_version) {
-  major_version_ = major_version;
-}
+LoadConfiguration& LoadConfiguration::operator=(const LoadConfiguration& other) {
+  if (&other == this) {
+    return *this;
+  }
+  Object::operator=(other);
+  characteristics_ = other.characteristics_;
+  timedatestamp_ = other.timedatestamp_;
+  major_version_ = other.major_version_;
+  minor_version_ = other.minor_version_;
+  global_flags_clear_ = other.global_flags_clear_;
+  global_flags_set_ = other.global_flags_set_;
+  critical_section_default_timeout_ = other.critical_section_default_timeout_;
+  decommit_free_block_threshold_ = other.decommit_free_block_threshold_;
+  decommit_total_free_threshold_ = other.decommit_total_free_threshold_;
+  lock_prefix_table_ = other.lock_prefix_table_;
+  maximum_allocation_size_ = other.maximum_allocation_size_;
+  virtual_memory_threshold_ = other.virtual_memory_threshold_;
+  process_affinity_mask_ = other.process_affinity_mask_;
+  process_heap_flags_ = other.process_heap_flags_;
+  csd_version_ = other.csd_version_;
+  reserved1_ = other.reserved1_;
+  editlist_ = other.editlist_;
+  security_cookie_ = other.security_cookie_;
+  se_handler_table_ = other.se_handler_table_;
+  se_handler_count_ = other.se_handler_count_;
+  guard_cf_check_function_pointer_ = other.guard_cf_check_function_pointer_;
+  guard_cf_dispatch_function_pointer_ = other.guard_cf_dispatch_function_pointer_;
+  guard_cf_function_table_ = other.guard_cf_function_table_;
+  guard_cf_function_count_ = other.guard_cf_function_count_;
+  flags_ = other.flags_;
+  code_integrity_ = other.code_integrity_;
+  guard_address_taken_iat_entry_table_ =
+      other.guard_address_taken_iat_entry_table_;
+  guard_address_taken_iat_entry_count_ =
+      other.guard_address_taken_iat_entry_count_;
+  guard_long_jump_target_table_ = other.guard_long_jump_target_table_;
+  guard_long_jump_target_count_ = other.guard_long_jump_target_count_;
+  dynamic_value_reloc_table_ = other.dynamic_value_reloc_table_;
+  hybrid_metadata_pointer_ = other.hybrid_metadata_pointer_;
+  guard_rf_failure_routine_ = other.guard_rf_failure_routine_;
+  guard_rf_failure_routine_function_pointer_ =
+      other.guard_rf_failure_routine_function_pointer_;
+  dynamic_value_reloctable_offset_ = other.dynamic_value_reloctable_offset_;
+  dynamic_value_reloctable_section_ = other.dynamic_value_reloctable_section_;
+  reserved2_ = other.reserved2_;
+  guardrf_verify_stackpointer_function_pointer_ =
+      other.guardrf_verify_stackpointer_function_pointer_;
+  hotpatch_table_offset_ = other.hotpatch_table_offset_;
+  reserved3_ = other.reserved3_;
+  enclave_configuration_ptr_ = other.enclave_configuration_ptr_;
+  volatile_metadata_pointer_ = other.volatile_metadata_pointer_;
+  guard_eh_continuation_table_ = other.guard_eh_continuation_table_;
+  guard_eh_continuation_count_ = other.guard_eh_continuation_count_;
+  guard_xfg_check_function_pointer_ = other.guard_xfg_check_function_pointer_;
+  guard_xfg_dispatch_function_pointer_ =
+      other.guard_xfg_dispatch_function_pointer_;
+  guard_xfg_table_dispatch_function_pointer_ =
+      other.guard_xfg_table_dispatch_function_pointer_;
+  cast_guard_os_determined_failure_mode_ =
+      other.cast_guard_os_determined_failure_mode_;
+  guard_memcpy_function_pointer_ = other.guard_memcpy_function_pointer_;
+  uma_function_pointers_ = other.uma_function_pointers_;
 
-void LoadConfiguration::minor_version(uint16_t minor_version) {
-  minor_version_ = minor_version;
-}
+  seh_rva_ = other.seh_rva_;
+  guard_cf_functions_ = other.guard_cf_functions_;
+  guard_address_taken_iat_entries_ = other.guard_address_taken_iat_entries_;
+  guard_long_jump_targets_ = other.guard_long_jump_targets_;
+  guard_eh_continuation_functions_ = other.guard_eh_continuation_functions_;
 
-void LoadConfiguration::global_flags_clear(uint32_t global_flags_clear) {
-  global_flags_clear_ = global_flags_clear;
-}
+  if (other.chpe_ != nullptr) {
+    chpe_ = other.chpe_->clone();
+  }
 
-void LoadConfiguration::global_flags_set(uint32_t global_flags_set) {
-  global_flags_set_ = global_flags_set;
-}
+  if (other.enclave_config_ != nullptr) {
+    enclave_config_ = other.enclave_config_->clone();
+  }
 
-void LoadConfiguration::critical_section_default_timeout(uint32_t critical_section_default_timeout) {
-  critical_section_default_timeout_ = critical_section_default_timeout;
-}
+  if (other.volatile_metadata_ != nullptr) {
+    volatile_metadata_ = other.volatile_metadata_->clone();
+  }
 
-void LoadConfiguration::decommit_free_block_threshold(uint64_t decommit_free_block_threshold) {
-  decommit_free_block_threshold_ = decommit_free_block_threshold;
-}
-
-void LoadConfiguration::decommit_total_free_threshold(uint64_t decommit_total_free_threshold) {
-  decommit_total_free_threshold_ = decommit_total_free_threshold;
-}
-
-void LoadConfiguration::lock_prefix_table(uint64_t lock_prefix_table) {
-  lock_prefix_table_ = lock_prefix_table;
-}
-
-void LoadConfiguration::maximum_allocation_size(uint64_t maximum_allocation_size) {
-  maximum_allocation_size_ = maximum_allocation_size;
-}
-
-void LoadConfiguration::virtual_memory_threshold(uint64_t virtual_memory_threshold) {
-  virtual_memory_threshold_ = virtual_memory_threshold;
-}
-
-void LoadConfiguration::process_affinity_mask(uint64_t process_affinity_mask) {
-  process_affinity_mask_ = process_affinity_mask;
-}
-
-void LoadConfiguration::process_heap_flags(uint32_t process_heap_flagsid) {
-  process_heap_flags_ = process_heap_flagsid;
-}
-
-void LoadConfiguration::csd_version(uint16_t csd_version) {
-  csd_version_ = csd_version;
-}
-
-void LoadConfiguration::reserved1(uint16_t reserved1) {
-  reserved1_ = reserved1;
-}
-
-void LoadConfiguration::dependent_load_flags(uint16_t flags) {
-  reserved1_ = flags;
-}
-
-void LoadConfiguration::editlist(uint32_t editlist) {
-  editlist_ = editlist;
-}
-
-void LoadConfiguration::security_cookie(uint32_t security_cookie) {
-  security_cookie_ = security_cookie;
+  if (other.dynamic_relocs_.empty()) {
+    dynamic_relocs_.reserve(other.dynamic_relocs_.size());
+    std::transform(other.dynamic_relocs_.begin(), other.dynamic_relocs_.end(),
+                   std::back_inserter(dynamic_relocs_),
+                   [](const std::unique_ptr<DynamicRelocation>& R) {
+                     return R->clone();
+                   });
+  }
+  return *this;
 }
 
 void LoadConfiguration::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool LoadConfiguration::operator==(const LoadConfiguration& rhs) const {
-  if (this == &rhs) {
-    return true;
+std::string LoadConfiguration::to_string() const {
+  static constexpr auto WIDTH = 65;
+  std::ostringstream oss;
+  oss << fmt::format("{:{}} {:#08x}\n", "Size:", WIDTH, size())
+      << fmt::format("{:{}} {}\n", "Timestamp:", WIDTH, timedatestamp())
+      << fmt::format("{:{}} {}.{}\n", "version:", WIDTH, major_version(),
+                     minor_version())
+      << fmt::format("{:{}} {}\n", "GlobalFlags Clear:", WIDTH,
+                     global_flags_clear())
+      << fmt::format("{:{}} {}\n", "GlobalFlags Set:", WIDTH, global_flags_set())
+      << fmt::format("{:{}} {}\n", "Critical Section Default Timeout:", WIDTH,
+                     critical_section_default_timeout())
+      << fmt::format("{:{}} {}\n", "Decommit Free Block Threshold:", WIDTH,
+                     decommit_free_block_threshold())
+      << fmt::format("{:{}} {}\n", "Decommit Total Free Threshold:", WIDTH,
+                     decommit_total_free_threshold())
+      << fmt::format("{:{}} {}\n", "Lock Prefix Table:", WIDTH,
+                     lock_prefix_table())
+      << fmt::format("{:{}} {}\n", "Maximum Allocation Size:", WIDTH,
+                     maximum_allocation_size())
+      << fmt::format("{:{}} {}\n", "Virtual Memory Threshold:", WIDTH,
+                     virtual_memory_threshold())
+      << fmt::format("{:{}} {}\n", "Process Affinity Mask:", WIDTH,
+                     process_affinity_mask())
+      << fmt::format("{:{}} {}\n", "Process Heap Flags:", WIDTH,
+                     process_heap_flags())
+      << fmt::format("{:{}} {}\n", "CSD Version:", WIDTH, csd_version())
+      << fmt::format("{:{}} {}\n", "Dependent Load Flag:", WIDTH,
+                     dependent_load_flags())
+      << fmt::format("{:{}} {}\n", "Edit List:", WIDTH, editlist())
+      << fmt::format("{:{}} {:#018x}\n", "Security Cookie:", WIDTH,
+                     security_cookie());
+
+  if (auto val = se_handler_table()) {
+    oss << fmt::format("{:{}} {:#08x}\n", "SEH Table:", WIDTH, *val);
   }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
+
+  if (auto val = se_handler_count()) {
+    oss << fmt::format("{:{}} {}\n", "SEH Count:", WIDTH, *val);
+  }
+
+  if (auto val = guard_cf_check_function_pointer()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Guard CF address of check-function pointer:", WIDTH, *val);
+  }
+
+  if (auto val = guard_cf_dispatch_function_pointer()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Guard CF address of dispatch-function pointer:", WIDTH,
+                       *val);
+  }
+
+  if (auto val = guard_cf_function_table()) {
+    oss << fmt::format("{:{}} {:#018x}\n", "Guard CF function table:", WIDTH,
+                       *val);
+  }
+
+  if (auto val = guard_cf_function_count()) {
+    oss << fmt::format("{:{}} {}\n", "Guard CF function count:", WIDTH, *val);
+  }
+
+  if (auto val = guard_flags(); val && *val != 0) {
+    oss << fmt::format("{:{}} {}\n", "Guard Flags:", WIDTH,
+                       fmt::join(guard_cf_flags_list(), ","));
+  }
+
+  if (const CodeIntegrity* CI = code_integrity()) {
+    oss << fmt::format("{:{}} {}\n", "Code Integrity Flags:", WIDTH, CI->flags())
+        << fmt::format("{:{}} {:#010x}\n", "Code Integrity Catalog:", WIDTH,
+                       CI->catalog())
+        << fmt::format("{:{}} {:#010x}\n", "Code Integrity Catalog Offset:", WIDTH,
+                       CI->catalog_offset())
+        << fmt::format("{:{}} {}\n", "Code Integrity Reserved:", WIDTH,
+                       CI->reserved());
+  }
+
+  if (auto val = guard_address_taken_iat_entry_table()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Guard CF address taken IAT entry table:", WIDTH, *val);
+  }
+
+  if (auto val = guard_address_taken_iat_entry_count()) {
+    oss << fmt::format("{:{}} {}\n",
+                       "Guard CF address taken IAT entry count:", WIDTH, *val);
+  }
+
+  if (auto val = guard_long_jump_target_table()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Guard CF long jump target table:", WIDTH, *val);
+  }
+
+  if (auto val = guard_long_jump_target_count()) {
+    oss << fmt::format("{:{}} {}\n", "Guard CF long jump target count:", WIDTH,
+                       *val);
+  }
+
+  if (auto val = dynamic_value_reloc_table()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Dynamic value relocation table:", WIDTH, *val);
+  }
+
+  if (auto val = hybrid_metadata_pointer()) {
+    oss << fmt::format("{:{}} {:#018x}\n", "Hybrid metadata pointer:", WIDTH,
+                       *val);
+  }
+
+  if (auto val = guard_rf_failure_routine()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Guard RF address of failure-function:", WIDTH, *val);
+  }
+
+  if (auto val = guard_rf_failure_routine_function_pointer()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Guard RF address of failure-function pointer:", WIDTH,
+                       *val);
+  }
+
+  if (auto val = dynamic_value_reloctable_offset()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Dynamic value relocation table offset:", WIDTH, *val);
+  }
+
+  if (auto val = dynamic_value_reloctable_section()) {
+    oss << fmt::format("{:{}} {}\n",
+                       "Dynamic value relocation table section:", WIDTH, *val);
+  }
+
+  if (auto val = reserved2()) {
+    oss << fmt::format("{:{}} {}\n", "Reserved2:", WIDTH, *val);
+  }
+
+  if (auto val = guard_rf_verify_stackpointer_function_pointer()) {
+    oss << fmt::format(
+        "{:{}} {:#018x}\n",
+        "Guard RF address of stack pointer verification function pointer:", WIDTH,
+        *val
+    );
+  }
+
+  if (auto val = hotpatch_table_offset()) {
+    oss << fmt::format("{:{}} {:#010x}\n", "Hot patching table offset:", WIDTH,
+                       *val);
+  }
+
+  if (auto val = reserved3()) {
+    oss << fmt::format("{:{}} {}\n", "Reserved3:", WIDTH, *val);
+  }
+
+  if (auto val = enclave_configuration_ptr()) {
+    oss << fmt::format("{:{}} {:#018x}\n", "Enclave configuration pointer", WIDTH,
+                       *val);
+  }
+
+  if (auto val = volatile_metadata_pointer()) {
+    oss << fmt::format("{:{}} {:#018x}\n", "Volatile metadata pointer", WIDTH,
+                       *val);
+  }
+
+  if (auto val = guard_eh_continuation_table()) {
+    oss << fmt::format("{:{}} {:#018x}\n", "Guard EH continuation table", WIDTH,
+                       *val);
+  }
+
+  if (auto val = guard_eh_continuation_count()) {
+    oss << fmt::format("{:{}} {}\n", "Guard EH continuation count", WIDTH, *val);
+  }
+
+  if (auto val = guard_xfg_check_function_pointer()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Guard XFG address of check-function pointer", WIDTH, *val);
+  }
+
+  if (auto val = guard_xfg_dispatch_function_pointer()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Guard XFG address of dispatch-function pointer", WIDTH,
+                       *val);
+  }
+
+  if (auto val = guard_xfg_table_dispatch_function_pointer()) {
+    oss << fmt::format("{:{}} {:#018x}\n",
+                       "Guard XFG address of dispatch-table-function pointer",
+                       WIDTH, *val);
+  }
+
+  if (auto val = cast_guard_os_determined_failure_mode()) {
+    oss << fmt::format("{:{}} {:#018x}\n", "CastGuard OS determined failure mode",
+                       WIDTH, *val);
+  }
+
+  if (auto val = guard_memcpy_function_pointer()) {
+    oss << fmt::format("{:{}} {:#018x}\n", "Guard memcpy function pointer", WIDTH,
+                       *val);
+  }
+
+  if (auto val = uma_function_pointers()) {
+    oss << fmt::format("{:{}} {:#018x}\n", "UMA function pointers", WIDTH, *val);
+  }
+
+  if (const CHPEMetadata* metadata = chpe_metadata()) {
+    oss << "  CHPE Metadata:\n" << indent(metadata->to_string(), 4);
+  }
+
+  if (!seh_rva_.empty()) {
+    oss << fmt::format("  SEH Table ({}) {{\n", seh_rva_.size());
+    for (uint32_t RVA : seh_rva_) {
+      oss << fmt::format("    {:#010x}\n", RVA);
+    }
+    oss << "}\n";
+  }
+
+  if (!guard_cf_functions_.empty()) {
+    oss << fmt::format("  Guard CF Function ({}) {{\n",
+                       guard_cf_functions_.size());
+    for (const guard_function_t& F : guard_cf_functions_) {
+      oss << fmt::format("    {:#010x} ({})\n", F.rva, F.extra);
+    }
+    oss << "}\n";
+  }
+
+  if (!guard_address_taken_iat_entries_.empty()) {
+    oss << fmt::format("  Guard CF Address Taken IAT ({}) {{\n",
+                       guard_address_taken_iat_entries_.size());
+    for (const guard_function_t& F : guard_address_taken_iat_entries_) {
+      oss << fmt::format("    {:#010x} ({})\n", F.rva, F.extra);
+    }
+    oss << "}\n";
+  }
+
+  if (!guard_long_jump_targets_.empty()) {
+    oss << fmt::format("  Guard CF Long Jump Target ({}) {{\n",
+                       guard_long_jump_targets_.size());
+    for (const guard_function_t& F : guard_long_jump_targets_) {
+      oss << fmt::format("    {:#010x} ({})\n", F.rva, F.extra);
+    }
+    oss << "}\n";
+  }
+
+  if (!guard_eh_continuation_functions_.empty()) {
+    oss << fmt::format("  Guard EH Continuation ({}) {{\n",
+                       guard_eh_continuation_functions_.size());
+    for (const guard_function_t& F : guard_eh_continuation_functions_) {
+      oss << fmt::format("    {:#010x} ({})\n", F.rva, F.extra);
+    }
+    oss << "}\n";
+  }
+
+  for (const DynamicRelocation& DR : dynamic_relocations()) {
+    oss << DR << '\n';
+  }
+
+  if (const EnclaveConfiguration* enclave = enclave_config()) {
+    oss << "  Enclave Configuration:\n" << indent(enclave->to_string(), 4);
+  }
+
+  if (const VolatileMetadata* metadata = volatile_metadata()) {
+    oss << "  Volatile Metadata:\n" << indent(metadata->to_string(), 4);
+  }
+
+  return oss.str();
 }
 
-bool LoadConfiguration::operator!=(const LoadConfiguration& rhs) const {
-  return !(*this == rhs);
+const char* to_string(LoadConfiguration::IMAGE_GUARD e) {
+#define ENTRY(X) std::pair(LoadConfiguration::IMAGE_GUARD::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(NONE),
+      ENTRY(CF_INSTRUMENTED),
+      ENTRY(CFW_INSTRUMENTED),
+      ENTRY(CF_FUNCTION_TABLE_PRESENT),
+      ENTRY(SECURITY_COOKIE_UNUSED),
+      ENTRY(PROTECT_DELAYLOAD_IAT),
+      ENTRY(DELAYLOAD_IAT_IN_ITS_OWN_SECTION),
+      ENTRY(CF_EXPORT_SUPPRESSION_INFO_PRESENT),
+      ENTRY(CF_ENABLE_EXPORT_SUPPRESSION),
+      ENTRY(CF_LONGJUMP_TABLE_PRESENT),
+      ENTRY(RF_INSTRUMENTED),
+      ENTRY(RF_ENABLE),
+      ENTRY(RF_STRICT),
+      ENTRY(RETPOLINE_PRESENT),
+      ENTRY(EH_CONTINUATION_TABLE_PRESENT),
+      ENTRY(XFG_ENABLED),
+      ENTRY(CASTGUARD_PRESENT),
+      ENTRY(MEMCPY_PRESENT),
+  };
+#undef ENTRY
+
+  if (auto it = enums2str.find(e); it != enums2str.end()) {
+    return it->second;
+  }
+  return "UNKNOWN";
 }
 
-std::ostream& LoadConfiguration::print(std::ostream& os) const {
-  os << std::hex << std::left << std::showbase;
+std::vector<LoadConfiguration::IMAGE_GUARD>
+    LoadConfiguration::guard_cf_flags_list() const {
+  std::vector<IMAGE_GUARD> flags_list;
+  flags_list.reserve(3);
+  std::copy_if(IMAGE_GUARD_LIST.begin(), IMAGE_GUARD_LIST.end(),
+               std::back_inserter(flags_list),
+               [this](IMAGE_GUARD f) { return has(f); });
 
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Version:"                          << std::hex << to_string(version()) << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Characteristics:"                  << std::hex << characteristics()    << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Timedatestamp:"                    << std::dec << timedatestamp()      << std::endl;
-
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Major version:"                    << std::dec << major_version() << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Minor version:"                    << std::dec << minor_version() << std::endl;
-
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Global flags clear:"               << std::hex << global_flags_clear() << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Global flags set:"                 << std::hex << global_flags_set()   << std::endl;
-
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Critical section default timeout:" << std::dec << critical_section_default_timeout() << std::endl;
-
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Decommit free block threshold:"    << std::hex << decommit_free_block_threshold() << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Decommit total free threshold:"    << std::hex << decommit_total_free_threshold() << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Lock prefix table:"                << std::hex << lock_prefix_table()             << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Maximum allocation size:"          << std::hex << maximum_allocation_size()       << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Virtual memory threshold:"         << std::hex << virtual_memory_threshold()      << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Process affinity mask:"            << std::hex << process_affinity_mask()         << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Process heap flags:"               << std::hex << process_heap_flags()            << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "CSD Version:"                      << std::hex << csd_version()                   << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Reserved 1:"                       << std::hex << reserved1()                     << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Edit list:"                        << std::hex << editlist()                      << std::endl;
-  os << std::setw(LoadConfiguration::PRINT_WIDTH) << std::setfill(' ') << "Security cookie:"                  << std::hex << security_cookie()               << std::endl;
-  return os;
+  return flags_list;
 }
 
-std::ostream& operator<<(std::ostream& os, const LoadConfiguration& config) {
-  return config.print(os);
+template std::unique_ptr<LoadConfiguration>
+    LoadConfiguration::parse<details::PE32>(Parser& ctx, BinaryStream& stream);
+
+template std::unique_ptr<LoadConfiguration>
+    LoadConfiguration::parse<details::PE64>(Parser& ctx, BinaryStream& stream);
+
+template ok_error_t LoadConfiguration::parse_enclave_config<details::PE32>(
+    Parser& ctx, LoadConfiguration& config
+);
+
+template ok_error_t LoadConfiguration::parse_enclave_config<details::PE64>(
+    Parser& ctx, LoadConfiguration& config
+);
+
 }
-
-
-} // namespace PE
-} // namespace LIEF
-

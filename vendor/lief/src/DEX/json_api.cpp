@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "LIEF/config.h"
-#include "logging.hpp"
 #include "LIEF/DEX/json.hpp"
+#include "LIEF/config.h"
 
 #ifdef LIEF_JSON_SUPPORT
-#include "DEX/json_internal.hpp"
+  #include "DEX/json_internal.hpp"
 #endif
 #include "LIEF/DEX.hpp"
 
-namespace LIEF {
-namespace DEX {
+
+namespace LIEF::DEX {
 
 std::string to_json(const Object& v) {
 #ifdef LIEF_JSON_SUPPORT
@@ -37,4 +36,3 @@ std::string to_json(const Object& v) {
 }
 
 }
-} // namespace LIEF

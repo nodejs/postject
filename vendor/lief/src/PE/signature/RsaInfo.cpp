@@ -1,5 +1,5 @@
-/* Copyright 2021 - 2022 R. Thomas
- * Copyright 2021 - 2022 Quarkslab
+/* Copyright 2021 - 2026 R. Thomas
+ * Copyright 2021 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,17 @@
 
 #include "LIEF/PE/signature/RsaInfo.hpp"
 
-#include <algorithm>
-#include <fstream>
+#ifndef MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS
+  #define MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS
+#endif
 
-#include <mbedtls/x509.h>
-#include <mbedtls/asn1.h>
-#include <mbedtls/oid.h>
-#include <mbedtls/rsa.h>
-#include <mbedtls/pk.h>
+#include <mbedtls/md.h>
+#include <mbedtls/private/bignum.h>
+#include <mbedtls/private/rsa.h>
+#include <utility>
 
 
-namespace LIEF {
-namespace PE {
+namespace LIEF::PE {
 
 RsaInfo::RsaInfo() = default;
 
@@ -36,20 +35,21 @@ RsaInfo::RsaInfo(const RsaInfo::rsa_ctx_handle ctx) {
   auto* local_ctx = new mbedtls_rsa_context{};
   mbedtls_rsa_init(local_ctx);
   mbedtls_rsa_set_padding(local_ctx, pctx->private_padding,
-                          static_cast<mbedtls_md_type_t>(pctx->private_hash_id));
+                          // NOLINTNEXTLINE(clang-taidy-avoid-unfixed-enum-cast)
+                          mbedtls_md_type_t(pctx->private_hash_id));
   mbedtls_rsa_copy(local_ctx, pctx);
   mbedtls_rsa_complete(local_ctx);
   ctx_ = reinterpret_cast<RsaInfo::rsa_ctx_handle>(local_ctx);
 }
 
-RsaInfo::RsaInfo(const RsaInfo& other)
-{
+RsaInfo::RsaInfo(const RsaInfo& other) {
   if (other.ctx_ != nullptr) {
     const auto* octx = reinterpret_cast<const mbedtls_rsa_context*>(other.ctx_);
     auto* local_ctx = new mbedtls_rsa_context{};
     mbedtls_rsa_init(local_ctx);
     mbedtls_rsa_set_padding(local_ctx, octx->private_padding,
-                            static_cast<mbedtls_md_type_t>(octx->private_hash_id));
+                            // NOLINTNEXTLINE(clang-taidy-avoid-unfixed-enum-cast)
+                            mbedtls_md_type_t(octx->private_hash_id));
     mbedtls_rsa_copy(local_ctx, octx);
     mbedtls_rsa_complete(local_ctx);
     ctx_ = reinterpret_cast<RsaInfo::rsa_ctx_handle>(local_ctx);
@@ -58,8 +58,7 @@ RsaInfo::RsaInfo(const RsaInfo& other)
 
 
 RsaInfo::RsaInfo(RsaInfo&& other) :
-  ctx_{other.ctx_}
-{}
+  ctx_{other.ctx_} {}
 
 RsaInfo& RsaInfo::operator=(RsaInfo other) {
   swap(other);
@@ -87,35 +86,35 @@ bool RsaInfo::has_private_key() const {
 
 RsaInfo::bignum_wrapper_t RsaInfo::N() const {
   auto* lctx = reinterpret_cast<mbedtls_rsa_context*>(ctx_);
-  bignum_wrapper_t N(mbedtls_mpi_bitlen(&lctx->private_N));
+  bignum_wrapper_t N(mbedtls_mpi_size(&lctx->private_N));
   mbedtls_mpi_write_binary(&lctx->private_N, N.data(), N.size());
   return N;
 }
 
 RsaInfo::bignum_wrapper_t RsaInfo::E() const {
   auto* lctx = reinterpret_cast<mbedtls_rsa_context*>(ctx_);
-  bignum_wrapper_t E(mbedtls_mpi_bitlen(&lctx->private_E));
+  bignum_wrapper_t E(mbedtls_mpi_size(&lctx->private_E));
   mbedtls_mpi_write_binary(&lctx->private_E, E.data(), E.size());
   return E;
 }
 
 RsaInfo::bignum_wrapper_t RsaInfo::D() const {
   auto* lctx = reinterpret_cast<mbedtls_rsa_context*>(ctx_);
-  bignum_wrapper_t D(mbedtls_mpi_bitlen(&lctx->private_D));
+  bignum_wrapper_t D(mbedtls_mpi_size(&lctx->private_D));
   mbedtls_mpi_write_binary(&lctx->private_D, D.data(), D.size());
   return D;
 }
 
 RsaInfo::bignum_wrapper_t RsaInfo::P() const {
   auto* lctx = reinterpret_cast<mbedtls_rsa_context*>(ctx_);
-  bignum_wrapper_t P(mbedtls_mpi_bitlen(&lctx->private_P));
+  bignum_wrapper_t P(mbedtls_mpi_size(&lctx->private_P));
   mbedtls_mpi_write_binary(&lctx->private_P, P.data(), P.size());
   return P;
 }
 
 RsaInfo::bignum_wrapper_t RsaInfo::Q() const {
   auto* lctx = reinterpret_cast<mbedtls_rsa_context*>(ctx_);
-  bignum_wrapper_t Q(mbedtls_mpi_bitlen(&lctx->private_Q));
+  bignum_wrapper_t Q(mbedtls_mpi_size(&lctx->private_Q));
   mbedtls_mpi_write_binary(&lctx->private_Q, Q.data(), Q.size());
   return Q;
 }
@@ -145,5 +144,4 @@ std::ostream& operator<<(std::ostream& os, const RsaInfo& info) {
   return os;
 }
 
-}
 }

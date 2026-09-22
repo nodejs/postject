@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,45 +13,64 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_DYNAMIC_SHARED_OBJECT_H_
-#define LIEF_ELF_DYNAMIC_SHARED_OBJECT_H_
+#ifndef LIEF_ELF_DYNAMIC_SHARED_OBJECT_H
+#define LIEF_ELF_DYNAMIC_SHARED_OBJECT_H
 
+#include <string_view>
+#include <memory>
 #include <string>
 
+#include "LIEF/ELF/DynamicEntry.hpp"
+#include "LIEF/compiler_attributes.hpp"
 #include "LIEF/visibility.h"
 
-#include "LIEF/ELF/DynamicEntry.hpp"
 
-namespace LIEF {
-namespace ELF {
+namespace LIEF::ELF {
 
-//! Class which represents a ``DT_SONAME`` entry in the dynamic table
-//! This kind of entry is usually used no name the original library.
-//!
-//! This entry is not present for executable.
+/// Class which represents a ``DT_SONAME`` entry in the dynamic table
+/// This kind of entry is usually used to name the original library.
+///
+/// This entry is not present for executables.
 class LIEF_API DynamicSharedObject : public DynamicEntry {
 
   public:
   using DynamicEntry::DynamicEntry;
-  DynamicSharedObject();
-  DynamicSharedObject(std::string name);
+  DynamicSharedObject() :
+    DynamicEntry(DynamicEntry::TAG::SONAME, 0) {}
 
-  DynamicSharedObject& operator=(const DynamicSharedObject&);
-  DynamicSharedObject(const DynamicSharedObject&);
+  DynamicSharedObject(std::string name) :
+    DynamicEntry(DynamicEntry::TAG::SONAME, 0),
+    name_(std::move(name)) {}
 
-  //! The actual name (e.g. ``libMyLib.so``)
-  const std::string& name() const;
-  void name(const std::string& name);
+  DynamicSharedObject& operator=(const DynamicSharedObject&) = default;
+  DynamicSharedObject(const DynamicSharedObject&) = default;
+
+  std::unique_ptr<DynamicEntry> clone() const override {
+    return std::make_unique<DynamicSharedObject>(*this);
+  }
+
+  /// The actual name (e.g. ``libMyLib.so``)
+  std::string_view name() const LIEF_LIFETIMEBOUND {
+    return name_;
+  }
+
+  void name(std::string name) {
+    name_ = std::move(name);
+  }
 
   void accept(Visitor& visitor) const override;
 
   std::ostream& print(std::ostream& os) const override;
 
-  static bool classof(const DynamicEntry* entry);
+  static bool classof(const DynamicEntry* entry) {
+    return entry->tag() == DynamicEntry::TAG::SONAME;
+  }
+
+  ~DynamicSharedObject() override = default;
 
   private:
   std::string name_;
 };
 }
-}
+
 #endif

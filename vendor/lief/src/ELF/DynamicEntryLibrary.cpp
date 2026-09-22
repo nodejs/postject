@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,55 +14,21 @@
  * limitations under the License.
  */
 #include "LIEF/ELF/DynamicEntryLibrary.hpp"
+#include "LIEF/Visitor.hpp"
 
-#include <iomanip>
-#include <utility>
-
-namespace LIEF {
-namespace ELF {
-
-DynamicEntryLibrary& DynamicEntryLibrary::operator=(const DynamicEntryLibrary&) = default;
-DynamicEntryLibrary::DynamicEntryLibrary(const DynamicEntryLibrary&) = default;
-
-DynamicEntryLibrary::DynamicEntryLibrary() :
-  DynamicEntry::DynamicEntry{DYNAMIC_TAGS::DT_NEEDED, 0}
-{}
-
-DynamicEntryLibrary::DynamicEntryLibrary(std::string name) :
-  DynamicEntry::DynamicEntry{DYNAMIC_TAGS::DT_NEEDED, 0},
-  libname_{std::move(name)}
-{}
-
-const std::string& DynamicEntryLibrary::name() const {
-  return libname_;
-}
+#include <spdlog/fmt/fmt.h>
 
 
-void DynamicEntryLibrary::name(const std::string& name) {
-  libname_ = name;
-}
-
+namespace LIEF::ELF {
 
 void DynamicEntryLibrary::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool DynamicEntryLibrary::classof(const DynamicEntry* entry) {
-  const DYNAMIC_TAGS tag = entry->tag();
-  return tag == DYNAMIC_TAGS::DT_NEEDED;
-}
-
 std::ostream& DynamicEntryLibrary::print(std::ostream& os) const {
-
   DynamicEntry::print(os);
-  os << std::hex
-     << std::left
-     << std::setw(10) << name();
+  os << fmt::format("{:<10}", name());
   return os;
-
-}
-}
 }
 
-
-
+}

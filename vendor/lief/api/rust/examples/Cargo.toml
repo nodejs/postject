@@ -1,0 +1,60 @@
+[package]
+name    = "lief-examples"
+version = "0.0.0"
+edition = "2024"
+
+rust-version = "1.85.0"
+
+[dependencies]
+lief = { path = "../crates/lief" }
+
+[[bin]]
+name = "reader"
+
+[[bin]]
+name = "pe_check_authenticode"
+
+[[bin]]
+name = "pe_rich_header"
+
+[[bin]]
+name = "elf_deps"
+
+[[bin]]
+name = "pe_deps"
+
+[[bin]]
+name = "list_macho_encryption"
+
+[[bin]]
+name = "dwarf_inspect"
+
+[[bin]]
+name = "dwarf_editor"
+
+[[bin]]
+name = "pdb_inspect"
+
+[[bin]]
+name = "objc_inspect"
+
+[[bin]]
+name = "disassembler"
+
+[[bin]]
+name = "pe_exceptions"
+
+[[bin]]
+name = "runtime_linux"
+
+[[bin]]
+name = "runtime_windows"
+
+[[bin]]
+name = "runtime_osx"
+
+[[bin]]
+name = "runtime_android"
+
+[[bin]]
+name = "test_run_examples"

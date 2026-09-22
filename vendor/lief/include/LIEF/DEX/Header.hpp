@@ -1,6 +1,6 @@
 
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,30 +14,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_DEX_HEADER_H_
-#define LIEF_DEX_HEADER_H_
+#ifndef LIEF_DEX_HEADER_H
+#define LIEF_DEX_HEADER_H
 
-#include "LIEF/DEX/types.hpp"
+#include <array>
+#include <cstdint>
+#include <ostream>
+#include <utility>
 
-#include "LIEF/visibility.h"
 #include "LIEF/Object.hpp"
+#include "LIEF/visibility.h"
 
 namespace LIEF {
+class Visitor;
+
 namespace DEX {
 class Parser;
 
-//! Class which represents the DEX header.
-//! This is the first structure that begins the DEX format.
-//!
-//! The official documentation is provided here:
-//! https://source.android.com/devices/tech/dalvik/dex-format#header-item
+/// Class which represents the DEX header.
+/// This is the first structure that begins the DEX format.
+///
+/// The official documentation is provided here:
+/// https://source.android.com/devices/tech/dalvik/dex-format#header-item
 class LIEF_API Header : public Object {
   friend class Parser;
 
   public:
   using location_t = std::pair<uint32_t, uint32_t>;
 
-  using magic_t     = std::array<uint8_t, 8>;
+  using magic_t = std::array<uint8_t, 8>;
   using signature_t = std::array<uint8_t, 20>;
 
   Header();
@@ -47,28 +52,28 @@ class LIEF_API Header : public Object {
   template<class T>
   LIEF_LOCAL Header(const T& header);
 
-  //! The DEX magic bytes (``DEX\n`` followed by the DEX version)
+  /// The DEX magic bytes (``DEX\n`` followed by the DEX version)
   magic_t magic() const;
 
-  //! The file checksum
+  /// The file checksum
   uint32_t checksum() const;
 
-  //! SHA-1 DEX signature (which is not really used as a signature)
+  /// SHA-1 DEX signature (which is not really used as a signature)
   signature_t signature() const;
 
-  //! Size of the entire file (including the current the header)
+  /// Size of the entire file (including the current the header)
   uint32_t file_size() const;
 
-  //! Size of this header. It should be 0x70
+  /// Size of this header. It should be 0x70
   uint32_t header_size() const;
 
-  //! File endianess of the file
+  /// File endianness of the file
   uint32_t endian_tag() const;
 
-  //! Offset from the start of the file to the map list (see: DEX::MapList)
+  /// Offset from the start of the file to the map list (see: DEX::MapList)
   uint32_t map() const;
 
-  //! Offset and size of the string pool
+  /// Offset and size of the string pool
   location_t strings() const;
   location_t link() const;
   location_t types() const;
@@ -84,47 +89,45 @@ class LIEF_API Header : public Object {
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const Header& rhs) const;
-  bool operator!=(const Header& rhs) const;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Header& hdr);
 
-  virtual ~Header();
+  ~Header() override;
 
   private:
-  magic_t magic_;
-  uint32_t checksum_;
-  signature_t signature_;
-  uint32_t file_size_;
+  magic_t magic_{};
+  uint32_t checksum_ = 0;
+  signature_t signature_{};
+  uint32_t file_size_ = 0;
 
-  uint32_t header_size_;
-  uint32_t endian_tag_;
+  uint32_t header_size_ = 0;
+  uint32_t endian_tag_ = 0;
 
-  uint32_t link_size_;
-  uint32_t link_off_;
+  uint32_t link_size_ = 0;
+  uint32_t link_off_ = 0;
 
-  uint32_t map_off_;
+  uint32_t map_off_ = 0;
 
-  uint32_t string_ids_size_;
-  uint32_t string_ids_off_;
+  uint32_t string_ids_size_ = 0;
+  uint32_t string_ids_off_ = 0;
 
-  uint32_t type_ids_size_;
-  uint32_t type_ids_off_;
+  uint32_t type_ids_size_ = 0;
+  uint32_t type_ids_off_ = 0;
 
-  uint32_t proto_ids_size_;
-  uint32_t proto_ids_off_;
+  uint32_t proto_ids_size_ = 0;
+  uint32_t proto_ids_off_ = 0;
 
-  uint32_t field_ids_size_;
-  uint32_t field_ids_off_;
+  uint32_t field_ids_size_ = 0;
+  uint32_t field_ids_off_ = 0;
 
-  uint32_t method_ids_size_;
-  uint32_t method_ids_off_;
+  uint32_t method_ids_size_ = 0;
+  uint32_t method_ids_off_ = 0;
 
-  uint32_t class_defs_size_;
-  uint32_t class_defs_off_;
+  uint32_t class_defs_size_ = 0;
+  uint32_t class_defs_off_ = 0;
 
-  uint32_t data_size_;
-  uint32_t data_off_;
+  uint32_t data_size_ = 0;
+  uint32_t data_off_ = 0;
 };
 
 } // Namespace DEX

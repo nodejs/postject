@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,43 +13,55 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_DEX_PARSER_H_
-#define LIEF_DEX_PARSER_H_
+#ifndef LIEF_DEX_PARSER_H
+#define LIEF_DEX_PARSER_H
 
+#include <string_view>
+#include <unordered_map>
 #include <memory>
+#include <string>
+#include <vector>
 
+#include "LIEF/DEX/types.hpp"
+#include "LIEF/path.hpp"
 #include "LIEF/visibility.h"
 
-#include "LIEF/BinaryStream/VectorStream.hpp"
-
-#include "LIEF/DEX/File.hpp"
-
-struct Profiler;
-
 namespace LIEF {
+class VectorStream;
+
 namespace DEX {
 class Class;
 class Method;
 class Field;
+class File;
+class Type;
 
-//! Class which parses a DEX file to produce a DEX::File object
+/// Class which parses a DEX file to produce a DEX::File object
 class LIEF_API Parser {
   public:
-  friend struct ::Profiler;
-  //! Parse the DEX file from the file path given in parameter
-  static std::unique_ptr<File> parse(const std::string& file);
-  static std::unique_ptr<File> parse(std::vector<uint8_t> data, const std::string& name = "");
+  /// Parse the DEX file from the file path given in parameter
+  static std::unique_ptr<File> parse(std::string_view file);
+
+  /// Same as parse(std::string_view) but the file is given as a
+  /// `std::filesystem::path`
+  template<class PathT, enable_if_path_t<PathT> = 0>
+  static std::unique_ptr<File> parse(const PathT& file) {
+    return parse(file.string());
+  }
+
+  static std::unique_ptr<File> parse(std::vector<uint8_t> data,
+                                     std::string_view name = "");
 
   Parser& operator=(const Parser& copy) = delete;
-  Parser(const Parser& copy)            = delete;
+  Parser(const Parser& copy) = delete;
 
   private:
   Parser();
-  Parser(const std::string& file);
+  Parser(std::string_view file);
   Parser(std::vector<uint8_t> data);
   ~Parser();
 
-  void init(const std::string& name, dex_version_t version);
+  void init(std::string_view name, dex_version_t version);
 
   template<typename DEX_T>
   void parse_file();
@@ -117,9 +129,6 @@ class LIEF_API Parser {
   std::unique_ptr<VectorStream> stream_;
 };
 
-
-
-
-} // namespace DEX
-} // namespace LIEF
+}
+}
 #endif

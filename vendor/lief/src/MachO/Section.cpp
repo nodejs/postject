@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,47 +14,84 @@
  * limitations under the License.
  */
 #include <algorithm>
-#include <numeric>
-#include <iomanip>
 #include <iterator>
 
+#include "fmt_formatter.hpp"
+#include "frozen.hpp"
 #include "logging.hpp"
-#include "LIEF/exception.hpp"
-#include "LIEF/MachO/hash.hpp"
+#include "spdlog/fmt/fmt.h"
 
-#include "LIEF/MachO/Section.hpp"
+#include "LIEF/BinaryStream/SpanStream.hpp"
+#include "LIEF/Visitor.hpp"
+
 #include "LIEF/MachO/Relocation.hpp"
+#include "LIEF/MachO/Section.hpp"
 #include "LIEF/MachO/SegmentCommand.hpp"
-#include "LIEF/MachO/EnumToString.hpp"
+#include "LIEF/MachO/ThreadLocalVariables.hpp"
 #include "MachO/Structures.hpp"
 
-namespace LIEF {
-namespace MachO {
+FMT_FORMATTER(LIEF::MachO::Section::FLAGS, LIEF::MachO::to_string);
+FMT_FORMATTER(LIEF::MachO::Section::TYPE, LIEF::MachO::to_string);
+
+
+namespace LIEF::MachO {
+
+static constexpr auto ARRAY_FLAGS = {
+    Section::FLAGS::PURE_INSTRUCTIONS, Section::FLAGS::NO_TOC,
+    Section::FLAGS::STRIP_STATIC_SYMS, Section::FLAGS::NO_DEAD_STRIP,
+    Section::FLAGS::LIVE_SUPPORT,      Section::FLAGS::SELF_MODIFYING_CODE,
+    Section::FLAGS::DEBUG_INFO,        Section::FLAGS::SOME_INSTRUCTIONS,
+    Section::FLAGS::EXT_RELOC,         Section::FLAGS::LOC_RELOC,
+};
+
+template<class T>
+static std::unique_ptr<Section> create_from_raw(const T& raw) {
+  auto type = (Section::TYPE)(raw.flags & Section::TYPE_MASK);
+  switch (type) {
+    case Section::TYPE::THREAD_LOCAL_VARIABLES:
+      return std::make_unique<ThreadLocalVariables>(raw);
+    default: return std::make_unique<Section>(raw);
+  }
+}
 
 Section::Section() = default;
 Section::~Section() = default;
 
-Section& Section::operator=(Section other) {
-  swap(other);
+Section::Section(Section&&) = default;
+Section& Section::operator=(Section&&) = default;
+
+Section& Section::operator=(const Section& copy) {
+  if (this == &copy) {
+    return *this;
+  }
+  LIEF::Section::operator=(copy);
+
+  segment_name_ = copy.segment_name_;
+  original_size_ = copy.original_size_;
+  align_ = copy.align_;
+  relocations_offset_ = copy.relocations_offset_;
+  nbof_relocations_ = copy.nbof_relocations_;
+  flags_ = copy.flags_;
+  reserved1_ = copy.reserved1_;
+  reserved2_ = copy.reserved2_;
+  reserved3_ = copy.reserved3_;
+  content_ = copy.content_;
+
   return *this;
 }
 
-Section::Section(const Section& other) :
-  LIEF::Section{other},
-  segment_name_{other.segment_name_},
-  original_size_{other.original_size_},
-  align_{other.align_},
-  relocations_offset_{other.relocations_offset_},
-  nbof_relocations_{other.nbof_relocations_},
-  flags_{other.flags_},
-  reserved1_{other.reserved1_},
-  reserved2_{other.reserved2_},
-  reserved3_{other.reserved3_},
-  content_{other.content_}
-{}
-
-
-
+Section::Section(const Section& copy) :
+  LIEF::Section{copy},
+  segment_name_(copy.segment_name_),
+  original_size_(copy.original_size_),
+  align_(copy.align_),
+  relocations_offset_(copy.relocations_offset_),
+  nbof_relocations_(copy.nbof_relocations_),
+  flags_(copy.flags_),
+  reserved1_(copy.reserved1_),
+  reserved2_(copy.reserved2_),
+  reserved3_(copy.reserved3_),
+  content_(copy.content_) {}
 
 Section::Section(const details::section_32& sec) :
   segment_name_{sec.segname, sizeof(sec.sectname)},
@@ -64,14 +101,13 @@ Section::Section(const details::section_32& sec) :
   nbof_relocations_{sec.nreloc},
   flags_{sec.flags},
   reserved1_{sec.reserved1},
-  reserved2_{sec.reserved2}
-{
-  name_            = {sec.sectname, sizeof(sec.sectname)};
-  size_            = sec.size;
-  offset_          = sec.offset;
+  reserved2_{sec.reserved2} {
+  name_ = {sec.sectname, sizeof(sec.sectname)};
+  size_ = sec.size;
+  offset_ = sec.offset;
   virtual_address_ = sec.addr;
 
-  name_         = name_.c_str();
+  name_ = name_.c_str();
   segment_name_ = segment_name_.c_str();
 }
 
@@ -84,47 +120,42 @@ Section::Section(const details::section_64& sec) :
   flags_{sec.flags},
   reserved1_{sec.reserved1},
   reserved2_{sec.reserved2},
-  reserved3_{sec.reserved3}
-{
-  name_            = {sec.sectname, sizeof(sec.sectname)};
-  size_            = sec.size;
-  offset_          = sec.offset;
+  reserved3_{sec.reserved3} {
+  name_ = {sec.sectname, sizeof(sec.sectname)};
+  size_ = sec.size;
+  offset_ = sec.offset;
   virtual_address_ = sec.addr;
 
-  name_         = name_.c_str();
+  name_ = name_.c_str();
   segment_name_ = segment_name_.c_str();
 }
 
-
-void Section::swap(Section& other) {
-  std::swap(name_,            other.name_);
-  std::swap(virtual_address_, other.virtual_address_);
-  std::swap(size_,            other.size_);
-  std::swap(offset_,          other.offset_);
-
-  std::swap(segment_name_,        other.segment_name_);
-  std::swap(original_size_,       other.original_size_);
-  std::swap(align_,               other.align_);
-  std::swap(relocations_offset_,  other.relocations_offset_);
-  std::swap(nbof_relocations_,    other.nbof_relocations_);
-  std::swap(flags_,               other.flags_);
-  std::swap(reserved1_,           other.reserved1_);
-  std::swap(reserved2_,           other.reserved2_);
-  std::swap(reserved3_,           other.reserved3_);
-  std::swap(content_,             other.content_);
-  std::swap(segment_,             other.segment_);
-  std::swap(relocations_,         other.relocations_);
-
+std::unique_ptr<Section> Section::create(const details::section_32& sec) {
+  return create_from_raw(sec);
 }
 
-
-Section::Section(std::string name) {
-  this->name(std::move(name));
+std::unique_ptr<Section> Section::create(const details::section_64& sec) {
+  return create_from_raw(sec);
 }
 
-Section::Section(std::string name, Section::content_t content) {
-  this->name(std::move(name));
-  this->content(std::move(content));
+std::unique_ptr<Section> Section::create(std::string name,
+                                         const content_t& content, TYPE type) {
+  std::unique_ptr<Section> sec;
+  switch (type) {
+    case TYPE::THREAD_LOCAL_VARIABLES:
+      sec = std::make_unique<ThreadLocalVariables>();
+      break;
+    default: sec = std::unique_ptr<Section>(new Section{});
+  }
+
+  assert(sec != nullptr);
+
+  sec->name(std::move(name));
+
+  if (!content.empty()) {
+    sec->content(content);
+  }
+  return sec;
 }
 
 span<const uint8_t> Section::content() const {
@@ -136,105 +167,67 @@ span<const uint8_t> Section::content() const {
     return {};
   }
 
-  uint64_t relative_offset = offset_ - segment_->file_offset();
+  if (int64_t(size_) < 0 || int64_t(offset_) < 0) {
+    return {};
+  }
+
+  int64_t relative_offset = offset_ - segment_->file_offset();
+  if (relative_offset < 0) {
+    relative_offset = virtual_address_ - segment_->virtual_address();
+  }
+
+  if (relative_offset < 0) {
+    return {};
+  }
   span<const uint8_t> content = segment_->content();
-  if (relative_offset > content.size() || (relative_offset + size_) > content.size()) {
-    LIEF_ERR("Section's size is bigger than segment's size");
+  if (relative_offset > (int64_t)content.size() ||
+      (relative_offset + size_) > content.size())
+  {
+    LIEF_ERR("Section size exceeds segment size");
     return {};
   }
   return content.subspan(relative_offset, size_);
 }
 
-void Section::content(const Section::content_t& data) {
+void Section::content(const content_t& data) {
   if (segment_ == nullptr) {
     content_ = data;
     return;
   }
 
   if (size_ == 0 || offset_ == 0) { // bss section for instance
-    LIEF_ERR("Offset or size is null");
+    LIEF_ERR("Offset or size is zero");
     return;
   }
 
   uint64_t relative_offset = offset_ - segment_->file_offset();
 
-  span<uint8_t> content = segment_->writable_content();
+  span<uint8_t> content = segment_->content();
 
-  if (relative_offset > content.size() || (relative_offset + data.size()) > content.size()) {
-    LIEF_ERR("New data are bigger than the original one");
+  if (relative_offset > content.size() ||
+      data.size() > content.size() - relative_offset)
+  {
+    LIEF_ERR("New data exceeds original size");
     return;
   }
 
-  std::move(std::begin(data), std::end(data),
-            content.data() + relative_offset);
+  std::move(data.begin(), data.end(), content.data() + relative_offset);
 }
 
-const std::string& Section::segment_name() const {
+std::string_view Section::segment_name() const {
   if (segment_ == nullptr || segment_->name().empty()) {
     return segment_name_;
   }
   return segment_->name();
 }
 
-uint64_t Section::address() const {
-  return virtual_address();
-}
 
-uint32_t Section::alignment() const {
-  return align_;
-}
+std::vector<Section::FLAGS> Section::flags_list() const {
+  std::vector<FLAGS> flags;
 
-uint32_t Section::relocation_offset() const {
-  return relocations_offset_;
-}
-
-uint32_t Section::numberof_relocations() const {
-  return nbof_relocations_;
-}
-
-uint32_t Section::flags() const {
-  static constexpr size_t SECTION_FLAGS_MASK = 0xffffff00u;
-  return (flags_ & SECTION_FLAGS_MASK);
-}
-
-uint32_t Section::reserved1() const {
-  return reserved1_;
-}
-
-uint32_t Section::reserved2() const {
-  return reserved2_;
-}
-
-uint32_t Section::reserved3() const {
-  return reserved3_;
-}
-
-
-uint32_t Section::raw_flags() const {
-  return flags_;
-}
-
-Section::it_relocations Section::relocations() {
-  return relocations_;
-}
-
-Section::it_const_relocations Section::relocations() const {
-  return relocations_;
-}
-
-MACHO_SECTION_TYPES Section::type() const {
-  static constexpr size_t SECTION_TYPE_MASK = 0xFF;
-  return static_cast<MACHO_SECTION_TYPES>(flags_ & SECTION_TYPE_MASK);
-}
-
-Section::flag_list_t Section::flags_list() const {
-
-  Section::flag_list_t flags;
-
-  std::copy_if(
-      std::begin(section_flags_array), std::end(section_flags_array),
-      std::inserter(flags, std::begin(flags)),
-      [this] (MACHO_SECTION_FLAGS f) { return has(f); });
+  std::copy_if(ARRAY_FLAGS.begin(), ARRAY_FLAGS.end(),
+               std::inserter(flags, flags.begin()),
+               [this](FLAGS f) { return has(f); });
 
   return flags;
 }
@@ -246,145 +239,91 @@ void Section::segment_name(const std::string& name) {
   }
 }
 
-void Section::address(uint64_t address) {
-  virtual_address(address);
+bool Section::has(FLAGS flag) const {
+  return (static_cast<uint32_t>(flag) & uint32_t(flags())) > 0;
 }
 
-void Section::alignment(uint32_t align) {
-  align_ = align;
+void Section::add(FLAGS flag) {
+  flags(raw_flags() | uint32_t(flag));
 }
 
-void Section::relocation_offset(uint32_t relocOffset) {
-  relocations_offset_ = relocOffset;
+void Section::remove(FLAGS flag) {
+  flags(raw_flags() & (~uint32_t(flag)));
 }
-
-void Section::numberof_relocations(uint32_t nbReloc) {
-  nbof_relocations_ = nbReloc;
-}
-
-void Section::flags(uint32_t flags) {
-  flags_ = flags_ | flags;
-}
-
-void Section::reserved1(uint32_t reserved1) {
-  reserved1_ = reserved1;
-}
-
-void Section::reserved2(uint32_t reserved2) {
-  reserved2_ = reserved2;
-}
-
-void Section::reserved3(uint32_t reserved3) {
-  reserved3_ = reserved3;
-}
-
-void Section::type(MACHO_SECTION_TYPES type) {
-  static constexpr size_t SECTION_FLAGS_MASK = 0xffffff00u;
-  flags_ = (flags_ & SECTION_FLAGS_MASK) | static_cast<uint8_t>(type);
-}
-
-
-bool Section::has(MACHO_SECTION_FLAGS flag) const {
-  return (static_cast<uint32_t>(flag) & flags()) > 0;
-}
-
-void Section::add(MACHO_SECTION_FLAGS flag) {
-  flags(raw_flags() | static_cast<uint32_t>(flag));
-}
-
-void Section::remove(MACHO_SECTION_FLAGS flag) {
-  flags_= raw_flags() & (~ static_cast<uint32_t>(flag));
-}
-
-Section& Section::operator+=(MACHO_SECTION_FLAGS flag) {
-  add(flag);
-  return *this;
-}
-
-Section& Section::operator-=(MACHO_SECTION_FLAGS flag) {
-  remove(flag);
-  return *this;
-}
-
-
-void Section::clear(uint8_t v) {
-  Section::content_t clear(size(), v);
-  content(std::move(clear));
-}
-
-
-bool Section::has_segment() const {
-  return segment_ != nullptr;
-}
-
-SegmentCommand* Section::segment() {
-  return const_cast<SegmentCommand*>(static_cast<const Section*>(this)->segment());
-}
-
-const SegmentCommand* Section::segment() const {
-  return segment_;
-}
-
 
 void Section::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool Section::operator==(const Section& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
+std::unique_ptr<SpanStream> Section::stream() const {
+  return std::make_unique<SpanStream>(content());
 }
-
-bool Section::operator!=(const Section& rhs) const {
-  return !(*this == rhs);
-}
-
 
 std::ostream& operator<<(std::ostream& os, const Section& section) {
   const auto& flags = section.flags_list();
-
-   std::string flags_str = std::accumulate(
-     std::begin(flags),
-     std::end(flags), std::string{},
-     [] (const std::string& a, MACHO_SECTION_FLAGS b) {
-         return a.empty() ? to_string(b) : a + " " + to_string(b);
-     });
-
-  os << std::hex;
-  os << std::left
-     << std::setw(17) << section.name()
-     << std::setw(17) << section.segment_name()
-     << std::setw(10) << section.address()
-     << std::setw(10) << section.size()
-     << std::setw(10) << section.offset()
-     << std::setw(10) << section.alignment()
-     << std::setw(30) << to_string(section.type())
-     << std::setw(20) << section.relocation_offset()
-     << std::setw(20) << section.numberof_relocations()
-     << std::setw(10) << section.reserved1()
-     << std::setw(10) << section.reserved2()
-     << std::setw(10) << section.reserved3()
-     << std::setw(10) << flags_str;
-
-  if (section.segment_ != nullptr) {
-    //os << std::setw(10) << section.segment_->name();
-  }
-
-  if (section.relocations().size() > 0)  {
-    os << std::endl;
-    os << "Relocations associated with the section :" << std::endl;
-    for (const Relocation& relocation : section.relocations()) {
-      os << "    " << relocation << std::endl;
-    }
-  }
-
-
+  os << fmt::format(
+      "name={}, segment={}, address={:#08x}, size={:#06x} "
+      "offset={:#08x}, align={}, type={}, reloc_offset={}, nb_reloc={} "
+      "reserved1={}, reserved2={}, reserved3={}, flags={}",
+      section.name(), section.segment_name(), section.address(), section.size(),
+      section.offset(), section.alignment(), section.type(),
+      section.relocation_offset(), section.numberof_relocations(),
+      section.reserved1(), section.reserved2(), section.reserved3(), flags
+  );
   return os;
 }
 
-} // namespace MachO
-} // namespace LIEF
+
+const char* to_string(Section::FLAGS e) {
+#define ENTRY(X) std::pair(Section::FLAGS::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(PURE_INSTRUCTIONS), ENTRY(NO_TOC),
+      ENTRY(STRIP_STATIC_SYMS), ENTRY(NO_DEAD_STRIP),
+      ENTRY(LIVE_SUPPORT),      ENTRY(SELF_MODIFYING_CODE),
+      ENTRY(DEBUG_INFO),        ENTRY(SOME_INSTRUCTIONS),
+      ENTRY(EXT_RELOC),         ENTRY(LOC_RELOC),
+  };
+#undef ENTRY
+
+  if (auto it = enums2str.find(e); it != enums2str.end()) {
+    return it->second;
+  }
+  return "UNKNOWN";
+}
+
+const char* to_string(Section::TYPE e) {
+#define ENTRY(X) std::pair(Section::TYPE::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(REGULAR),
+      ENTRY(ZEROFILL),
+      ENTRY(CSTRING_LITERALS),
+      ENTRY(IS_4BYTE_LITERALS),
+      ENTRY(IS_8BYTE_LITERALS),
+      ENTRY(LITERAL_POINTERS),
+      ENTRY(NON_LAZY_SYMBOL_POINTERS),
+      ENTRY(LAZY_SYMBOL_POINTERS),
+      ENTRY(SYMBOL_STUBS),
+      ENTRY(MOD_INIT_FUNC_POINTERS),
+      ENTRY(MOD_TERM_FUNC_POINTERS),
+      ENTRY(COALESCED),
+      ENTRY(GB_ZEROFILL),
+      ENTRY(INTERPOSING),
+      ENTRY(IS_16BYTE_LITERALS),
+      ENTRY(DTRACE_DOF),
+      ENTRY(LAZY_DYLIB_SYMBOL_POINTERS),
+      ENTRY(THREAD_LOCAL_REGULAR),
+      ENTRY(THREAD_LOCAL_ZEROFILL),
+      ENTRY(THREAD_LOCAL_VARIABLES),
+      ENTRY(THREAD_LOCAL_VARIABLE_POINTERS),
+      ENTRY(THREAD_LOCAL_INIT_FUNCTION_POINTERS),
+      ENTRY(INIT_FUNC_OFFSETS),
+  };
+#undef ENTRY
+
+  if (auto it = enums2str.find(e); it != enums2str.end()) {
+    return it->second;
+  }
+  return "UNKNOWN";
+}
+
+}

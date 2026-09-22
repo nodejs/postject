@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <string>
 #include "LIEF/DEX/Header.hpp"
-namespace LIEF {
-namespace DEX {
+#include <string>
+
+namespace LIEF::DEX {
 
 template<class T>
 Header::Header(const T& header) :
-  magic_{},
   checksum_{header.checksum},
-  signature_{},
   file_size_{header.file_size},
   header_size_{header.header_size},
   endian_tag_{header.endian_tag},
@@ -51,15 +49,12 @@ Header::Header(const T& header) :
   class_defs_off_{header.class_defs_off},
 
   data_size_{header.data_size},
-  data_off_{header.data_off}
-{
-  std::copy(std::begin(header.magic), std::end(header.magic),
-            std::begin(magic_));
+  data_off_{header.data_off} {
+  std::copy(std::begin(header.magic), std::end(header.magic), std::begin(magic_));
 
   std::copy(std::begin(header.signature), std::end(header.signature),
             std::begin(signature_));
 }
 
 
-} // namespace DEX
-} // namespace LIEF
+}

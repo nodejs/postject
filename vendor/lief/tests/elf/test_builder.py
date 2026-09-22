@@ -1,19 +1,31 @@
-#!/usr/bin/env python
-import lief
-import math
 import os
-import pathlib
+import shutil
 import stat
 import subprocess
-import sys
-import pytest
-
+from pathlib import Path
 from subprocess import Popen
-from utils import is_linux, glibc_version
+from textwrap import dedent
+from typing import Any
 
-SAMPLE_DIR = pathlib.Path(os.getenv("LIEF_SAMPLES_DIR", ""))
+import lief
+import pytest
+from utils import (
+    check_layout,
+    ci_runner_arch,
+    convert_size,
+    get_path_sample,
+    get_sample,
+    glibc_version,
+    is_github_ci,
+    is_linux,
+    is_server_ci,
+    is_windows,
+    is_x86_64,
+    lief_samples_dir,
+    parse_elf,
+)
 
-OUTPUT = """
+_OUTPUT = """
 In ctor
 In ctor2
 sum: 3
@@ -25,219 +37,563 @@ LOOKUP_RW[0]: 0
 LOOKUP_RW[1]: 11111111
 """
 
-version = glibc_version()
-glibc_too_old = False
 
-if version < (2, 32):
-    glibc_too_old = True
-    print(f"glibc version is too old: {version}")
-
-def normalize(instr: str) -> str:
+def _normalize(instr: str) -> str:
     instr = instr.replace("\n", "").replace(" ", "").strip()
     return instr
 
-def convert_size(size_bytes):
-    if size_bytes == 0:
-        return "0B"
-    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-    i = int(math.floor(math.log(size_bytes, 1024)))
-    p = math.pow(1024, i)
-    s = round(size_bytes / p, 2)
-    return "%s %s" % (s, size_name[i])
+
+def _run(target: Path, output: str | None = None):
+    if not is_linux() or glibc_version() < (2, 32):
+        return
+
+    env = os.environ
+    with Popen(
+        target.as_posix(),
+        universal_newlines=True,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    ) as proc:
+        assert proc.stdout is not None
+        stdout = proc.stdout.read()
+        proc.poll()
+        expected = output or _normalize(_OUTPUT)
+        assert expected in _normalize(stdout)
 
 
-@pytest.mark.skipif(not is_linux() or glibc_too_old, reason="not linux or glibc too old")
-def test_force_relocate(tmp_path):
+@pytest.mark.slow
+def test_force_relocate(tmp_path: Path):
     SKIP_LIST = {
-        "test.clang.gold.wronglinker.bin", "test.android.bin", "test.android.aarch64.bin",
-        "test.rust.bin", "test.go.pie.bin", "test.clang.lld.nolinker.bin", "test.dart.bin",
-        "test.clang.lld.tbss.tdata.nopie.bin", "test.go.static.bin"
+        "test.clang.gold.wronglinker.bin",
+        "test.android.bin",
+        "test.android.aarch64.bin",
+        "test.rust.bin",
+        "test.go.pie.bin",
+        "test.clang.lld.nolinker.bin",
+        "test.dart.bin",
+        "test.clang.lld.tbss.tdata.nopie.bin",
+        "test.go.static.bin",
     }
-    BINS = SAMPLE_DIR / "ELF" / "batch-x86-64"
-    tmp = pathlib.Path(tmp_path)
-    for file in BINS.rglob("*.bin"):
+    for file in (lief_samples_dir() / "ELF/batch-x86-64").rglob("*.bin"):
         if file.name in SKIP_LIST:
             continue
-        print(f"Dealing with {file}")
+        lief.logging.info(f"Dealing with {file}")
         if not file.exists():
-            print(f"{file} does not exist. Skipping ...", file=sys.stderr)
+            lief.logging.warn(f"{file} does not exist. Skipping ...")
             continue
-        elf: lief.ELF.Binary = lief.parse(file.as_posix())
+        elf = parse_elf(file)
         fsize = file.stat().st_size
 
-        builder = lief.ELF.Builder(elf)
-        builder.config.force_relocate = True
-        builder.build()
+        config = lief.ELF.Builder.config_t()
+        config.force_relocate = True
 
-        out_path = tmp / file.name
+        out_path = tmp_path / file.name
 
-        print(f"File written in {out_path}")
-        builder.write(out_path.as_posix())
+        lief.logging.info(f"File written in {out_path}")
+        elf.write(out_path, config)
 
+        check_layout(out_path)
         out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC)
         delta_size = out_path.stat().st_size - fsize
-        print(f"delta size: {convert_size(delta_size)}")
+        lief.logging.info(f"delta size: {convert_size(delta_size)}")
 
-        env = os.environ
-        with Popen(out_path.as_posix(), universal_newlines=True, env=env,
-                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
-            stdout = proc.stdout.read()
-            proc.poll()
-            assert normalize(OUTPUT) == normalize(stdout)
+        _run(out_path)
 
 
-@pytest.mark.skipif(not is_linux() or glibc_too_old, reason="not linux or glibc too old")
-def test_symtab(tmp_path):
-    """
-    Test that the ELF builder is able to manipulate the .symtab section
-    """
-    TARGETS = [
-        SAMPLE_DIR / "ELF" / "batch-x86-64" / "test.clang.debug.bin",
-        SAMPLE_DIR / "ELF" / "batch-x86-64" / "test.clang.stripped.bin",
-        SAMPLE_DIR / "ELF" / "batch-x86-64" / "test.gcc.stripped.bin",
+def test_symtab(tmp_path: Path):
+    """Test `.symtab` manipulation"""
+    targets = [
+        get_path_sample("ELF/batch-x86-64/test.clang.debug.bin"),
+        get_path_sample("ELF/batch-x86-64/test.clang.stripped.bin"),
+        get_path_sample("ELF/batch-x86-64/test.gcc.stripped.bin"),
     ]
-    NB_SYMBOLS = 30
-    for TARGET in TARGETS:
+    nb_symbols = 30
+    for target in targets:
+        out_path = tmp_path / target.name
 
-        tmp = pathlib.Path(tmp_path)
-        out_path = tmp / TARGET.name
+        elf = parse_elf(target)
 
-        elf: lief.ELF.Binary = lief.parse(TARGET.as_posix())
-
-        fsize = TARGET.stat().st_size
-        for i in range(NB_SYMBOLS):
+        fsize = target.stat().st_size
+        for i in range(nb_symbols):
             sym = lief.ELF.Symbol()
-            sym.name = "test_sym_{:03}".format(i)
+            sym.name = f"test_sym_{i:03}"
             sym.value = 0x1000 + i
-            sym.type = lief.ELF.SYMBOL_TYPES.FUNC
-            sym.binding = lief.ELF.SYMBOL_BINDINGS.LOCAL
-            sym.visibility = lief.ELF.SYMBOL_VISIBILITY.DEFAULT
-            elf.add_static_symbol(sym)
-        elf.write(out_path.as_posix())
+            sym.type = lief.ELF.Symbol.TYPE.FUNC
+            sym.binding = lief.ELF.Symbol.BINDING.LOCAL
+            sym.visibility = lief.ELF.Symbol.VISIBILITY.DEFAULT
+            elf.add_symtab_symbol(sym)
+        elf.write(out_path)
+        check_layout(out_path)
 
-        print(f"File written in {out_path}")
+        lief.logging.info(f"File written in {out_path}")
         out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC)
         delta_size = out_path.stat().st_size - fsize
-        print(f"delta size: {convert_size(delta_size)}")
+        lief.logging.info(f"delta size: {convert_size(delta_size)}")
 
-        env = os.environ
-        with Popen(out_path.as_posix(), universal_newlines=True, env=env,
-                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
-            stdout = proc.stdout.read()
-            proc.poll()
-            assert normalize(OUTPUT) == normalize(stdout)
-
-
-        out = lief.parse(out_path.as_posix())
-        sym_names = [s.name for s in out.static_symbols]
+        out = lief.ELF.parse(out_path)
+        assert out is not None
+        sym_names = [s.name for s in out.symtab_symbols]
         assert "test_sym_029" in sym_names
 
-@pytest.mark.skipif(not is_linux() or glibc_too_old, reason="not linux or glibc too old")
-def test_add_interpreter(tmp_path):
-    TARGET = SAMPLE_DIR / "ELF" / "batch-x86-64" / "test.clang.lld.nolinker.bin"
-    tmp = pathlib.Path(tmp_path)
-    out_path = tmp / TARGET.name
+        _run(out_path)
 
-    elf: lief.ELF.Binary = lief.parse(TARGET.as_posix())
-    fsize = TARGET.stat().st_size
 
-    elf.interpreter = "/lib64/ld-linux-x86-64.so.2"
+def test_add_interpreter(tmp_path: Path):
+    target = lief_samples_dir() / "ELF/batch-x86-64/test.clang.lld.nolinker.bin"
+    out_path = tmp_path / target.name
 
-    elf.write(out_path.as_posix())
-
-    print(f"File written in {out_path}")
-    out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC)
-    delta_size = out_path.stat().st_size - fsize
-    print(f"delta size: {convert_size(delta_size)}")
-
-    env = os.environ
-    with Popen(out_path.as_posix(), universal_newlines=True, env=env,
-               stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
-        stdout = proc.stdout.read()
-        proc.poll()
-        assert normalize(OUTPUT) == normalize(stdout)
-
-@pytest.mark.skipif(not is_linux() or glibc_too_old, reason="not linux or glibc too old")
-def test_change_interpreter(tmp_path):
-    TARGET = SAMPLE_DIR / "ELF" / "batch-x86-64" / "test.clang.gold.wronglinker.bin"
-    tmp = pathlib.Path(tmp_path)
-    out_path = tmp / TARGET.name
-
-    elf: lief.ELF.Binary = lief.parse(TARGET.as_posix())
-    fsize = TARGET.stat().st_size
+    elf = parse_elf(target)
+    fsize = target.stat().st_size
 
     elf.interpreter = "/lib64/ld-linux-x86-64.so.2"
 
-    elf.write(out_path.as_posix())
+    elf.write(out_path)
+    check_layout(out_path)
 
-    print(f"File written in {out_path}")
+    lief.logging.info(f"File written in {out_path}")
     out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC)
     delta_size = out_path.stat().st_size - fsize
-    print(f"delta size: {convert_size(delta_size)}")
+    lief.logging.info(f"delta size: {convert_size(delta_size)}")
 
-    env = os.environ
-    with Popen(out_path.as_posix(), universal_newlines=True, env=env,
-               stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
-        stdout = proc.stdout.read()
-        proc.poll()
-        assert normalize(OUTPUT) == normalize(stdout)
+    _run(out_path)
 
 
-@pytest.mark.skipif(not is_linux() or glibc_too_old, reason="not linux or glibc too old")
-def test_rust_files(tmp_path):
-    TARGET = SAMPLE_DIR / "ELF" / "batch-x86-64" / "test.rust.bin"
-    tmp = pathlib.Path(tmp_path)
-    out_path = tmp / TARGET.name
+def test_change_interpreter(tmp_path: Path):
+    target = lief_samples_dir() / "ELF/batch-x86-64/test.clang.gold.wronglinker.bin"
+    out_path = tmp_path / target.name
 
-    elf: lief.ELF.Binary = lief.parse(TARGET.as_posix())
-    fsize = TARGET.stat().st_size
+    elf = parse_elf(target)
+    fsize = target.stat().st_size
 
-    builder = lief.ELF.Builder(elf)
-    builder.config.force_relocate = True
-    builder.build()
+    elf.interpreter = "/lib64/ld-linux-x86-64.so.2"
 
-    elf.write(out_path.as_posix())
+    elf.write(out_path)
+    check_layout(out_path)
 
-    print(f"File written in {out_path}")
+    lief.logging.info(f"File written in {out_path}")
     out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC)
     delta_size = out_path.stat().st_size - fsize
-    print(f"delta size: {convert_size(delta_size)}")
+    lief.logging.info(f"delta size: {convert_size(delta_size)}")
 
-    env = os.environ
-    with Popen(out_path.as_posix(), universal_newlines=True, env=env,
-               stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
-        stdout = proc.stdout.read()
-        proc.poll()
-        assert "thisisthreadnumber9" in normalize(stdout)
+    _run(out_path)
 
-@pytest.mark.skipif(not is_linux() or glibc_too_old, reason="not linux or glibc too old")
-def test_go_files(tmp_path):
-    TARGETS = [
-        SAMPLE_DIR / "ELF" / "batch-x86-64" / "test.go.pie.bin",
-        SAMPLE_DIR / "ELF" / "batch-x86-64" / "test.go.static.bin",
+
+def test_rust_files(tmp_path: Path):
+    target = lief_samples_dir() / "ELF/batch-x86-64/test.rust.bin"
+    out_path = tmp_path / target.name
+
+    elf = parse_elf(target)
+    fsize = target.stat().st_size
+
+    config = lief.ELF.Builder.config_t()
+    config.force_relocate = True
+
+    elf.write(out_path, config)
+    check_layout(out_path)
+
+    lief.logging.info(f"File written in {out_path}")
+    out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC)
+    delta_size = out_path.stat().st_size - fsize
+    lief.logging.info(f"delta size: {convert_size(delta_size)}")
+
+    _run(out_path, output="thisisthreadnumber9")
+
+
+@pytest.mark.slow
+def test_go_files(tmp_path: Path):
+    targets = [
+        lief_samples_dir() / "ELF/batch-x86-64/test.go.pie.bin",
+        lief_samples_dir() / "ELF/batch-x86-64/test.go.static.bin",
     ]
-    for TARGET in TARGETS:
-        tmp = pathlib.Path(tmp_path)
-        out_path = tmp / TARGET.name
+    for target in targets:
+        out_path = tmp_path / target.name
 
-        elf: lief.ELF.Binary = lief.parse(TARGET.as_posix())
-        fsize = TARGET.stat().st_size
+        elf = parse_elf(target)
+        fsize = target.stat().st_size
 
-        builder = lief.ELF.Builder(elf)
-        builder.config.force_relocate = True
-        builder.build()
+        config = lief.ELF.Builder.config_t()
+        config.force_relocate = True
 
-        elf.write(out_path.as_posix())
-
-        print(f"File written in {out_path}")
+        elf.write(out_path, config)
+        lief.logging.info(f"File written in {out_path}")
+        check_layout(out_path)
         out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC)
         delta_size = out_path.stat().st_size - fsize
-        print(f"delta size: {convert_size(delta_size)}")
+        lief.logging.info(f"delta size: {convert_size(delta_size)}")
 
-        env = os.environ
-        with Popen(out_path.as_posix(), universal_newlines=True, env=env,
-                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
+        _run(out_path, output="done")
+
+
+@pytest.mark.slow
+def test_issue_970(tmp_path: Path):
+    lib = parse_elf("ELF/libcudart.so.12")
+    out = tmp_path / "libcudart.so"
+
+    lib.write(out)
+    new = lief.ELF.parse(out)
+    assert new is not None
+    check_layout(new)
+
+    assert len(new.symbols_version_definition) == 2
+    svd_0 = new.symbols_version_definition[0]
+    svd_1 = new.symbols_version_definition[1]
+
+    assert len(svd_0.auxiliary_symbols) == 1
+    assert len(svd_1.auxiliary_symbols) == 1
+
+    assert svd_0.auxiliary_symbols[0].name == "libcudart.so.12"
+    assert svd_1.auxiliary_symbols[0].name == "libcudart.so.12"
+
+
+def test_issue_1121(tmp_path: Path):
+    elf = parse_elf("ELF/issue_1121.elf")
+    main_sym = elf.get_symbol("main")
+    assert main_sym is not None
+    main_sym.name = "main_test"
+
+    out = tmp_path / "main_test.new"
+    elf.write(out)
+
+    new = lief.ELF.parse(out)
+    assert new is not None
+    check_layout(new)
+    assert new.has_symbol("main_test")
+
+
+@pytest.mark.private
+@pytest.mark.slow
+def test_smart_insert_1(tmp_path: Path):
+    """
+    The purpose of this test is to make sure that when we have a binary with debug
+    info (or not) and we insert a new section/segment, the section is inserted
+    prior the debug info so that stripping the binary works
+    """
+    if is_server_ci() and not ci_runner_arch().startswith("linux/"):
+        pytest.skip("skipping: needs linux runner")
+    input_path = Path(get_sample("private/ELF/libclang-cpp.so.20.1"))
+    elf = lief.ELF.parse(input_path)
+    assert elf is not None
+
+    section = lief.ELF.Section(".lief_test")
+    section.content = list(b"This is a test")
+    elf.add(section)
+
+    output = tmp_path / input_path.name
+    elf.write(output)
+
+    new_elf = lief.ELF.parse(output)
+    assert new_elf is not None
+    check_layout(new_elf)
+
+    sec = new_elf.get_section(".lief_test")
+    assert sec is not None
+    assert new_elf.get_section_idx(sec) == 28
+
+    if is_linux():
+        llvm_strip = shutil.which("llvm-strip")
+        if llvm_strip is None:
+            pytest.skip("skipping: missing 'llvm-strip'")
+        lief.logging.info(f"Using llvm-strip: {llvm_strip}")
+        popen_args: dict[str, Any] = {
+            "universal_newlines": True,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+        }
+
+        args = [llvm_strip, output.as_posix()]
+        with Popen(args, **popen_args) as proc:
+            stdout, _ = proc.communicate(timeout=10)
+            lief.logging.info(stdout)
+            assert proc.returncode == 0
+            assert len(stdout) == 0
+
+        elf_strip = lief.ELF.parse(output)
+        assert elf_strip is not None
+        lief_test_section = elf_strip.get_section(".lief_test")
+        assert lief_test_section is not None
+        assert bytes(lief_test_section.content) == b"This is a test\x00\x00"
+
+
+@pytest.mark.private
+def test_smart_insert_2(tmp_path: Path):
+    input_path = Path(get_sample("private/ELF/libhwui.so"))
+    elf = lief.ELF.parse(input_path)
+    assert elf is not None
+
+    section = lief.ELF.Section(".lief_section_to_strip")
+    section.content = list(b"The content of this section needs to be removed")
+    elf.add(section, loaded=False)
+
+    output = tmp_path / input_path.name
+    elf.write(output)
+
+    new_elf = lief.ELF.parse(output)
+    assert new_elf is not None
+
+    check_layout(new_elf)
+
+    sec = new_elf.get_section(".lief_section_to_strip")
+    assert sec is not None
+    assert new_elf.get_section_idx(sec) == 26
+
+    if is_linux():
+        llvm_strip = shutil.which("llvm-strip")
+        if llvm_strip is None:
+            pytest.skip("skipping: missing 'llvm-strip'")
+
+        lief.logging.info(f"Using llvm-strip: {llvm_strip}")
+        popen_args: dict[str, Any] = {
+            "universal_newlines": True,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+        }
+
+        args = [llvm_strip, output]
+
+        with Popen(args, **popen_args) as proc:  # type: ignore[call-overload]
+            stdout, _ = proc.communicate(timeout=10)
+            lief.logging.info(stdout)
+            assert proc.returncode == 0
+            assert len(stdout) == 0
+
+        elf_strip = lief.ELF.parse(output)
+        assert elf_strip is not None
+        lief_test_section = elf_strip.get_section(".lief_section_to_strip")
+        assert lief_test_section is None
+
+
+def test_issue_1175_missing_segment(tmp_path: Path):
+    elf = parse_elf("ELF/issue_1175.elf")
+    for i in range(2):
+        section = lief.ELF.Section(f".lief.dummy.{i + 1}")
+        section.content = list(b"Hello World")
+        elf.add(section)
+
+    output = tmp_path / "issue_1175.elf"
+    elf.write(output)
+
+    new = lief.ELF.parse(output)
+    assert new is not None
+    check_layout(new)
+    assert new.get(lief.ELF.Segment.TYPE.RISCV_ATTRIBUTES) is not None
+    assert new.get_section(".stack_sizes") is not None
+    stack_section = new.get_section(".stack_sizes")
+    assert stack_section is not None
+    stacksize_content = lief.dump(stack_section.content)
+    # print("\n" + stacksize_content)
+    assert stacksize_content == dedent("""\
+    +---------------------------------------------------------------------+
+    | 9c 00 02 00 10 9c 01 02 00 10 14 02 02 00 00 6e  | ...............n |
+    | 02 02 00 00 70 02 02 00 00 72 02 02 00 00 74 02  | ....p....r....t. |
+    | 02 00 00 80 02 02 00 00                          | ........         |
+    +---------------------------------------------------------------------+""")
+
+
+def test_ld_relocations(tmp_path: Path):
+    elf = parse_elf("ELF/ld-linux-x32.so.2")
+    elf.relocate_phdr_table()
+
+    config = lief.ELF.Builder.config_t()
+    config.force_relocate = True
+    output = tmp_path / "ld.so"
+    elf.write(output, config)
+    output.chmod(0o755)
+
+    new = lief.ELF.parse(output)
+    assert new is not None
+    check_layout(new)
+    assert new.header.program_header_offset == 52
+
+    if is_linux() and is_x86_64() and not is_github_ci():
+        with Popen(
+            [output.as_posix(), "--version"],
+            universal_newlines=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        ) as proc:
+            assert proc.stdout is not None
             stdout = proc.stdout.read()
             proc.poll()
-            assert "done" in normalize(stdout)
+            assert "version 2.41" in stdout
 
+
+def test_s390x(tmp_path: Path):
+    elf = parse_elf("ELF/s390x-linux-gnu-libc.so")
+
+    r = elf.get_relocation("_dl_exception_create")
+    assert r is not None
+    assert r.address == 0x1C5008
+    assert (
+        int.from_bytes(
+            elf.get_content_from_virtual_address(r.address, 8), byteorder="big"
+        )
+        == 0x2B07E
+    )
+
+    output = tmp_path / "s390x-linux-gnu-libc.so"
+
+    elf.relocate_phdr_table()
+
+    config = lief.ELF.Builder.config_t()
+    config.force_relocate = True
+
+    elf.write(output, config)
+    new = lief.ELF.parse(output)
+    assert new is not None
+    check_layout(new)
+
+    if is_github_ci() and is_windows():
+        pytest.skip("Not supported")
+
+    r = new.get_relocation("_dl_exception_create")
+    assert r is not None
+    assert r.address == 0x1C6008
+    assert (
+        int.from_bytes(
+            elf.get_content_from_virtual_address(r.address, 8), byteorder="big"
+        )
+        == 0x2C07E
+    )
+
+    assert new.dynamic_entries[18].flags == [lief.ELF.DynamicEntryFlags.FLAG.STATIC_TLS]  # type: ignore
+
+
+def test_patchelf(tmp_path: Path):
+    elf = parse_elf("ELF/lief-patchelf")
+    elf.relocate_phdr_table()
+
+    config = lief.ELF.Builder.config_t()
+    config.force_relocate = True
+    config.skip_dynamic = True
+
+    output = tmp_path / "lief-patchelf"
+
+    elf.write(output, config)
+
+    check_layout(output)
+    output.chmod(0o755)
+
+    if is_linux() and is_x86_64():
+        with Popen(
+            [output.as_posix(), "--version"],
+            universal_newlines=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        ) as proc:
+            assert proc.stdout is not None
+            stdout = proc.stdout.read()
+            proc.poll()
+            assert "0.17.0.0" in stdout
+
+
+def test_remove_segment(tmp_path: Path):
+    elf = parse_elf("ELF/lief-patchelf")
+
+    elf.remove(lief.ELF.Segment.TYPE.GNU_RELRO)
+    elf.remove(lief.ELF.Segment.TYPE.GNU_STACK)
+    elf.remove(lief.ELF.Segment.TYPE.NOTE)
+    elf.remove(lief.ELF.Segment.TYPE.GNU_EH_FRAME)
+
+    output = tmp_path / "lief-patchelf"
+
+    elf.write(output)
+
+    new = lief.ELF.parse(output)
+    assert new is not None
+
+    assert new.get(lief.ELF.Segment.TYPE.GNU_EH_FRAME) is None
+    check_layout(new)
+
+    if is_linux() and is_x86_64():
+        output.chmod(0o755)
+        with Popen(
+            [output.as_posix(), "--version"],
+            universal_newlines=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        ) as proc:
+            assert proc.stdout is not None
+            stdout = proc.stdout.read()
+            proc.poll()
+            assert "0.17.0.0" in stdout
+
+
+def test_issue_1251():
+    elf = parse_elf("ELF/libmmkv.so")
+    assert elf.relocate_phdr_table() == 64
+
+
+def test_extend_load_segment(tmp_path: Path):
+    target = lief_samples_dir() / "ELF/batch-x86-64/test.clang.bin"
+    elf = parse_elf(target)
+
+    # Find the last LOAD segment (typically RW data)
+    load_segments = [s for s in elf.segments if s.type == lief.ELF.Segment.TYPE.LOAD]
+    assert len(load_segments) > 0
+    last_load = load_segments[-1]
+    original_psize = last_load.physical_size
+    original_vsize = last_load.virtual_size
+
+    extend_size = 0x1000
+    result = elf.extend(last_load, extend_size)
+    assert result is not None
+    assert result.physical_size == original_psize + extend_size
+    assert result.virtual_size == original_vsize + extend_size
+
+    out_path = tmp_path / target.name
+    elf.write(out_path)
+    check_layout(out_path)
+
+    out_path.chmod(out_path.stat().st_mode | stat.S_IEXEC)
+
+    _run(out_path)
+
+
+@pytest.mark.parametrize(
+    "sample",
+    [
+        "ELF/ELF32_x86_binary_ls.bin",
+        "ELF/ELF32_x86_binary_cmake.bin",
+        "ELF/ELF32_x86_binary_gcc.bin",
+        "ELF/elf_reader.ppc64le.elf",
+        "ELF/echo.mips_r3000.bin",
+    ],
+)
+def test_repatch_non_pie(tmp_path: Path, sample: str):
+    """
+    Patching a non-PIE binary that has already been patched must not relocate
+    the segment table a second time: the segment table area which has been
+    reserved by the first run still has room for the new segments.
+    """
+    new_interpreter = "/root/lief/ld-linux-aarch64.so.1"
+
+    new_runpath = "${ORIGIN}:${ORIGIN}/../dep"
+
+    output = tmp_path / "patched.elf"
+
+    elf = parse_elf(sample)
+    check_layout(elf)
+
+    elf.add(lief.ELF.DynamicEntryRunPath(new_runpath))
+    elf.write(str(output))
+
+    elf = parse_elf(output)
+    check_layout(elf)
+    phdr_offset = elf.header.program_header_offset
+
+    elf.interpreter = new_interpreter
+    elf.write(str(output))
+
+    elf = parse_elf(output)
+    check_layout(elf)
+
+    # The segment table must not have been relocated again
+    assert elf.header.program_header_offset == phdr_offset
+
+    runpath = elf.get(lief.ELF.DynamicEntry.TAG.RUNPATH)
+    assert isinstance(runpath, lief.ELF.DynamicEntryRunPath)
+    assert runpath.runpath == new_runpath
+
+    assert elf.has_interpreter
+    assert elf.interpreter == new_interpreter

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,108 +13,75 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iomanip>
-#include <numeric>
-#include <sstream>
-#include <algorithm>
-
-#include "LIEF/exception.hpp"
-#include "LIEF/utils.hpp"
+#include "frozen.hpp"
+#include "internal_utils.hpp"
 
 #include "LIEF/ELF/hash.hpp"
 
-#include "LIEF/ELF/EnumToString.hpp"
-
 #include "LIEF/ELF/NoteDetails/NoteAbi.hpp"
 
-namespace LIEF {
-namespace ELF {
+#include "spdlog/fmt/fmt.h"
 
-NoteAbi NoteAbi::make(Note& note) {
-  NoteAbi abi = note;
-  abi.parse();
-  return abi;
-}
 
-NoteAbi* NoteAbi::clone() const {
-  return new NoteAbi(*this);
-}
+namespace LIEF::ELF {
 
-NoteAbi::NoteAbi(Note& note) :
-  NoteDetails::NoteDetails{note},
-  version_{{0, 0, 0}},
-  abi_{NOTE_ABIS::ELF_NOTE_UNKNOWN}
-{}
-
-NoteAbi::version_t NoteAbi::version() const {
-  return version_;
-}
-
-NOTE_ABIS NoteAbi::abi() const {
-  return abi_;
-}
-
-void NoteAbi::parse() {
-  const description_t& desc = description();
-
-  // Parse ABI
-  if (desc.size() < (abi_offset + abi_size)) {
-    return;
+result<NoteAbi::version_t> NoteAbi::version() const {
+  version_t version;
+  for (size_t i = 0; i < version.size(); ++i) {
+    auto res = read_at<uint32_t>(version_offset + i * sizeof(uint32_t));
+    if (!res) {
+      return make_error_code(lief_errors::read_error);
+    }
+    version[i] = *res;
   }
-  abi_ = static_cast<NOTE_ABIS>(*reinterpret_cast<const uint32_t*>(desc.data()));
-
-  // Parse Version
-  if (desc.size() < (version_offset + version_size)) {
-    return;
-  }
-
-  const auto* version = reinterpret_cast<const uint32_t*>(desc.data() + version_offset);
-  version_ = {{version[0], version[1], version[2]}};
+  return version;
 }
 
+result<NoteAbi::ABI> NoteAbi::abi() const {
+  auto value = read_at<uint32_t>(abi_offset);
+  if (!value) {
+    return make_error_code(get_error(value));
+  }
+  return static_cast<ABI>(*value);
+}
+
+void NoteAbi::version(const version_t& version) {
+  write_at<uint32_t>(version_offset + 0 * sizeof(uint32_t), version[0]);
+  write_at<uint32_t>(version_offset + 1 * sizeof(uint32_t), version[1]);
+  write_at<uint32_t>(version_offset + 2 * sizeof(uint32_t), version[2]);
+}
+
+void NoteAbi::version(ABI abi) {
+  write_at<uint32_t>(abi_offset, static_cast<uint32_t>(abi));
+}
 
 void NoteAbi::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-
-bool NoteAbi::operator==(const NoteAbi& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool NoteAbi::operator!=(const NoteAbi& rhs) const {
-  return !(*this == rhs);
-}
-
 void NoteAbi::dump(std::ostream& os) const {
-    version_t version = this->version();
-    std::string version_str;
-    // Major
-    version_str += std::to_string(std::get<0>(version));
-    version_str += ".";
-
-    // Minor
-    version_str += std::to_string(std::get<1>(version));
-    version_str += ".";
-
-    // Patch
-    version_str += std::to_string(std::get<2>(version));
-
-    os << std::setw(33) << std::setfill(' ') << "ABI:"     << to_string(abi()) << std::endl;
-    os << std::setw(33) << std::setfill(' ') << "Version:" << version_str           << std::endl;
+  Note::dump(os);
+  os << '\n';
+  auto version_res = version().value_or(version_t({0, 0, 0}));
+  auto abi_res = to_string_or(abi(), "???");
+  os << fmt::format("   {}.{}.{} '{}'", version_res[0], version_res[1],
+                    version_res[2], abi_res);
 }
 
-std::ostream& operator<<(std::ostream& os, const NoteAbi& note) {
-  note.dump(os);
-  return os;
+
+const char* to_string(NoteAbi::ABI abi) {
+#define ENTRY(X) std::pair(NoteAbi::ABI::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(LINUX),  ENTRY(GNU),      ENTRY(SOLARIS2), ENTRY(FREEBSD),
+      ENTRY(NETBSD), ENTRY(SYLLABLE), ENTRY(NACL),
+  };
+#undef ENTRY
+
+  if (auto it = enums2str.find(abi); it != enums2str.end()) {
+    return it->second;
+  }
+
+  return "UNKNOWN";
 }
 
-NoteAbi::~NoteAbi() = default;
-
-} // namespace ELF
-} // namespace LIEF
+}

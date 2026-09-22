@@ -1,4 +1,4 @@
-/* Copyright 2021 - 2022 R. Thomas
+/* Copyright 2021 - 2026 R. Thomas
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,26 +12,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_DEX_FIELD_H_
-#define LIEF_DEX_FIELD_H_
+#ifndef LIEF_DEX_FIELD_H
+#define LIEF_DEX_FIELD_H
 
+#include <string_view>
 #include <climits>
+#include <cstdint>
 
 #include "LIEF/DEX/enums.hpp"
 
-#include "LIEF/visibility.h"
 #include "LIEF/Object.hpp"
+#include "LIEF/visibility.h"
 
 #include "LIEF/DEX/Type.hpp"
 
-namespace LIEF {
-namespace DEX {
+
+namespace LIEF::DEX {
 class Parser;
 class Class;
 
-//! Class which represent a DEX Field
+/// Class which represents a DEX Field
 class LIEF_API Field : public Object {
   friend class Parser;
+
   public:
   using access_flags_list_t = std::vector<ACCESS_FLAGS>;
 
@@ -42,41 +45,39 @@ class LIEF_API Field : public Object {
   Field(const Field&);
   Field& operator=(const Field&);
 
-  //! Name of the Field
-  const std::string& name() const;
+  /// Name of the Field
+  std::string_view name() const;
 
-  //! True if a class is associated with this field
-  //! (which should be the case)
+  /// True if a class is associated with this field
+  /// (which should be the case)
   bool has_class() const;
 
-  //! Class associated with this Field
-  const Class* cls() const;
-  Class* cls();
+  /// Class associated with this Field
+  const Class* cls() const LIEF_LIFETIMEBOUND;
+  Class* cls() LIEF_LIFETIMEBOUND;
 
-  //! Index in the DEX Fields pool
+  /// Index in the DEX Fields pool
   size_t index() const;
 
-  //! True if this field is a static one.
+  /// True if this field is a static one.
   bool is_static() const;
 
-  //! Field's prototype
-  const Type* type() const;
-  Type* type();
+  /// Field's prototype
+  const Type* type() const LIEF_LIFETIMEBOUND;
+  Type* type() LIEF_LIFETIMEBOUND;
 
   void accept(Visitor& visitor) const override;
 
-  //! Check if the field has the given ACCESS_FLAGS
+  /// Check if the field has the given ACCESS_FLAGS
   bool has(ACCESS_FLAGS f) const;
 
-  //! ACCESS_FLAGS as a list
+  /// ACCESS_FLAGS as a list
   access_flags_list_t access_flags() const;
 
-  bool operator==(const Field& rhs) const;
-  bool operator!=(const Field& rhs) const;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Field& mtd);
 
-  virtual ~Field();
+  ~Field() override;
 
   private:
   void set_static(bool v);
@@ -91,5 +92,5 @@ class LIEF_API Field : public Object {
 };
 
 } // Namespace DEX
-} // Namespace LIEF
+// Namespace LIEF
 #endif

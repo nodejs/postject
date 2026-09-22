@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,519 +13,952 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_PE_BINARY_H_
-#define LIEF_PE_BINARY_H_
+#ifndef LIEF_PE_BINARY_H
+#define LIEF_PE_BINARY_H
 
-#include <map>
+#include <memory>
 
-#include "LIEF/PE/Header.hpp"
-#include "LIEF/PE/OptionalHeader.hpp"
-#include "LIEF/PE/DosHeader.hpp"
-#include "LIEF/PE/RichHeader.hpp"
-#include "LIEF/PE/Import.hpp"
+#include "LIEF/PE/Builder.hpp"
+#include "LIEF/PE/DataDirectory.hpp"
 #include "LIEF/PE/DelayImport.hpp"
-#include "LIEF/PE/TLS.hpp"
-#include "LIEF/PE/Export.hpp"
-#include "LIEF/PE/Debug.hpp"
-#include "LIEF/PE/Symbol.hpp"
+#include "LIEF/PE/DosHeader.hpp"
+#include "LIEF/PE/Header.hpp"
+#include "LIEF/PE/Import.hpp"
+#include "LIEF/PE/OptionalHeader.hpp"
+#include "LIEF/PE/ResourcesManager.hpp"
 #include "LIEF/PE/signature/Signature.hpp"
+
+#include "LIEF/COFF/String.hpp"
+#include "LIEF/COFF/Symbol.hpp"
 
 #include "LIEF/Abstract/Binary.hpp"
 
+#include "LIEF/compiler_attributes.hpp"
 #include "LIEF/visibility.h"
 
-namespace LIEF {
 
-//! Namespace related to the LIEF's PE module
-namespace PE {
+/// Namespace related to the LIEF's PE module
+namespace LIEF::PE {
+class ExceptionInfo;
+class CodeViewPDB;
+class Debug;
+class Export;
+class LoadConfiguration;
 class Parser;
-class Builder;
+class Relocation;
+class ResourceData;
+class ResourceDirectory;
+class ResourceNode;
+class RichHeader;
+class TLS;
+class Factory;
 
-//! Class which represents a PE binary
-//! This is the main interface to manage and modify a PE executable
+/// Class which represents a PE binary
+/// This is the main interface to manage and modify a PE executable
 class LIEF_API Binary : public LIEF::Binary {
   friend class Parser;
   friend class Builder;
+  friend class Factory;
 
   public:
-  //! Internal container for storing PE's Section
+  /// Internal container for storing PE's Section
   using sections_t = std::vector<std::unique_ptr<Section>>;
 
-  //! Iterator that outputs Section& object
+  /// Iterator that outputs Section& object
   using it_sections = ref_iterator<sections_t&, Section*>;
 
-  //! Iterator that outputs const Section& object
+  /// Iterator that outputs const Section& object
   using it_const_sections = const_ref_iterator<const sections_t&, const Section*>;
 
-  //! Internal container for storing PE's DataDirectory
+  /// Internal container for storing PE's DataDirectory
   using data_directories_t = std::vector<std::unique_ptr<DataDirectory>>;
 
-  //! Iterator that outputs DataDirectory&
+  /// Iterator that outputs DataDirectory&
   using it_data_directories = ref_iterator<data_directories_t&, DataDirectory*>;
 
-  //! Iterator that outputs const DataDirectory&
-  using it_const_data_directories = const_ref_iterator<const data_directories_t&, const DataDirectory*>;
+  /// Iterator that outputs const DataDirectory&
+  using it_const_data_directories =
+      const_ref_iterator<const data_directories_t&, const DataDirectory*>;
 
-  //! Internal container for storing PE's Relocation
+  /// Internal container for storing PE's Relocation
   using relocations_t = std::vector<std::unique_ptr<Relocation>>;
 
-  //! Iterator that outputs Relocation&
+  /// Iterator that outputs Relocation&
   using it_relocations = ref_iterator<relocations_t&, Relocation*>;
 
-  //! Iterator that outputs const Relocation&
-  using it_const_relocations = const_ref_iterator<const relocations_t&, const Relocation*>;
+  /// Iterator that outputs const Relocation&
+  using it_const_relocations =
+      const_ref_iterator<const relocations_t&, const Relocation*>;
 
-  //! Internal container for storing PE's Import
-  using imports_t = std::vector<Import>;
+  /// Internal container for storing PE's Import
+  using imports_t = std::vector<std::unique_ptr<Import>>;
 
-  //! Iterator that output Import&
-  using it_imports = ref_iterator<imports_t&>;
+  /// Iterator that outputs Import&
+  using it_imports = ref_iterator<imports_t&, Import*>;
 
-  //! Iterator that outputs const Import&
-  using it_const_imports = const_ref_iterator<const imports_t&>;
+  /// Iterator that outputs const Import&
+  using it_const_imports = const_ref_iterator<const imports_t&, const Import*>;
 
-  //! Internal container for storing PE's DelayImport
-  using delay_imports_t = std::vector<DelayImport>;
+  /// Internal container for storing PE's DelayImport
+  using delay_imports_t = std::vector<std::unique_ptr<DelayImport>>;
 
-  //! Iterator that output DelayImport&
-  using it_delay_imports = ref_iterator<delay_imports_t&>;
+  /// Iterator that outputs DelayImport&
+  using it_delay_imports = ref_iterator<delay_imports_t&, DelayImport*>;
 
-  //! Iterator that outputs const DelayImport&
-  using it_const_delay_imports = const_ref_iterator<const delay_imports_t&>;
+  /// Iterator that outputs const DelayImport&
+  using it_const_delay_imports =
+      const_ref_iterator<const delay_imports_t&, const DelayImport*>;
 
-  //! Internal container for storing Debug information
-  using debug_entries_t = std::vector<Debug>;
+  /// Internal container for storing Debug information
+  using debug_entries_t = std::vector<std::unique_ptr<Debug>>;
 
-  //! Iterator that outputs Debug&
-  using it_debug_entries = ref_iterator<debug_entries_t&>;
+  /// Iterator that outputs Debug&
+  using it_debug_entries = ref_iterator<debug_entries_t&, Debug*>;
 
-  //! Iterator that outputs const Debug&
-  using it_const_debug_entries = const_ref_iterator<const debug_entries_t&>;
+  /// Iterator that outputs const Debug&
+  using it_const_debug_entries =
+      const_ref_iterator<const debug_entries_t&, const Debug*>;
 
-  //! Internal container for storing COFF Symbols
-  using symbols_t = std::vector<Symbol>;
+  /// Internal container for storing COFF Symbols
+  using symbols_t = std::vector<std::unique_ptr<COFF::Symbol>>;
 
-  //! Iterator that outputs Symbol&
-  using it_symbols = ref_iterator<symbols_t&>;
+  /// Iterator that outputs Symbol&
+  using it_symbols = ref_iterator<symbols_t&, COFF::Symbol*>;
 
-  //! Iterator that outputs const Symbol&
-  using it_const_symbols = const_ref_iterator<const symbols_t&>;
+  /// Iterator that outputs const Symbol&
+  using it_const_symbols =
+      const_ref_iterator<const symbols_t&, const COFF::Symbol*>;
 
-  //! Internal container for storing strings
-  using strings_table_t = std::vector<std::string>;
+  /// Internal container for storing strings
+  using strings_table_t = std::vector<COFF::String>;
 
-  //! Iterator that outputs std::string&
+  /// Iterator that outputs COFF::String&
   using it_strings_table = ref_iterator<strings_table_t&>;
 
-  //! Iterator that outputs const std::string&
+  /// Iterator that outputs const COFF::String&
   using it_const_strings_table = const_ref_iterator<const strings_table_t&>;
 
-  //! Internal container for storing PE's authenticode Signature
+  /// Internal container for storing PE's authenticode Signature
   using signatures_t = std::vector<Signature>;
 
-  //! Iterator that outputs Signature&
+  /// Iterator that outputs Signature&
   using it_signatures = ref_iterator<signatures_t&>;
 
-  //! Iterator that outputs const Signature&
+  /// Iterator that outputs const Signature&
   using it_const_signatures = const_ref_iterator<const signatures_t&>;
 
-  Binary(const std::string& name, PE_TYPE type);
+  /// Internal container for storing runtime function associated with exceptions
+  using exceptions_t = std::vector<std::unique_ptr<ExceptionInfo>>;
 
+  /// Iterator that outputs ExceptionInfo&
+  using it_exceptions = ref_iterator<exceptions_t&, ExceptionInfo*>;
+
+  /// Iterator that outputs const ExceptionInfo&
+  using it_const_exceptions =
+      const_ref_iterator<const exceptions_t&, const ExceptionInfo*>;
+
+  Binary();
   ~Binary() override;
 
-  //! Return `PE32` or `PE32+`
-  PE_TYPE type() const;
+  /// Return `PE32` or `PE32+`
+  PE_TYPE type() const {
+    return type_;
+  }
 
-  //! Convert a Relative Virtual Address into an offset
-  //!
-  //! The conversion is performed by looking for the section that
-  //! encompasses the provided RVA.
-  uint64_t rva_to_offset(uint64_t RVA);
+  /// Convert a Relative Virtual Address into an offset
+  ///
+  /// The conversion is performed by looking for the section that
+  /// encompasses the provided RVA.
+  uint64_t rva_to_offset(uint64_t RVA) const;
 
-  //! Convert the **absolute** virtual address into an offset.
-  //! @see rva_to_offset
-  uint64_t va_to_offset(uint64_t VA);
+  /// Convert the **absolute** virtual address into an offset.
+  /// @see rva_to_offset
+  uint64_t va_to_offset(uint64_t VA) const {
+    uint64_t rva = VA - optional_header().imagebase();
+    return rva_to_offset(rva);
+  }
 
-  //! Convert the given offset into a virtual address.
-  //!
-  //! @param[in] offset The offset to convert.
-  //! @param[in] slide  If not 0, it will replace the default base address (if any)
-  result<uint64_t> offset_to_virtual_address(uint64_t offset, uint64_t slide = 0) const override;
+  /// Convert the given offset into an absolute virtual address.
+  ///
+  /// @param[in] offset The offset to convert.
+  /// @param[in] slide  If not 0, it will replace the default base address (if any)
+  result<uint64_t> offset_to_virtual_address(uint64_t offset,
+                                             uint64_t slide = 0) const override;
 
-  //! Return binary's imagebase. ``0`` if not relevant
-  //!
-  //! The value is the same as those returned by OptionalHeader::imagebase
-  uint64_t imagebase() const override;
+  /// Convert the given offset into a relative virtual address (RVA).
+  uint64_t offset_to_rva(uint64_t offset) const;
 
-  //! Find the section associated that encompasses the given offset.
-  //!
-  //! If no section can be found, return a nullptr
-  Section* section_from_offset(uint64_t offset);
-  const Section* section_from_offset(uint64_t offset) const;
+  /// Return binary's imagebase. ``0`` if not relevant
+  ///
+  /// The value is the same as those returned by OptionalHeader::imagebase
+  uint64_t imagebase() const override {
+    return optional_header().imagebase();
+  }
 
-  //! Find the section associated that encompasses the given RVA.
-  //!
-  //! If no section can be found, return a nullptr
-  Section* section_from_rva(uint64_t virtual_address);
-  const Section* section_from_rva(uint64_t virtual_address) const;
+  /// Find the section that encompasses the given offset.
+  ///
+  /// If no section can be found, return a nullptr
+  Section* section_from_offset(uint64_t offset) LIEF_LIFETIMEBOUND {
+    return const_cast<Section*>(
+        static_cast<const Binary*>(this)->section_from_offset(offset)
+    );
+  }
+  const Section* section_from_offset(uint64_t offset) const LIEF_LIFETIMEBOUND;
 
-  //! Return an iterator over the PE's Section
-  it_sections sections();
-  it_const_sections sections() const;
+  /// Find the section that encompasses the given RVA.
+  ///
+  /// If no section can be found, return a nullptr
+  Section* section_from_rva(uint64_t virtual_address) LIEF_LIFETIMEBOUND {
+    return const_cast<Section*>(
+        static_cast<const Binary*>(this)->section_from_rva(virtual_address)
+    );
+  }
+  const Section*
+      section_from_rva(uint64_t virtual_address) const LIEF_LIFETIMEBOUND;
 
-  //! Return a reference to the PE::DosHeader object
-  DosHeader& dos_header();
-  const DosHeader& dos_header() const;
+  /// Return an iterator over the PE's Section
+  it_sections sections() LIEF_LIFETIMEBOUND {
+    return sections_;
+  }
 
-  //! Return a reference to the PE::Header object
-  Header& header();
-  const Header& header() const;
+  it_const_sections sections() const LIEF_LIFETIMEBOUND {
+    return sections_;
+  }
 
-  //! Return a reference to the OptionalHeader object
-  OptionalHeader& optional_header();
-  const OptionalHeader& optional_header() const;
+  /// Return a reference to the PE::DosHeader object
+  DosHeader& dos_header() LIEF_LIFETIMEBOUND {
+    return dos_header_;
+  }
 
-  //! Compute the binary's virtual size.
-  //! It should match OptionalHeader::sizeof_image
-  uint64_t virtual_size() const;
+  const DosHeader& dos_header() const LIEF_LIFETIMEBOUND {
+    return dos_header_;
+  }
 
-  //! Compute the size of all the headers
+  /// Return a reference to the PE::Header object
+  Header& header() LIEF_LIFETIMEBOUND {
+    return header_;
+  }
+
+  const Header& header() const LIEF_LIFETIMEBOUND {
+    return header_;
+  }
+
+  /// Header that follows the header(). It is named optional from the COFF
+  /// specification but it is mandatory in a PE file.
+  OptionalHeader& optional_header() LIEF_LIFETIMEBOUND {
+    return optional_header_;
+  }
+
+  const OptionalHeader& optional_header() const LIEF_LIFETIMEBOUND {
+    return optional_header_;
+  }
+
+  /// Re-compute the value of OptionalHeader::checksum.
+  /// If both values do not match, it could mean that the binary has been modified
+  /// after the compilation.
+  ///
+  /// This value is computed by LIEF for the current binary object.
+  uint32_t compute_checksum() const;
+
+  /// Compute the binary's virtual size.
+  /// It should match OptionalHeader::sizeof_image
+  uint64_t virtual_size() const override;
+
+  /// Compute the size of all the headers
   uint32_t sizeof_headers() const;
 
-  //! Return a reference to the TLS object
-  TLS& tls();
-  const TLS& tls() const;
+  /// Return a reference to the TLS object
+  TLS* tls() LIEF_LIFETIMEBOUND {
+    return tls_.get();
+  }
 
-  //! Set a TLS object in the current Binary
-  void tls(const TLS& tls);
+  const TLS* tls() const LIEF_LIFETIMEBOUND {
+    return tls_.get();
+  }
 
-  //! Check if the current binary has a TLS object
-  bool has_tls() const;
+  /// Set a TLS object in the current Binary
+  TLS& tls(const TLS& tls) LIEF_LIFETIMEBOUND;
 
-  //! Check if the current binary contains imports
-  //!
-  //! @see Import
-  bool has_imports() const;
+  /// Check if the current binary has a TLS object
+  bool has_tls() const {
+    return tls_ != nullptr;
+  }
 
-  //! Check if the current binary contains signatures
-  //!
-  //! @see signatures
-  bool has_signatures() const;
+  /// Remove the TLS from the binary.
+  void remove_tls();
 
-  //! Check if the current binary has exports.
-  //!
-  //! @see Export
-  bool has_exports() const;
+  /// Check if the current binary contains imports
+  ///
+  /// @see Import
+  bool has_imports() const {
+    return !imports_.empty();
+  }
 
-  //! Check if the current binary has resources
-  bool has_resources() const;
+  /// Check if the current binary contains signatures
+  ///
+  /// @see signatures
+  bool has_signatures() const {
+    return !signatures_.empty();
+  }
 
-  //! Check if the current binary has exceptions
-  bool has_exceptions() const;
+  /// Check if the current binary has exports.
+  ///
+  /// @see Export
+  bool has_exports() const {
+    return export_ != nullptr;
+  }
 
-  //! Check if the current binary has relocations
-  //!
-  //! @see Relocation
-  bool has_relocations() const;
+  /// Check if the current binary has resources
+  bool has_resources() const {
+    return resources_ != nullptr;
+  }
 
-  //! Check if the current binary has debugs
-  bool has_debug() const;
+  /// Check if the current binary has exceptions
+  bool has_exceptions() const {
+    if (const DataDirectory* dir = exceptions_dir()) {
+      return dir->size() > 0;
+    }
+    return false;
+  }
 
-  //! Check if the current binary has a load configuration
-  bool has_configuration() const;
+  /// Check if the current binary has relocations
+  ///
+  /// @see Relocation
+  bool has_relocations() const {
+    return !relocations_.empty();
+  }
 
-  //! Check if the current binary is *reproducible build*, replacing timestamps by a compile hash.
-  //!
-  //! @see Debug
+  /// Check if the current binary contains debug information
+  bool has_debug() const {
+    return !debug_.empty();
+  }
+
+  /// Check if the current binary has a load configuration
+  bool has_configuration() const {
+    return loadconfig_ != nullptr;
+  }
+
+  /// Check if the current binary is *reproducible build*, replacing timestamps
+  /// by a compile hash.
+  ///
+  /// @see Repro
   bool is_reproducible_build() const;
 
-  //! Return an iterator over the Signature object(s) if the binary is signed
-  it_const_signatures signatures() const;
+  /// Return an iterator over the Signature object(s) if the binary is signed
+  it_const_signatures signatures() const LIEF_LIFETIMEBOUND {
+    return signatures_;
+  }
 
-  //! Verify the binary against the embedded signature(s) (if any)
-  //! First, it checks that the embedded signatures are correct (c.f. Signature::check)
-  //! and then, it checks that the authentihash matches ContentInfo::digest
-  //!
-  //! One can tweak the verification process with the Signature::VERIFICATION_CHECKS flags
-  //!
-  //! @see LIEF::PE::Signature::check
-  Signature::VERIFICATION_FLAGS verify_signature(
-      Signature::VERIFICATION_CHECKS checks = Signature::VERIFICATION_CHECKS::DEFAULT) const;
+  it_signatures signatures() LIEF_LIFETIMEBOUND {
+    return signatures_;
+  }
 
-  //! Verify the binary with the Signature object provided in the first parameter
-  //! It can be used to verify a detached signature:
-  //!
-  //! \code{.cpp}
-  //! result<Signature> detached = LIEF::PE::SignatureParser::parse("sig.pkcs7")
-  //! if (detached) {
-  //!   binary->verify_signature(detached.value());
-  //! }
-  //! \endcode
-  Signature::VERIFICATION_FLAGS verify_signature(const Signature& sig,
-      Signature::VERIFICATION_CHECKS checks = Signature::VERIFICATION_CHECKS::DEFAULT) const;
+  /// Verify the binary against the embedded signature(s) (if any)
+  /// First, it checks that the embedded signatures are correct (c.f.
+  /// Signature::check) and then, it checks that the authentihash matches
+  /// ContentInfo::digest
+  ///
+  /// One can tweak the verification process with the
+  /// Signature::VERIFICATION_CHECKS flags
+  ///
+  /// @see LIEF::PE::Signature::check
+  Signature::VERIFICATION_FLAGS
+      verify_signature(Signature::VERIFICATION_CHECKS checks =
+                           Signature::VERIFICATION_CHECKS::DEFAULT) const;
 
-  //! Compute the authentihash according to the algorithm provided in the first
-  //! parameter
+  /// Verify the binary with the Signature object provided in the first parameter.
+  /// It can be used to verify a detached signature:
+  ///
+  /// @code{.cpp}
+  /// result<Signature> detached = LIEF::PE::SignatureParser::parse("sig.pkcs7")
+  /// if (detached) {
+  ///   binary->verify_signature(detached.value());
+  /// }
+  /// @endcode
+  Signature::VERIFICATION_FLAGS
+      verify_signature(const Signature& sig,
+                       Signature::VERIFICATION_CHECKS checks =
+                           Signature::VERIFICATION_CHECKS::DEFAULT) const;
+
+  /// Compute the authentihash according to the algorithm provided in the first
+  /// parameter
   std::vector<uint8_t> authentihash(ALGORITHMS algo) const;
 
-  //! Try to predict the RVA of the function `function` in the import library `library`
-  //!
-  //! @warning
-  //! The value could be chang if imports change
-  //!
-  //! @note
-  //! It should be used with:
-  //! LIEF::PE::Builder::build_imports set to ``true``
-  //!
-  //! @param[in] library  Library name in which the function is located
-  //! @param[in] function Function name
-  //! @return The address of the function (``IAT``)  in the new import table
-  uint32_t predict_function_rva(const std::string& library, const std::string& function);
+  /// Return the Export object
+  Export* get_export() LIEF_LIFETIMEBOUND {
+    return export_.get();
+  }
 
-  //! Return the Export object
-  Export& get_export();
-  const Export& get_export() const;
+  const Export* get_export() const LIEF_LIFETIMEBOUND {
+    return export_.get();
+  }
 
-  //! Return binary Symbols
-  std::vector<Symbol>& symbols();
-  const std::vector<Symbol>& symbols() const;
+  Export& set_export(const Export& export_table) LIEF_LIFETIMEBOUND;
 
-  //! Return resources as a tree or a nullptr if there is no resources
-  ResourceNode* resources();
-  const ResourceNode* resources() const;
+  /// Return binary Symbols
+  it_symbols symbols() LIEF_LIFETIMEBOUND {
+    return symbols_;
+  }
 
-  //! Set a new resource tree
-  void set_resources(const ResourceDirectory& resource);
+  it_const_symbols symbols() const LIEF_LIFETIMEBOUND {
+    return symbols_;
+  }
 
-  //! Set a new resource tree
-  void set_resources(const ResourceData& resource);
+  /// Iterator over the strings located in the COFF string table
+  it_const_strings_table coff_string_table() const LIEF_LIFETIMEBOUND {
+    return strings_table_;
+  }
 
-  //! Return the ResourcesManager (class to manage resources more easily than the tree one)
-  result<ResourcesManager> resources_manager() const;
+  it_strings_table coff_string_table() LIEF_LIFETIMEBOUND {
+    return strings_table_;
+  }
 
-  //! Return binary's section from its name.
-  //! If the secion can't be found, return a nullptr
-  //!
-  //! @param[in] name Name of the Section
-  Section* get_section(const std::string& name);
-  const Section* get_section(const std::string& name) const;
+  /// Try to find the COFF string at the given offset in the COFF string table.
+  ///
+  /// @warning This offset must include the first 4 bytes holding the size of
+  ///          the table. Hence, the first string starts at the offset 4.
+  COFF::String* find_coff_string(uint32_t offset) LIEF_LIFETIMEBOUND {
+    auto it = std::find_if(strings_table_.begin(), strings_table_.end(),
+                           [offset](const COFF::String& item) {
+                             return offset == item.offset();
+                           });
+    return it == strings_table_.end() ? nullptr : &*it;
+  }
 
-  //! Return the section associated with import table or a
-  //! nullptr if the binary does not have an import table
+  const COFF::String* find_coff_string(uint32_t offset) const LIEF_LIFETIMEBOUND {
+    return const_cast<Binary*>(this)->find_coff_string(offset);
+  }
+
+  /// Return resources as a tree or a nullptr if there is no resources
+  ResourceNode* resources() LIEF_LIFETIMEBOUND {
+    return resources_.get();
+  }
+
+  const ResourceNode* resources() const LIEF_LIFETIMEBOUND {
+    return resources_.get();
+  }
+
+  /// Change or set the current resource tree with the new one provided in
+  /// parameter.
+  ResourceNode* set_resources(const ResourceNode& root) LIEF_LIFETIMEBOUND;
+
+  ResourceNode*
+      set_resources(std::unique_ptr<ResourceNode> root) LIEF_LIFETIMEBOUND;
+
+  /// Return the ResourcesManager (class to manage resources more easily than the
+  /// tree one)
+  result<ResourcesManager> resources_manager() const LIEF_LIFETIMEBOUND;
+
+  /// Return binary's section from its name.
+  /// If the section can't be found, return a nullptr
+  ///
+  /// @param[in] name Name of the Section
+  Section* get_section(const std::string& name) LIEF_LIFETIMEBOUND {
+    return const_cast<Section*>(
+        static_cast<const Binary*>(this)->get_section(name)
+    );
+  }
+  const Section* get_section(const std::string& name) const LIEF_LIFETIMEBOUND;
+
+  /// Return the section associated with import table or a
+  /// nullptr if the binary does not have an import table
   const Section* import_section() const;
-  Section*       import_section();
+  Section* import_section() {
+    return const_cast<Section*>(
+        static_cast<const Binary*>(this)->import_section()
+    );
+  }
 
-  //! Delete the section with the given name
-  //!
-  //! @param[in] name    Name of section to delete
-  //! @param[in] clear   if ``true`` clear the section's content with 0
-  //!                    before removing (default: ``false``)
+  /// Delete the section with the given name
+  ///
+  /// @param[in] name    Name of section to delete
+  /// @param[in] clear   if ``true`` clear the section's content with 0
+  ///                    before removing (default: ``false``)
   void remove_section(const std::string& name, bool clear = false) override;
 
-  //! Remove the given section
-  //!
-  //! @see remove_section
+  /// Remove the given section
+  ///
+  /// @see remove_section
   void remove(const Section& section, bool clear = false);
 
-  //! Add a section to the binary and return the section added.
-  Section* add_section(const Section& section,
-                       PE_SECTION_TYPES type = PE_SECTION_TYPES::UNKNOWN);
+  /// Add a section to the binary and return the section added.
+  Section* add_section(const Section& section) LIEF_LIFETIMEBOUND;
 
-  //! Return an iterator over the PE's Relocation
-  it_relocations relocations();
-  it_const_relocations relocations() const;
+  /// Return an iterator over the PE's Relocation
+  it_relocations relocations() LIEF_LIFETIMEBOUND {
+    return relocations_;
+  }
 
-  //! Add a PE::Relocation
-  Relocation& add_relocation(const Relocation& relocation);
+  it_const_relocations relocations() const LIEF_LIFETIMEBOUND {
+    return relocations_;
+  }
 
-  //! Remove all the relocations
+  /// Add a new PE Relocation
+  Relocation& add_relocation(const Relocation& relocation) LIEF_LIFETIMEBOUND;
+
+  /// Remove all the relocations
   void remove_all_relocations();
 
-  //! Return an iterator over the DataDirectory present in the Binary
-  it_data_directories data_directories();
-  it_const_data_directories data_directories() const;
+  /// Return an iterator over the DataDirectory present in the Binary
+  it_data_directories data_directories() LIEF_LIFETIMEBOUND {
+    return data_directories_;
+  }
 
-  //! Return the DataDirectory with the given type (or index)
-  DataDirectory& data_directory(DATA_DIRECTORY index);
-  const DataDirectory& data_directory(DATA_DIRECTORY index) const;
+  it_const_data_directories data_directories() const LIEF_LIFETIMEBOUND {
+    return data_directories_;
+  }
 
-  //! Check if the current binary has the given DATA_DIRECTORY
-  bool has(DATA_DIRECTORY index) const;
+  /// Return the DataDirectory with the given type (or index)
+  DataDirectory* data_directory(DataDirectory::TYPES type) LIEF_LIFETIMEBOUND {
+    return const_cast<DataDirectory*>(
+        static_cast<const Binary*>(this)->data_directory(type)
+    );
+  }
+  const DataDirectory*
+      data_directory(DataDirectory::TYPES type) const LIEF_LIFETIMEBOUND;
 
-  //! Return the debug_entries_t object
-  debug_entries_t& debug();
-  const debug_entries_t& debug() const;
+  /// Check if the current binary has the given DataDirectory::TYPES
+  bool has(DataDirectory::TYPES type) const {
+    return data_directory(type) != nullptr;
+  }
 
-  //! Retrun the LoadConfiguration object or a nullptr
-  //! if the binary does not use the LoadConfiguration
-  const LoadConfiguration* load_configuration() const;
-  LoadConfiguration* load_configuration();
+  /// Return an iterator over the Debug entries
+  it_debug_entries debug() LIEF_LIFETIMEBOUND {
+    return debug_;
+  }
 
-  //! Return the overlay content
-  const std::vector<uint8_t>& overlay() const;
-  std::vector<uint8_t>&       overlay();
+  it_const_debug_entries debug() const LIEF_LIFETIMEBOUND {
+    return debug_;
+  }
 
-  //! Return the DOS stub content
-  const std::vector<uint8_t>& dos_stub() const;
-  std::vector<uint8_t>&       dos_stub();
+  /// Add a new debug entry
+  Debug* add_debug_info(const Debug& entry) LIEF_LIFETIMEBOUND;
 
-  //! Update the DOS stub content
-  void dos_stub(const std::vector<uint8_t>& content);
+  /// Remove a specific debug entry
+  bool remove_debug(const Debug& entry);
 
-  // Rich Header
-  // -----------
+  /// Remove all debug info from the binary
+  bool clear_debug();
 
-  //! Return a reference to the RichHeader object
-  RichHeader& rich_header();
-  const RichHeader& rich_header() const;
+  /// Return the CodeViewPDB object if present
+  const CodeViewPDB* codeview_pdb() const LIEF_LIFETIMEBOUND;
 
-  //! Set a RichHeader object in the current Binary
+  CodeViewPDB* codeview_pdb() LIEF_LIFETIMEBOUND {
+    return const_cast<CodeViewPDB*>(
+        static_cast<const Binary*>(this)->codeview_pdb()
+    );
+  }
+
+  /// Return the LoadConfiguration object or a nullptr if the binary does not
+  /// use the LoadConfiguration
+  const LoadConfiguration* load_configuration() const LIEF_LIFETIMEBOUND {
+    return loadconfig_.get();
+  }
+
+  LoadConfiguration* load_configuration() LIEF_LIFETIMEBOUND {
+    return loadconfig_.get();
+  }
+
+  /// Return the overlay content
+  span<const uint8_t> overlay() const LIEF_LIFETIMEBOUND {
+    return overlay_;
+  }
+
+  span<uint8_t> overlay() LIEF_LIFETIMEBOUND {
+    return overlay_;
+  }
+
+  /// Return the original overlay offset
+  uint64_t overlay_offset() const {
+    return overlay_offset_;
+  }
+
+  /// Return the DOS stub content
+  span<const uint8_t> dos_stub() const LIEF_LIFETIMEBOUND {
+    return dos_stub_;
+  }
+
+  span<uint8_t> dos_stub() LIEF_LIFETIMEBOUND {
+    return dos_stub_;
+  }
+
+  /// Update the DOS stub content
+  void dos_stub(std::vector<uint8_t> content) {
+    dos_stub_ = std::move(content);
+  }
+
+  /// Return a reference to the RichHeader object
+  RichHeader* rich_header() LIEF_LIFETIMEBOUND {
+    return rich_header_.get();
+  }
+
+  const RichHeader* rich_header() const LIEF_LIFETIMEBOUND {
+    return rich_header_.get();
+  }
+
+  /// Set a RichHeader object in the current Binary
   void rich_header(const RichHeader& rich_header);
 
-  //! Check if the current binary has a RichHeader object
-  bool has_rich_header() const;
+  /// Check if the current binary has a RichHeader object
+  bool has_rich_header() const {
+    return rich_header_ != nullptr;
+  }
 
-  //! Return an iterator over the binary imports
-  it_imports       imports();
-  it_const_imports imports() const;
+  /// Return an iterator over the binary imports
+  it_imports imports() LIEF_LIFETIMEBOUND {
+    return imports_;
+  }
 
-  //! Returns the PE::Import from the given name. If it can't be
-  //! found, return a nullptr
-  //!
-  //! @param[in] import_name Name of the import
-  Import* get_import(const std::string& import_name);
-  const Import* get_import(const std::string& import_name) const;
+  it_const_imports imports() const LIEF_LIFETIMEBOUND {
+    return imports_;
+  }
 
-  //! ``True`` if the binary imports the given library name
-  //!
-  //! @param[in] import_name Name of the import
-  bool has_import(const std::string& import_name) const;
+  /// Return the Import matching the provided name (case-sensitive)
+  ///
+  /// If the import can't be found, it returns a nullptr
+  Import* get_import(const std::string& import_name) LIEF_LIFETIMEBOUND {
+    return const_cast<Import*>(
+        static_cast<const Binary*>(this)->get_import(import_name)
+    );
+  }
 
-  //! Check if the current binary contains delay imports
-  //!
-  //! @see DelayImport
-  //! @see has_import
-  bool has_delay_imports() const;
+  const Import*
+      get_import(const std::string& import_name) const LIEF_LIFETIMEBOUND;
 
-  //! Return an iterator over the binary's delay imports
-  it_delay_imports       delay_imports();
-  it_const_delay_imports delay_imports() const;
+  /// `True` if the binary imports the given library name
+  bool has_import(const std::string& import_name) const {
+    return get_import(import_name) != nullptr;
+  }
 
-  //! Returns the PE::DelayImport from the given name. If it can't be
-  //! found, return a nullptr
-  //!
-  //! @param[in] import_name Name of the delay import
-  DelayImport* get_delay_import(const std::string& import_name);
-  const DelayImport* get_delay_import(const std::string& import_name) const;
+  /// Check if the current binary contains delay imports
+  bool has_delay_imports() const {
+    return !delay_imports_.empty();
+  }
 
+  /// Return an iterator over the binary's delay imports
+  it_delay_imports delay_imports() {
+    return delay_imports_;
+  }
 
-  //! ``True`` if the binary delay-imports the given library name
-  //!
-  //! @param[in] import_name Name of the delay import
-  bool has_delay_import(const std::string& import_name) const;
+  it_const_delay_imports delay_imports() const {
+    return delay_imports_;
+  }
 
-
-  //! Add the function @p function of the library @p library.
-  //! If the function fails, it returns a nullptr
-  //!
-  //! @param[in] library  Library name of the function
-  //! @param[in] function Function's name from the library to import
-  ImportEntry* add_import_function(const std::string& library, const std::string& function);
-
-  //! Add an imported library (i.e. `DLL`) to the binary
-  Import& add_library(const std::string& name);
-
-  //! Remove the library with the given `name`
-  void remove_library(const std::string& name);
-
-  //! Remove all libraries in the binary
-  void remove_all_libraries();
-
-  // @deprecated This function will be removed in a future version of LIEF
-  void hook_function(const std::string& function, uint64_t address);
+  /// Returns the DelayImport matching the given name. If it can't be
+  /// found, it returns a nullptr
+  DelayImport*
+      get_delay_import(const std::string& import_name) LIEF_LIFETIMEBOUND {
+    return const_cast<DelayImport*>(
+        static_cast<const Binary*>(this)->get_delay_import(import_name)
+    );
+  }
+  const DelayImport*
+      get_delay_import(const std::string& import_name) const LIEF_LIFETIMEBOUND;
 
 
-  // @deprecated This function will be removed in a future version of LIEF
-  void hook_function(const std::string& library, const std::string& function, uint64_t address);
+  /// `True` if the binary delay-imports the given library name
+  bool has_delay_import(const std::string& import_name) const {
+    return get_delay_import(import_name) != nullptr;
+  }
 
-  //! Reconstruct the binary object and write the raw PE in `filename`
-  //!
-  //! Rebuild a PE binary from the current Binary object.
-  //! When rebuilding, import table and relocations are not rebuilt.
-  void write(const std::string& filename) override;
+  /// Add an imported library (i.e. `DLL`) to the binary.
+  ///
+  /// The second parameter `pos` defines where to insert the import.
+  /// If negative (default), the import is appended to the end of the list.
+  Import& add_import(const std::string& name,
+                     int32_t pos = -1) LIEF_LIFETIMEBOUND {
+    if (pos < 0 || (size_t)pos >= imports_.size()) {
+      imports_.push_back(std::make_unique<Import>(name));
+      return *imports_.back();
+    }
+    return **imports_.insert(imports_.begin() + pos,
+                             std::make_unique<Import>(name));
+  }
 
-  //! Reconstruct the binary object and write the raw PE in `os` stream
-  //!
-  //! Rebuild a PE binary from the current Binary object.
-  //! When rebuilding, import table and relocations are not rebuilt.
-  void write(std::ostream& os) override;
+  /// Remove the imported library with the given `name`
+  ///
+  /// Return true if the deletion succeeded, false otherwise.
+  bool remove_import(const std::string& name);
+
+  /// Remove all libraries in the binary
+  void remove_all_imports() {
+    imports_.clear();
+  }
+
+  /// Reconstruct the binary object and write the raw PE in `filename`
+  std::unique_ptr<Builder> write(const std::string& filename) {
+    return write(filename, Builder::config_t());
+  }
+
+  /// Reconstruct the binary object with the given configuration and write it in
+  /// `filename`
+  std::unique_ptr<Builder> write(const std::string& filename,
+                                 const Builder::config_t& config);
+
+  /// Reconstruct the binary object and write the raw PE in `os` stream
+  ///
+  /// Rebuild a PE binary from the current Binary object.
+  /// When rebuilding, import table and relocations are not rebuilt.
+  std::unique_ptr<Builder> write(std::ostream& os) {
+    return write(os, Builder::config_t());
+  }
+
+  std::unique_ptr<Builder> write(std::ostream& os,
+                                 const Builder::config_t& config);
 
   void accept(Visitor& visitor) const override;
 
-  //! Patch the content at virtual address @p address with @p patch_value
-  //!
-  //! @param[in] address      Address to patch
-  //! @param[in] patch_value  Patch to apply
-  //! @param[in] addr_type    Type of the Virtual address: VA or RVA. Default: Auto
+  /// Patch the content at virtual address @p address with @p patch_value
+  ///
+  /// @param[in] address      Address to patch
+  /// @param[in] patch_value  Patch to apply
+  /// @param[in] addr_type    Type of the Virtual address: VA or RVA. Default: Auto
   void patch_address(uint64_t address, const std::vector<uint8_t>& patch_value,
-                     LIEF::Binary::VA_TYPES addr_type = LIEF::Binary::VA_TYPES::AUTO) override;
+                     VA_TYPES addr_type = VA_TYPES::AUTO) override;
 
 
-  //! Patch the address with the given value
-  //!
-  //! @param[in] address        Address to patch
-  //! @param[in] patch_value    Patch to apply
-  //! @param[in] size           Size of the value in **bytes** (1, 2, ... 8)
-  //! @param[in] addr_type      Type of the Virtual address: VA or RVA. Default: Auto
-  void patch_address(uint64_t address, uint64_t patch_value, size_t size = sizeof(uint64_t),
-                     LIEF::Binary::VA_TYPES addr_type = LIEF::Binary::VA_TYPES::AUTO) override;
+  /// Patch the address with the given value
+  ///
+  /// @param[in] address        Address to patch
+  /// @param[in] patch_value    Patch to apply
+  /// @param[in] size           Size of the value in **bytes** (1, 2, ... 8)
+  /// @param[in] addr_type      Type of the Virtual address: VA or RVA. Default:
+  /// Auto
+  void patch_address(uint64_t address, uint64_t patch_value,
+                     size_t size = sizeof(uint64_t),
+                     VA_TYPES addr_type = VA_TYPES::AUTO) override;
 
-  //! Return the content located at the provided virtual address
-  //!
-  //! @param[in] virtual_address    Virtual address of the data to retrieve
-  //! @param[in] size               Size in bytes of the data to retrieve
-  //! @param[in] addr_type          Type of the Virtual address: VA or RVA. Default: Auto
-  std::vector<uint8_t> get_content_from_virtual_address(uint64_t virtual_address, uint64_t size,
-      LIEF::Binary::VA_TYPES addr_type = LIEF::Binary::VA_TYPES::AUTO) const override;
 
-  //! Return the binary's entrypoint (It is the same value as OptionalHeader::addressof_entrypoint
-  uint64_t entrypoint() const override;
+  /// Fill the content at the provided address with a fixed value
+  void fill_address(uint64_t address, size_t size, uint8_t value = 0,
+                    VA_TYPES addr_type = VA_TYPES::AUTO);
 
-  //! Check if the binary is position independent
-  bool is_pie() const override;
+  /// Return the content located at the provided virtual address
+  ///
+  /// @param[in] virtual_address    Virtual address of the data to retrieve
+  /// @param[in] size               Size in bytes of the data to retrieve
+  /// @param[in] addr_type          Type of the Virtual address: VA or RVA.
+  /// Default: Auto
+  span<const uint8_t> get_content_from_virtual_address(
+      uint64_t virtual_address, uint64_t size,
+      Binary::VA_TYPES addr_type = Binary::VA_TYPES::AUTO
+  ) const LIEF_LIFETIMEBOUND override;
 
-  //! Check if the binary uses ``NX`` protection
-  bool has_nx() const override;
+  /// Return the binary's entrypoint (it is the same value as
+  /// OptionalHeader::addressof_entrypoint)
+  uint64_t entrypoint() const override {
+    return optional_header_.imagebase() + optional_header_.addressof_entrypoint();
+  }
 
-  //! Return the list of the binary constructors.
-  //!
-  //! In a PE file, we consider a constructors as a callback in the TLS object
+  /// Check if the binary is position independent
+  bool is_pie() const override {
+    return optional_header_.has(OptionalHeader::DLL_CHARACTERISTICS::DYNAMIC_BASE);
+  }
+
+  /// Check if the binary uses ``NX`` protection
+  bool has_nx() const override {
+    return optional_header_.has(OptionalHeader::DLL_CHARACTERISTICS::NX_COMPAT);
+  }
+
+  uint64_t last_section_offset() const;
+
+  /// Return the data directory associated with the export table
+  DataDirectory* export_dir() {
+    return data_directory(DataDirectory::TYPES::EXPORT_TABLE);
+  }
+
+  const DataDirectory* export_dir() const {
+    return data_directory(DataDirectory::TYPES::EXPORT_TABLE);
+  }
+
+  /// Return the data directory associated with the import table
+  DataDirectory* import_dir() {
+    return data_directory(DataDirectory::TYPES::IMPORT_TABLE);
+  }
+
+  const DataDirectory* import_dir() const {
+    return data_directory(DataDirectory::TYPES::IMPORT_TABLE);
+  }
+
+  /// Return the data directory associated with the resources tree
+  DataDirectory* rsrc_dir() {
+    return data_directory(DataDirectory::TYPES::RESOURCE_TABLE);
+  }
+
+  const DataDirectory* rsrc_dir() const {
+    return data_directory(DataDirectory::TYPES::RESOURCE_TABLE);
+  }
+
+  /// Return the data directory associated with the exceptions
+  DataDirectory* exceptions_dir() {
+    return data_directory(DataDirectory::TYPES::EXCEPTION_TABLE);
+  }
+
+  const DataDirectory* exceptions_dir() const {
+    return data_directory(DataDirectory::TYPES::EXCEPTION_TABLE);
+  }
+
+  /// Return the data directory associated with the certificate table
+  /// (authenticode)
+  DataDirectory* cert_dir() {
+    return data_directory(DataDirectory::TYPES::CERTIFICATE_TABLE);
+  }
+
+  const DataDirectory* cert_dir() const {
+    return data_directory(DataDirectory::TYPES::CERTIFICATE_TABLE);
+  }
+
+  /// Return the data directory associated with the relocation table
+  DataDirectory* relocation_dir() {
+    return data_directory(DataDirectory::TYPES::BASE_RELOCATION_TABLE);
+  }
+
+  const DataDirectory* relocation_dir() const {
+    return data_directory(DataDirectory::TYPES::BASE_RELOCATION_TABLE);
+  }
+
+  /// Return the data directory associated with the debug table
+  DataDirectory* debug_dir() {
+    return data_directory(DataDirectory::TYPES::DEBUG_DIR);
+  }
+
+  const DataDirectory* debug_dir() const {
+    return data_directory(DataDirectory::TYPES::DEBUG_DIR);
+  }
+
+  /// Return the data directory associated with TLS
+  DataDirectory* tls_dir() {
+    return data_directory(DataDirectory::TYPES::TLS_TABLE);
+  }
+
+  const DataDirectory* tls_dir() const {
+    return data_directory(DataDirectory::TYPES::TLS_TABLE);
+  }
+
+  /// Return the data directory associated with the load config
+  DataDirectory* load_config_dir() {
+    return data_directory(DataDirectory::TYPES::LOAD_CONFIG_TABLE);
+  }
+
+  const DataDirectory* load_config_dir() const {
+    return data_directory(DataDirectory::TYPES::LOAD_CONFIG_TABLE);
+  }
+
+  /// Return the data directory associated with the IAT
+  DataDirectory* iat_dir() {
+    return data_directory(DataDirectory::TYPES::IAT);
+  }
+
+  const DataDirectory* iat_dir() const {
+    return data_directory(DataDirectory::TYPES::IAT);
+  }
+
+  /// Return the data directory associated with delayed imports
+  DataDirectory* delay_dir() {
+    return data_directory(DataDirectory::TYPES::DELAY_IMPORT_DESCRIPTOR);
+  }
+
+  const DataDirectory* delay_dir() const {
+    return data_directory(DataDirectory::TYPES::DELAY_IMPORT_DESCRIPTOR);
+  }
+
+  /// Return the list of the binary constructors.
+  ///
+  /// In a PE file, we consider a constructors as a callback in the TLS object
   LIEF::Binary::functions_t ctor_functions() const override;
 
-  //! **All** functions found in the binary
+  /// **All** functions found in the binary
   LIEF::Binary::functions_t functions() const;
 
-  //! Functions found in the Exception table directory
+  /// Functions found in the Exception table directory
   LIEF::Binary::functions_t exception_functions() const;
 
-  bool operator==(const Binary& rhs) const;
-  bool operator!=(const Binary& rhs) const;
+  /// Iterator over the exception (`_RUNTIME_FUNCTION`) functions
+  ///
+  /// @warning This function requires that the option
+  /// LIEF::PE::ParserConfig::parse_exceptions was turned on (default is false)
+  /// when parsing the binary
+  it_exceptions exceptions() LIEF_LIFETIMEBOUND {
+    return exceptions_;
+  }
+
+  it_const_exceptions exceptions() const LIEF_LIFETIMEBOUND {
+    return exceptions_;
+  }
+
+  /// Try to find the exception info at the given RVA
+  ///
+  /// @warning This function requires that the option
+  /// LIEF::PE::ParserConfig::parse_exceptions was turned on (default is false)
+  /// when parsing the binary
+  ExceptionInfo* find_exception_at(uint32_t rva) LIEF_LIFETIMEBOUND;
+
+  const ExceptionInfo* find_exception_at(uint32_t rva) const LIEF_LIFETIMEBOUND {
+    return const_cast<Binary*>(this)->find_exception_at(rva);
+  }
+
+  /// True if this binary is compiled in ARM64EC mode (emulation compatible)
+  bool is_arm64ec() const;
+
+  /// True if this binary is compiled in ARM64X mode (contains both ARM64 and
+  /// ARM64EC code)
+  bool is_arm64x() const;
+
+  /// If the current binary contains dynamic relocations
+  /// (e.g. LIEF::PE::DynamicFixupARM64X), this function returns the
+  /// **relocated** view of the current PE.
+  ///
+  /// This can be used to get the alternative PE binary, targeting a different
+  /// architectures.
+  ///
+  /// @warning This function requires that the option
+  /// LIEF::PE::ParserConfig::parse_arm64x_binary was turned on (default is false)
+  /// when parsing the binary
+  const Binary* nested_pe_binary() const {
+    return nested_.get();
+  }
+
+  Binary* nested_pe_binary() {
+    return nested_.get();
+  }
+
+  /// Attempt to resolve the address of the function specified by `name`.
+  result<uint64_t> get_function_address(const std::string& name) const override;
+
+  static bool classof(const LIEF::Binary* bin) {
+    return bin->format() == Binary::FORMATS::PE;
+  }
 
   std::ostream& print(std::ostream& os) const override;
 
+
+  /// @private
+  ///
+  /// Should only be used for the Rust bindings
+  LIEF_LOCAL std::unique_ptr<Binary> move_nested_pe_binary() {
+    auto ret = std::move(nested_);
+    nested_ = nullptr;
+    return ret;
+  }
+
   private:
-  Binary();
+  struct sizing_info_t {
+    uint32_t nb_tls_callbacks = 0;
+    uint32_t load_config_size = 0;
+  };
 
-  //! Make space between the last section header and the beginning of the
-  //! content of first section
-  void make_space_for_new_section();
+  /// Make space between the last section header and the beginning of the
+  /// content of first section
+  result<uint64_t> make_space_for_new_section();
 
-  //! Return binary's symbols as LIEF::Symbol
+  /// Return binary's symbols as LIEF::Symbol
   LIEF::Binary::symbols_t get_abstract_symbols() override;
 
-  LIEF::Header get_abstract_header() const override;
+  LIEF::Header get_abstract_header() const override {
+    return LIEF::Header::from(*this);
+  }
 
-  //! Return binary's section as LIEF::Section
+  /// Return binary's section as LIEF::Section
   LIEF::Binary::sections_t get_abstract_sections() override;
 
   LIEF::Binary::relocations_t get_abstract_relocations() override;
@@ -536,47 +969,40 @@ class LIEF_API Binary : public LIEF::Binary {
 
   void update_lookup_address_table_offset();
   void update_iat();
+  void shift(uint64_t from, uint64_t by);
 
-  PE_TYPE        type_ = PE_TYPE::PE32_PLUS;
-  DosHeader      dos_header_;
-  RichHeader     rich_header_;
-  Header         header_;
+  PE_TYPE type_ = PE_TYPE::PE32_PLUS;
+  DosHeader dos_header_;
+  Header header_;
   OptionalHeader optional_header_;
 
   int32_t available_sections_space_ = 0;
 
-  bool has_rich_header_ = false;
-  bool has_tls_ = false;
-  bool has_imports_ = false;
-  bool has_exports_ = false;
-  bool has_resources_ = false;
-  bool has_exceptions_ = false;
-  bool has_relocations_ = false;
-  bool has_debug_ = false;
-  bool has_configuration_ = false;
-  bool is_reproducible_build_ = false;
-
-  signatures_t         signatures_;
-  TLS                  tls_;
-  sections_t           sections_;
-  data_directories_t   data_directories_;
-  symbols_t            symbols_;
-  strings_table_t      strings_table_;
-  relocations_t        relocations_;
-  std::unique_ptr<ResourceNode> resources_;
-  imports_t            imports_;
-  delay_imports_t      delay_imports_;
-  Export               export_;
-  debug_entries_t      debug_;
+  signatures_t signatures_;
+  sections_t sections_;
+  data_directories_t data_directories_;
+  symbols_t symbols_;
+  strings_table_t strings_table_;
+  relocations_t relocations_;
+  imports_t imports_;
+  delay_imports_t delay_imports_;
+  debug_entries_t debug_;
+  exceptions_t exceptions_;
   uint64_t overlay_offset_ = 0;
   std::vector<uint8_t> overlay_;
   std::vector<uint8_t> dos_stub_;
   std::vector<uint8_t> section_offset_padding_;
 
-  std::unique_ptr<LoadConfiguration> load_configuration_;
-  std::map<std::string, std::map<std::string, uint64_t>> hooks_; // Deprecated
+  std::unique_ptr<RichHeader> rich_header_;
+  std::unique_ptr<Export> export_;
+  std::unique_ptr<ResourceNode> resources_;
+  std::unique_ptr<TLS> tls_;
+  std::unique_ptr<LoadConfiguration> loadconfig_;
+  std::unique_ptr<Binary> nested_;
+
+  sizing_info_t sizing_info_;
 };
 
 }
-}
+
 #endif

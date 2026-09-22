@@ -1,6 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
- * Copyright 2017 - 2021 K. Nakagawa
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +15,77 @@
  */
 
 #include "LIEF/PE/hash.hpp"
-#include "LIEF/PE.hpp"
+#include "LIEF/PE/Binary.hpp"
+#include "LIEF/PE/Builder.hpp"
+#include "LIEF/PE/CodeIntegrity.hpp"
+#include "LIEF/PE/DataDirectory.hpp"
+#include "LIEF/PE/DelayImport.hpp"
+#include "LIEF/PE/DelayImportEntry.hpp"
+#include "LIEF/PE/DosHeader.hpp"
+#include "LIEF/PE/EnumToString.hpp"
+#include "LIEF/PE/Export.hpp"
+#include "LIEF/PE/ExportEntry.hpp"
+#include "LIEF/PE/Header.hpp"
+#include "LIEF/PE/Import.hpp"
+#include "LIEF/PE/ImportEntry.hpp"
+#include "LIEF/PE/LoadConfigurations/LoadConfiguration.hpp"
+#include "LIEF/PE/OptionalHeader.hpp"
+#include "LIEF/PE/Parser.hpp"
+#include "LIEF/PE/Relocation.hpp"
+#include "LIEF/PE/RelocationEntry.hpp"
+#include "LIEF/PE/ResourceData.hpp"
+#include "LIEF/PE/ResourceDirectory.hpp"
+#include "LIEF/PE/ResourceNode.hpp"
+#include "LIEF/PE/ResourcesManager.hpp"
+#include "LIEF/PE/RichEntry.hpp"
+#include "LIEF/PE/RichHeader.hpp"
+#include "LIEF/PE/Section.hpp"
+#include "LIEF/PE/TLS.hpp"
+#include "LIEF/PE/debug/CodeView.hpp"
+#include "LIEF/PE/debug/CodeViewPDB.hpp"
+#include "LIEF/PE/debug/Debug.hpp"
+#include "LIEF/PE/debug/Pogo.hpp"
+#include "LIEF/PE/debug/PogoEntry.hpp"
+#include "LIEF/PE/debug/Repro.hpp"
+#include "LIEF/PE/enums.hpp"
+#include "LIEF/PE/hash.hpp"
+#include "LIEF/PE/resources/ResourceAccelerator.hpp"
+#include "LIEF/PE/resources/ResourceDialog.hpp"
+#include "LIEF/PE/resources/ResourceDialogExtended.hpp"
+#include "LIEF/PE/resources/ResourceDialogRegular.hpp"
+#include "LIEF/PE/resources/ResourceIcon.hpp"
+#include "LIEF/PE/resources/ResourceStringFileInfo.hpp"
+#include "LIEF/PE/resources/ResourceStringTable.hpp"
+#include "LIEF/PE/resources/ResourceVar.hpp"
+#include "LIEF/PE/resources/ResourceVarFileInfo.hpp"
+#include "LIEF/PE/resources/ResourceVersion.hpp"
+#include "LIEF/PE/signature/Attribute.hpp"
+#include "LIEF/PE/signature/ContentInfo.hpp"
+#include "LIEF/PE/signature/GenericContent.hpp"
+#include "LIEF/PE/signature/RsaInfo.hpp"
+#include "LIEF/PE/signature/Signature.hpp"
+#include "LIEF/PE/signature/SignerInfo.hpp"
+#include "LIEF/PE/signature/SpcIndirectData.hpp"
+#include "LIEF/PE/signature/attributes/ContentType.hpp"
+#include "LIEF/PE/signature/attributes/GenericType.hpp"
+#include "LIEF/PE/signature/attributes/MsCounterSign.hpp"
+#include "LIEF/PE/signature/attributes/MsManifestBinaryID.hpp"
+#include "LIEF/PE/signature/attributes/MsSpcNestedSignature.hpp"
+#include "LIEF/PE/signature/attributes/MsSpcStatementType.hpp"
+#include "LIEF/PE/signature/attributes/PKCS9AtSequenceNumber.hpp"
+#include "LIEF/PE/signature/attributes/PKCS9CounterSignature.hpp"
+#include "LIEF/PE/signature/attributes/PKCS9MessageDigest.hpp"
+#include "LIEF/PE/signature/attributes/PKCS9SigningTime.hpp"
+#include "LIEF/PE/signature/attributes/SigningCertificateV2.hpp"
+#include "LIEF/PE/signature/attributes/SpcRelaxedPeMarkerCheck.hpp"
+#include "LIEF/PE/signature/attributes/SpcSpOpusInfo.hpp"
+#include "LIEF/PE/signature/x509.hpp"
+#include "LIEF/PE/utils.hpp"
+
 #include "Object.tcc"
 
-namespace LIEF {
-namespace PE {
+
+namespace LIEF::PE {
 
 Hash::~Hash() = default;
 
@@ -33,35 +98,33 @@ void Hash::visit(const Binary& binary) {
   process(binary.header());
   process(binary.optional_header());
 
-  process(std::begin(binary.data_directories()), std::end(binary.data_directories()));
-  process(std::begin(binary.sections()), std::end(binary.sections()));
-  process(std::begin(binary.imports()), std::end(binary.imports()));
-  process(std::begin(binary.delay_imports()), std::end(binary.delay_imports()));
-  process(std::begin(binary.relocations()), std::end(binary.relocations()));
-  process(std::begin(binary.symbols()), std::end(binary.symbols()));
+  process(binary.data_directories().begin(), binary.data_directories().end());
+  process(binary.sections().begin(), binary.sections().end());
+  process(binary.imports().begin(), binary.imports().end());
+  process(binary.delay_imports().begin(), binary.delay_imports().end());
+  process(binary.relocations().begin(), binary.relocations().end());
 
   if (binary.has_debug()) {
-    process(std::begin(binary.debug()), std::end(binary.debug()));
+    process(binary.debug().begin(), binary.debug().end());
   }
 
-  if (binary.has_exports()) {
-    process(binary.get_export());
+  if (const Export* exp = binary.get_export()) {
+    process(*exp);
   }
 
-  if (binary.has_tls()) {
-    process(binary.tls());
+  if (const TLS* tls_obj = binary.tls()) {
+    process(*tls_obj);
   }
 
-  if (binary.has_rich_header()) {
-    process(binary.rich_header());
+  if (const RichHeader* rheader = binary.rich_header()) {
+    process(*rheader);
   }
-
 }
 
 
 void Hash::visit(const DosHeader& dos_header) {
   process(dos_header.magic());
-  process(dos_header.used_bytes_in_the_last_page());
+  process(dos_header.used_bytes_in_last_page());
   process(dos_header.file_size_in_pages());
   process(dos_header.numberof_relocation());
   process(dos_header.header_size_in_paragraphs());
@@ -82,8 +145,9 @@ void Hash::visit(const DosHeader& dos_header) {
 }
 
 void Hash::visit(const RichHeader& rich_header) {
+  RichHeader::it_const_entries entries = rich_header.entries();
   process(rich_header.key());
-  process(std::begin(rich_header.entries()), std::end(rich_header.entries()));
+  process(entries.begin(), entries.end());
 }
 
 void Hash::visit(const RichEntry& rich_entry) {
@@ -136,7 +200,6 @@ void Hash::visit(const OptionalHeader& optional_header) {
   process(optional_header.sizeof_heap_commit());
   process(optional_header.loader_flags());
   process(optional_header.numberof_rva_and_size());
-
 }
 
 void Hash::visit(const DataDirectory& data_directory) {
@@ -159,19 +222,17 @@ void Hash::visit(const Section& section) {
   process(section.numberof_line_numbers());
   process(section.characteristics());
   process(section.content());
-
 }
 
 void Hash::visit(const Relocation& relocation) {
   process(relocation.virtual_address());
-  process(std::begin(relocation.entries()), std::end(relocation.entries()));
+  process(relocation.entries().begin(), relocation.entries().end());
 }
 
 void Hash::visit(const RelocationEntry& relocation_entry) {
   process(relocation_entry.data());
   process(relocation_entry.position());
   process(relocation_entry.type());
-
 }
 
 void Hash::visit(const Export& export_) {
@@ -181,14 +242,14 @@ void Hash::visit(const Export& export_) {
   process(export_.minor_version());
   process(export_.ordinal_base());
   process(export_.name());
-  process(std::begin(export_.entries()), std::end(export_.entries()));
+  process(export_.entries().begin(), export_.entries().end());
 }
 
 void Hash::visit(const ExportEntry& export_entry) {
   process(export_entry.name());
   process(export_entry.ordinal());
   process(export_entry.address());
-  process(static_cast<size_t>(export_entry.is_extern()));
+  process(size_t{export_entry.is_extern()});
 }
 
 void Hash::visit(const TLS& tls) {
@@ -202,20 +263,6 @@ void Hash::visit(const TLS& tls) {
   process(tls.callbacks());
 }
 
-void Hash::visit(const Symbol& symbol) {
-
-  process(symbol.name());
-  process(symbol.value());
-  process(symbol.size());
-
-  process(symbol.section_number());
-  process(symbol.type());
-  process(symbol.base_type());
-  process(symbol.complex_type());
-  process(symbol.storage_class());
-  process(symbol.numberof_aux_symbols());
-}
-
 void Hash::visit(const Debug& debug) {
   process(debug.characteristics());
   process(debug.timestamp());
@@ -225,15 +272,11 @@ void Hash::visit(const Debug& debug) {
   process(debug.sizeof_data());
   process(debug.addressof_rawdata());
   process(debug.pointerto_rawdata());
-
-  if (debug.has_code_view()) {
-    debug.code_view()->accept(*this);
-  }
-
 }
 
 void Hash::visit(const CodeView& cv) {
-  process(cv.cv_signature());
+  visit(static_cast<const Debug&>(cv));
+  process(cv.signature());
 }
 
 void Hash::visit(const CodeViewPDB& cvpdb) {
@@ -244,13 +287,12 @@ void Hash::visit(const CodeViewPDB& cvpdb) {
 }
 
 void Hash::visit(const Import& import) {
-
   process(import.forwarder_chain());
   process(import.timedatestamp());
   process(import.import_address_table_rva());
   process(import.import_lookup_table_rva());
   process(import.name());
-  process(std::begin(import.entries()), std::end(import.entries()));
+  process(import.entries().begin(), import.entries().end());
 }
 
 void Hash::visit(const ImportEntry& import_entry) {
@@ -263,6 +305,8 @@ void Hash::visit(const ImportEntry& import_entry) {
 
 
 void Hash::visit(const DelayImport& import) {
+  DelayImport::it_const_entries entries = import.entries();
+
   process(import.attribute());
   process(import.name());
   process(import.handle());
@@ -271,6 +315,7 @@ void Hash::visit(const DelayImport& import) {
   process(import.biat());
   process(import.uiat());
   process(import.timestamp());
+  process(entries.begin(), entries.end());
 }
 
 void Hash::visit(const DelayImportEntry& import_entry) {
@@ -280,23 +325,22 @@ void Hash::visit(const DelayImportEntry& import_entry) {
 }
 
 void Hash::visit(const ResourceNode& resource_node) {
-
   process(resource_node.id());
   if (resource_node.has_name()) {
     process(resource_node.name());
   }
 
-  process(std::begin(resource_node.childs()), std::end(resource_node.childs()));
+  process(resource_node.childs().begin(), resource_node.childs().end());
 }
 
 void Hash::visit(const ResourceData& resource_data) {
-  process(*resource_data.as<ResourceNode>());
+  visit(*resource_data.as<ResourceNode>());
   process(resource_data.code_page());
   process(resource_data.content());
 }
 
 void Hash::visit(const ResourceDirectory& resource_directory) {
-  process(*resource_directory.as<ResourceNode>());
+  visit(*resource_directory.as<ResourceNode>());
   process(resource_directory.characteristics());
   process(resource_directory.time_date_stamp());
   process(resource_directory.major_version());
@@ -307,90 +351,76 @@ void Hash::visit(const ResourceDirectory& resource_directory) {
 
 
 void Hash::visit(const ResourcesManager& resources_manager) {
-
   if (resources_manager.has_manifest()) {
     process(resources_manager.manifest());
   }
-
-  if (resources_manager.has_version()) {
-    if (auto version = resources_manager.version()) {
-      process(*version);
-    }
+  for (const ResourceVersion& version : resources_manager.version()) {
+    process(version);
   }
 
   if (resources_manager.has_icons()) {
-    process(std::begin(resources_manager.icons()), std::end(resources_manager.icons()));
+    process(resources_manager.icons().begin(), resources_manager.icons().end());
   }
 
   if (resources_manager.has_dialogs()) {
-    process(std::begin(resources_manager.dialogs()), std::end(resources_manager.dialogs()));
+    process(resources_manager.dialogs().begin(),
+            resources_manager.dialogs().end());
   }
 }
 
-void Hash::visit(const ResourceStringFileInfo& resource_sfi) {
-
-  process(resource_sfi.type());
-  process(resource_sfi.key());
-  process(std::begin(resource_sfi.langcode_items()), std::end(resource_sfi.langcode_items()));
-}
-
-void Hash::visit(const ResourceFixedFileInfo& resource_ffi) {
-
-  process(resource_ffi.signature());
-  process(resource_ffi.struct_version());
-  process(resource_ffi.file_version_MS());
-  process(resource_ffi.file_version_LS());
-  process(resource_ffi.product_version_MS());
-  process(resource_ffi.product_version_LS());
-  process(resource_ffi.file_flags_mask());
-  process(resource_ffi.file_flags());
-  process(resource_ffi.file_os());
-  process(resource_ffi.file_type());
-  process(resource_ffi.file_subtype());
-  process(resource_ffi.file_date_MS());
-  process(resource_ffi.file_date_LS());
-}
-
-void Hash::visit(const ResourceVarFileInfo& resource_vfi) {
-
-  process(resource_vfi.type());
-  process(resource_vfi.key());
-  process(resource_vfi.translations());
-}
-
-void Hash::visit(const LangCodeItem& resource_lci) {
-
-  process(resource_lci.type());
-  process(resource_lci.key());
-  for (const std::pair<const std::u16string, std::u16string>& p : resource_lci.items()) {
-    process(p.first);
-    process(p.second);
+void Hash::visit(const ResourceStringFileInfo& info) {
+  process(info.type());
+  process(info.key());
+  for (const ResourceStringTable& table : info.children()) {
+    for (const ResourceStringTable::entry_t& entry : table.entries()) {
+      process(entry.key);
+      process(entry.value);
+    }
   }
 }
 
+void Hash::visit(const ResourceVarFileInfo& info) {
+  process(info.type());
+  process(info.key());
+  for (const ResourceVar& var : info.vars()) {
+    for (uint32_t value : var.values()) {
+      process(value);
+    }
+  }
+}
 
-void Hash::visit(const ResourceVersion& resource_version) {
+void Hash::visit(const ResourceVersion& version) {
+  process(version.type());
+  process(version.key());
 
-  process(resource_version.type());
-  process(resource_version.key());
-
-  if (resource_version.has_fixed_file_info()) {
-    process(*resource_version.fixed_file_info());
+  {
+    const ResourceVersion::fixed_file_info_t& info = version.file_info();
+    process(info.signature);
+    process(info.struct_version);
+    process(info.file_version_ms);
+    process(info.file_version_ls);
+    process(info.product_version_ms);
+    process(info.product_version_ls);
+    process(info.file_flags_mask);
+    process(info.file_flags);
+    process(info.file_os);
+    process(info.file_type);
+    process(info.file_subtype);
+    process(info.file_date_ms);
+    process(info.file_date_ls);
   }
 
-  if (resource_version.has_string_file_info()) {
-    process(*resource_version.string_file_info());
+  if (const ResourceStringFileInfo* info = version.string_file_info()) {
+    process(*info);
   }
 
-  if (resource_version.has_var_file_info()) {
-    process(*resource_version.var_file_info());
+  if (const ResourceVarFileInfo* info = version.var_file_info()) {
+    process(*info);
   }
-
 }
 
 void Hash::visit(const ResourceIcon& resource_icon) {
-
-  if (resource_icon.id() != static_cast<uint32_t>(-1)) {
+  if (resource_icon.id() != uint32_t(-1)) {
     process(resource_icon.id());
   }
   process(resource_icon.lang());
@@ -402,52 +432,13 @@ void Hash::visit(const ResourceIcon& resource_icon) {
   process(resource_icon.planes());
   process(resource_icon.bit_count());
   process(resource_icon.pixels());
-
 }
 
-void Hash::visit(const ResourceDialog& dialog) {
-
-  process(dialog.x());
-  process(dialog.y());
-  process(dialog.cx());
-  process(dialog.cy());
-  process(dialog.style());
-  process(dialog.extended_style());
-
-  process(std::begin(dialog.items()), std::end(dialog.items()));
-
-  if (dialog.is_extended()) {
-    process(dialog.version());
-    process(dialog.signature());
-    process(dialog.help_id());
-    process(dialog.weight());
-    process(dialog.point_size());
-    process(static_cast<size_t>(dialog.is_italic()));
-    process(dialog.charset());
-    process(dialog.title());
-    process(dialog.typeface());
+void Hash::visit(const ResourceStringTable& table) {
+  for (const ResourceStringTable::entry_t& entry : table.entries()) {
+    process(entry.key);
+    process(entry.value);
   }
-
-}
-
-
-void Hash::visit(const ResourceDialogItem& dialog_item) {
-  process(dialog_item.x());
-  process(dialog_item.y());
-  process(dialog_item.cx());
-  process(dialog_item.cy());
-  process(dialog_item.id());
-  process(dialog_item.style());
-  process(dialog_item.extended_style());
-  if (dialog_item.is_extended()) {
-    process(dialog_item.help_id());
-    process(dialog_item.title());
-  }
-}
-
-void Hash::visit(const ResourceStringTable& string_table) {
-  process(string_table.length());
-  process(string_table.name());
 }
 
 void Hash::visit(const ResourceAccelerator& accelerator) {
@@ -461,8 +452,8 @@ void Hash::visit(const Signature& signature) {
   process(signature.version());
   process(signature.digest_algorithm());
   process(signature.content_info());
-  process(std::begin(signature.certificates()), std::end(signature.certificates()));
-  process(std::begin(signature.signers()), std::end(signature.signers()));
+  process(signature.certificates().begin(), signature.certificates().end());
+  process(signature.signers().begin(), signature.signers().end());
 }
 
 void Hash::visit(const x509& x509) {
@@ -476,15 +467,16 @@ void Hash::visit(const x509& x509) {
 }
 
 void Hash::visit(const SignerInfo& signerinfo) {
-
   process(signerinfo.version());
   process(signerinfo.serial_number());
   process(signerinfo.issuer());
   process(signerinfo.encryption_algorithm());
   process(signerinfo.digest_algorithm());
   process(signerinfo.encrypted_digest());
-  process(std::begin(signerinfo.authenticated_attributes()), std::end(signerinfo.authenticated_attributes()));
-  process(std::begin(signerinfo.unauthenticated_attributes()), std::end(signerinfo.unauthenticated_attributes()));
+  process(signerinfo.authenticated_attributes().begin(),
+          signerinfo.authenticated_attributes().end());
+  process(signerinfo.unauthenticated_attributes().begin(),
+          signerinfo.unauthenticated_attributes().end());
 }
 
 void Hash::visit(const Attribute& attr) {
@@ -493,9 +485,19 @@ void Hash::visit(const Attribute& attr) {
 
 void Hash::visit(const ContentInfo& info) {
   process(info.content_type());
-  process(info.digest_algorithm());
-  process(info.digest());
-  process(info.file());
+  info.value().accept(*this);
+}
+
+
+void Hash::visit(const GenericContent& content) {
+  process(content.raw());
+  process(content.oid());
+}
+
+void Hash::visit(const SpcIndirectData& content) {
+  process(content.file());
+  process(content.digest());
+  process(content.digest_algorithm());
 }
 
 
@@ -503,39 +505,67 @@ void Hash::visit(const ContentType& attr) {
   visit(*attr.as<Attribute>());
   process(attr.oid());
 }
+
 void Hash::visit(const GenericType& attr) {
   visit(*attr.as<Attribute>());
   process(attr.raw_content());
   process(attr.oid());
 }
+
 void Hash::visit(const MsSpcNestedSignature& attr) {
   visit(*attr.as<Attribute>());
   process(attr.sig());
 }
+
 void Hash::visit(const MsSpcStatementType& attr) {
   visit(*attr.as<Attribute>());
   process(attr.oid());
 }
+
+void Hash::visit(const MsCounterSign& attr) {
+  visit(*attr.as<Attribute>());
+  // TODO
+}
+
+void Hash::visit(const MsManifestBinaryID& attr) {
+  visit(*attr.as<Attribute>());
+  process(attr.manifest_id());
+}
+
 void Hash::visit(const PKCS9AtSequenceNumber& attr) {
   visit(*attr.as<Attribute>());
   process(attr.number());
 }
+
 void Hash::visit(const PKCS9CounterSignature& attr) {
   visit(*attr.as<Attribute>());
   process(attr.signer());
 }
+
 void Hash::visit(const PKCS9MessageDigest& attr) {
   visit(*attr.as<Attribute>());
   process(attr.digest());
 }
+
 void Hash::visit(const PKCS9SigningTime& attr) {
   visit(*attr.as<Attribute>());
   process(attr.time());
 }
+
 void Hash::visit(const SpcSpOpusInfo& attr) {
   visit(*attr.as<Attribute>());
   process(attr.program_name());
   process(attr.more_info());
+}
+
+void Hash::visit(const SpcRelaxedPeMarkerCheck& attr) {
+  visit(*attr.as<Attribute>());
+  process(attr.value());
+}
+
+void Hash::visit(const SigningCertificateV2& attr) {
+  visit(*attr.as<Attribute>());
+  // TODO
 }
 
 void Hash::visit(const CodeIntegrity& code_integrity) {
@@ -564,69 +594,45 @@ void Hash::visit(const LoadConfiguration& config) {
   process(config.reserved1());
   process(config.editlist());
   process(config.security_cookie());
-}
-
-void Hash::visit(const LoadConfigurationV0& config) {
-  process(*config.as<LoadConfiguration>());
   process(config.se_handler_table());
   process(config.se_handler_count());
-}
-
-void Hash::visit(const LoadConfigurationV1& config) {
-
-  process(*config.as<LoadConfigurationV0>());
   process(config.guard_cf_check_function_pointer());
   process(config.guard_cf_dispatch_function_pointer());
   process(config.guard_cf_function_table());
   process(config.guard_cf_function_count());
   process(config.guard_flags());
-}
-
-void Hash::visit(const LoadConfigurationV2& config) {
-
-  process(*config.as<LoadConfigurationV1>());
-  process(config.code_integrity());
-}
-
-void Hash::visit(const LoadConfigurationV3& config) {
-  process(*config.as<LoadConfigurationV2>());
+  if (const CodeIntegrity* CI = config.code_integrity()) {
+    process(*CI);
+  }
   process(config.guard_address_taken_iat_entry_table());
   process(config.guard_address_taken_iat_entry_count());
   process(config.guard_long_jump_target_table());
   process(config.guard_long_jump_target_count());
-}
-
-void Hash::visit(const LoadConfigurationV4& config) {
-  process(*config.as<LoadConfigurationV3>());
   process(config.dynamic_value_reloc_table());
   process(config.hybrid_metadata_pointer());
-}
-
-void Hash::visit(const LoadConfigurationV5& config) {
-  process(*config.as<LoadConfigurationV4>());
   process(config.guard_rf_failure_routine());
   process(config.guard_rf_failure_routine_function_pointer());
   process(config.dynamic_value_reloctable_offset());
   process(config.dynamic_value_reloctable_section());
-}
-
-void Hash::visit(const LoadConfigurationV6& config) {
-  process(*config.as<LoadConfigurationV5>());
   process(config.guard_rf_verify_stackpointer_function_pointer());
   process(config.hotpatch_table_offset());
-}
-
-void Hash::visit(const LoadConfigurationV7& config) {
-  process(*config.as<LoadConfigurationV6>());
   process(config.reserved3());
-  process(config.addressof_unicode_string());
+  process(config.enclave_configuration_ptr());
+  process(config.volatile_metadata_pointer());
+  process(config.guard_eh_continuation_table());
+  process(config.guard_eh_continuation_count());
+  process(config.guard_xfg_check_function_pointer());
+  process(config.guard_xfg_dispatch_function_pointer());
+  process(config.guard_xfg_table_dispatch_function_pointer());
+  process(config.cast_guard_os_determined_failure_mode());
+  process(config.guard_memcpy_function_pointer());
 }
-
 
 void Hash::visit(const Pogo& pogo) {
   Pogo::it_const_entries entries = pogo.entries();
+  visit(static_cast<const Debug&>(pogo));
   process(pogo.signature());
-  process(std::begin(entries), std::end(entries));
+  process(entries.begin(), entries.end());
 }
 
 
@@ -636,6 +642,71 @@ void Hash::visit(const PogoEntry& entry) {
   process(entry.size());
 }
 
-} // namespace PE
-} // namespace LIEF
+void Hash::visit(const Repro& repro) {
+  visit(static_cast<const Debug&>(repro));
+  process(repro.hash());
+}
 
+void Hash::visit(const ResourceDialogRegular& dialog) {
+  process(dialog.style());
+  process(dialog.extended_style());
+  process(dialog.x());
+  process(dialog.y());
+  process(dialog.cx());
+  process(dialog.cy());
+  process(dialog.font().point_size);
+  process(dialog.font().name);
+  process(dialog.menu().ordinal.value_or(0));
+  process(dialog.menu().string);
+
+  for (const ResourceDialogRegular::Item& item : dialog.items()) {
+    process(item.id());
+    process(item.style());
+    process(item.extended_style());
+    process(item.x());
+    process(item.y());
+    process(item.cx());
+    process(item.cy());
+    process(item.clazz().ordinal.value_or(0));
+    process(item.clazz().string);
+    process(item.title().ordinal.value_or(0));
+    process(item.title().string);
+    process(item.creation_data());
+  }
+}
+
+void Hash::visit(const ResourceDialogExtended& dialog) {
+  process(dialog.help_id());
+  process(dialog.style());
+  process(dialog.extended_style());
+  process(dialog.x());
+  process(dialog.y());
+  process(dialog.cx());
+  process(dialog.cy());
+  process(dialog.font().point_size);
+  process(dialog.font().typeface);
+  process(dialog.font().italic);
+  process(dialog.font().charset);
+  process(dialog.font().weight);
+  process(dialog.menu().ordinal.value_or(0));
+  process(dialog.menu().string);
+
+
+  for (const ResourceDialogExtended::Item& item : dialog.items()) {
+    process(item.help_id());
+    process(item.id());
+    process(item.style());
+    process(item.extended_style());
+    process(item.x());
+    process(item.y());
+    process(item.cx());
+    process(item.cy());
+    process(item.clazz().ordinal.value_or(0));
+    process(item.clazz().string);
+    process(item.title().ordinal.value_or(0));
+    process(item.title().string);
+    process(item.creation_data());
+  }
+}
+
+}

@@ -1,27 +1,55 @@
-#!/usr/bin/env python
-import re
 import pathlib
+import re
+from pathlib import Path
+
 import lief
-from utils import get_sample, is_osx
+from utils import get_sample, is_osx, parse_macho
 
-from test_builder import run_program
+from .test_builder import run_program
 
-lief.logging.set_level(lief.logging.LOGGING_LEVEL.INFO)
 
-def test_all(tmp_path):
+def test_all(tmp_path: Path):
     bin_path = pathlib.Path(get_sample("MachO/FAT_MachO_x86-x86-64-binary_fatall.bin"))
-    original = lief.MachO.parse(bin_path.as_posix())
-    output = f"{tmp_path}/{bin_path.name}"
+    original = lief.MachO.parse(bin_path)
+    assert original is not None
+    output = tmp_path / bin_path.name
 
     assert len(original) == 2
     original.write(output)
 
     new = lief.MachO.parse(output)
+    assert new is not None
 
     checked, err = lief.MachO.check_layout(new)
     assert checked, err
 
     if is_osx():
         stdout = run_program(output)
-        print(stdout)
-        assert re.search(r'Hello World', stdout) is not None
+        lief.logging.info(stdout)
+        assert re.search(r"Hello World", stdout) is not None
+
+
+def test_create_fat():
+    fat = lief.MachO.FatBinary.create(
+        [
+            parse_macho("MachO/variants_alt.dylib").take(
+                lief.MachO.Header.CPU_TYPE.ARM64
+            ),
+            parse_macho("MachO/IOKit").take(lief.MachO.Header.CPU_TYPE.ARM),
+        ]
+    )
+
+    assert fat is not None
+    assert len(fat) == 2
+
+    fat = lief.MachO.FatBinary.create(
+        [
+            parse_macho("MachO/variants_alt.dylib").take(
+                lief.MachO.Header.CPU_TYPE.ARM64
+            ),
+            parse_macho("MachO/variants_alt.dylib").take(
+                lief.MachO.Header.CPU_TYPE.ARM64
+            ),
+        ]
+    )
+    assert fat is None

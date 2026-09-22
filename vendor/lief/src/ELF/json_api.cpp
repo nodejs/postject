@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 #include "LIEF/config.h"
-#include "logging.hpp"
-#include "LIEF/ELF.hpp"
 
-#if LIEF_JSON_SUPPORT
-#include "ELF/json_internal.hpp"
+#if defined(LIEF_JSON_SUPPORT)
+  #include "ELF/json_internal.hpp"
+#else
+  #include "logging.hpp"
 #endif
 
 namespace LIEF {
+class Object;
 namespace ELF {
 
-std::string to_json(const Object& v) {
+std::string to_json([[maybe_unused]] const Object& v) {
 #ifdef LIEF_JSON_SUPPORT
   JsonVisitor visitor;
   visitor(v);
@@ -35,6 +36,5 @@ std::string to_json(const Object& v) {
 #endif
 }
 
-} // namespace ELF
-} // namespace LIEF
-
+}
+}

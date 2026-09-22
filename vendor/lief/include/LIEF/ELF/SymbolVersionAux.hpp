@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,46 +13,55 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_SYMBOL_VERSION_AUX_H_
-#define LIEF_ELF_SYMBOL_VERSION_AUX_H_
+#ifndef LIEF_ELF_SYMBOL_VERSION_AUX_H
+#define LIEF_ELF_SYMBOL_VERSION_AUX_H
 
+#include <string_view>
+#include <ostream>
 #include <string>
-#include <iostream>
 
 #include "LIEF/Object.hpp"
+#include "LIEF/compiler_attributes.hpp"
 #include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace ELF {
+
+namespace LIEF::ELF {
 class Parser;
 
-//! @brief Class which represents an Auxiliary Symbol version
+/// Class which represents an Auxiliary Symbol version
 class LIEF_API SymbolVersionAux : public Object {
   friend class Parser;
+
   public:
-  SymbolVersionAux(std::string name);
-  SymbolVersionAux();
-  virtual ~SymbolVersionAux();
+  SymbolVersionAux(std::string name) :
+    name_(std::move(name)) {}
+  SymbolVersionAux() = default;
+  ~SymbolVersionAux() override = default;
 
-  SymbolVersionAux& operator=(const SymbolVersionAux&);
-  SymbolVersionAux(const SymbolVersionAux&);
+  SymbolVersionAux& operator=(const SymbolVersionAux&) = default;
+  SymbolVersionAux(const SymbolVersionAux&) = default;
 
-  //! Smybol's aux name (e.g. ``GLIBC_2.2.5``)
-  const std::string& name() const;
+  /// Symbol's aux name (e.g. ``GLIBC_2.2.5``)
+  std::string_view name() const LIEF_LIFETIMEBOUND {
+    return name_;
+  }
 
-  void name(const std::string& name);
+  void name(std::string name) {
+    name_ = std::move(name);
+  }
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const SymbolVersionAux& rhs) const;
-  bool operator!=(const SymbolVersionAux& rhs) const;
-
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const SymbolVersionAux& symAux);
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const SymbolVersionAux& aux) {
+    os << aux.name();
+    return os;
+  }
 
   protected:
   std::string name_;
 };
 
 }
-}
+
 #endif

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,22 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_PE_CONTENT_INFO_H_
-#define LIEF_PE_CONTENT_INFO_H_
+#ifndef LIEF_PE_CONTENT_INFO_H
+#define LIEF_PE_CONTENT_INFO_H
+
+#include <memory>
+#include <ostream>
+#include <vector>
 
 #include "LIEF/Object.hpp"
 #include "LIEF/visibility.h"
 
-#include "LIEF/PE/signature/types.hpp"
 #include "LIEF/PE/enums.hpp"
+#include "LIEF/PE/signature/types.hpp"
 
-namespace LIEF {
-namespace PE {
+
+namespace LIEF::PE {
 
 class Parser;
 class SignatureParser;
 
-/** ContentInfo as described in the RFC2315 (https://tools.ietf.org/html/rfc2315#section-7)
+/**
+ * ContentInfo as described in the RFC2315
+ * (https://tools.ietf.org/html/rfc2315#section-7)
  *
  * ```text
  * ContentInfo ::= SEQUENCE {
@@ -39,8 +45,10 @@ class SignatureParser;
  * ContentType ::= OBJECT IDENTIFIER
  * ```
  *
- * In the case of PE signature, ContentType **must** be set to SPC_INDIRECT_DATA_OBJID
- * OID: ``1.3.6.1.4.1.311.2.1.4`` and content is defined by the structure: ``SpcIndirectDataContent``
+ * In the case of PE signature, ContentType **must** be set to
+ * SPC_INDIRECT_DATA_OBJID OID: ``1.3.6.1.4.1.311.2.1.4`` and content is defined by
+ * the structure: ``SpcIndirectDataContent``
+ *
  * ```text
  * SpcIndirectDataContent ::= SEQUENCE {
  *  data          SpcAttributeTypeAndOptionalValue,
@@ -54,7 +62,8 @@ class SignatureParser;
  * ```
  *
  * For PE signature, ``SpcAttributeTypeAndOptionalValue.type``
- * is set to ``SPC_PE_IMAGE_DATAOBJ`` (OID: ``1.3.6.1.4.1.311.2.1.15``) and the value is defined by
+ * is set to ``SPC_PE_IMAGE_DATAOBJ`` (OID: ``1.3.6.1.4.1.311.2.1.15``) and the
+ * value is defined by
  * ``SpcPeImageData``
  *
  * ```text
@@ -70,55 +79,88 @@ class SignatureParser;
  * ```
  */
 class LIEF_API ContentInfo : public Object {
-
   friend class Parser;
   friend class SignatureParser;
 
   public:
+  class LIEF_API Content : public Object {
+    public:
+    Content(oid_t oid) :
+      type_(std::move(oid)) {}
+
+    const oid_t& content_type() const {
+      return type_;
+    }
+
+    virtual std::unique_ptr<Content> clone() const = 0;
+    virtual void print(std::ostream& os) const = 0;
+
+    LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                             const Content& content) {
+      content.print(os);
+      return os;
+    }
+
+    template<class T>
+    const T* cast() const {
+      static_assert(std::is_base_of_v<Content, T>,
+                    "Require ContentInfo inheritance");
+      if (T::classof(this)) {
+        return static_cast<const T*>(this);
+      }
+      return nullptr;
+    }
+
+    template<class T>
+    T* cast() {
+      return const_cast<T*>(static_cast<const Content*>(this)->cast<T>());
+    }
+
+    ~Content() override = default;
+
+    private:
+    oid_t type_;
+  };
   ContentInfo();
-  ContentInfo(const ContentInfo&);
-  ContentInfo& operator=(const ContentInfo&);
+  ContentInfo(const ContentInfo& other);
+  ContentInfo(ContentInfo&& other) noexcept = default;
+  ContentInfo& operator=(ContentInfo other);
 
-  //! Return the OID that describes the content wrapped by this object.
-  //! It should match SPC_INDIRECT_DATA_OBJID (1.3.6.1.4.1.311.2.1.4)
-  inline oid_t content_type() const {
-    return content_type_;
+  void swap(ContentInfo& other) noexcept;
+
+  /// Return the OID that describes the content wrapped by this object.
+  /// It should match SPC_INDIRECT_DATA_OBJID (1.3.6.1.4.1.311.2.1.4)
+  oid_t content_type() const {
+    return value_->content_type();
   }
 
-  //! Digest used to hash the file
-  //!
-  //! It should match LIEF::PE::SignerInfo::digest_algorithm
-  inline ALGORITHMS digest_algorithm() const {
-    return digest_algorithm_;
+  Content& value() LIEF_LIFETIMEBOUND {
+    return *value_;
   }
 
-  //! PE's authentihash
-  //!
-  //! @see LIEF::PE::Binary::authentihash
-  inline const std::vector<uint8_t>& digest() const {
-    return digest_;
+  const Content& value() const LIEF_LIFETIMEBOUND {
+    return *value_;
   }
 
-  inline const std::string& file() const {
-    return file_;
-  }
+  /// Return the digest (authentihash) if the underlying content type is
+  /// `SPC_INDIRECT_DATA_OBJID` Otherwise, return an empty vector
+  std::vector<uint8_t> digest() const;
+
+  /// Return the digest used to hash the file
+  ALGORITHMS digest_algorithm() const;
 
   void accept(Visitor& visitor) const override;
 
-  virtual ~ContentInfo();
+  ~ContentInfo() override = default;
 
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const ContentInfo& content_info);
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const ContentInfo& content_info);
 
   private:
-  oid_t content_type_;
-  std::string file_;
-  uint8_t flags_ = 0;
-  ALGORITHMS digest_algorithm_ = ALGORITHMS::UNKNOWN;
-  std::vector<uint8_t> digest_;
-
+  std::unique_ptr<Content> value_;
 };
 
 }
-}
+
 
 #endif

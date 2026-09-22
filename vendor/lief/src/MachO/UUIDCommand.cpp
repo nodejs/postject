@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,75 +13,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <numeric>
-#include <iomanip>
-
-#include "LIEF/MachO/hash.hpp"
+#include "LIEF/Visitor.hpp"
+#include "spdlog/fmt/fmt.h"
 
 #include "LIEF/MachO/UUIDCommand.hpp"
 #include "MachO/Structures.hpp"
 
-namespace LIEF {
-namespace MachO {
 
-UUIDCommand::UUIDCommand() = default;
-UUIDCommand& UUIDCommand::operator=(const UUIDCommand&) = default;
-UUIDCommand::UUIDCommand(const UUIDCommand&) = default;
-UUIDCommand::~UUIDCommand() = default;
+namespace LIEF::MachO {
+
 
 UUIDCommand::UUIDCommand(const details::uuid_command& uuid) :
-  LoadCommand::LoadCommand{static_cast<LOAD_COMMAND_TYPES>(uuid.cmd), uuid.cmdsize}
-{
+  LoadCommand::LoadCommand{LoadCommand::TYPE(uuid.cmd), uuid.cmdsize} {
   std::copy(std::begin(uuid.uuid), std::end(uuid.uuid), std::begin(uuid_));
 }
-
-UUIDCommand* UUIDCommand::clone() const {
-  return new UUIDCommand(*this);
-}
-
-uuid_t UUIDCommand::uuid() const {
-  return uuid_;
-}
-
-void UUIDCommand::uuid(const uuid_t& uuid) {
-  uuid_ = uuid;
-}
-
 
 void UUIDCommand::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-
-bool UUIDCommand::operator==(const UUIDCommand& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool UUIDCommand::operator!=(const UUIDCommand& rhs) const {
-  return !(*this == rhs);
-}
-
-bool UUIDCommand::classof(const LoadCommand* cmd) {
-  // This must be sync with BinaryParser.tcc
-  const LOAD_COMMAND_TYPES type = cmd->command();
-  return type == LOAD_COMMAND_TYPES::LC_UUID;
-}
-
-
 std::ostream& UUIDCommand::print(std::ostream& os) const {
-  LoadCommand::print(os);
+  LoadCommand::print(os) << '\n';
   for (uint32_t x : uuid()) {
-    os << std::setw(2) << std::setfill('0') << std::hex << static_cast<uint32_t>(x) << " ";
+    os << fmt::format("{:02x}", x) << ' ';
   }
-  os << std::setfill(' ');
+  os << ' ';
   return os;
 }
 
 
-}
 }

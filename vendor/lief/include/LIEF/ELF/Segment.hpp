@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_SEGMENT_H_
-#define LIEF_ELF_SEGMENT_H_
+#ifndef LIEF_ELF_SEGMENT_H
+#define LIEF_ELF_SEGMENT_H
 
+#include <memory>
+#include <ostream>
 #include <string>
 #include <vector>
-#include <iostream>
-#include <memory>
 
 #include "LIEF/Object.hpp"
-#include "LIEF/visibility.h"
+#include "LIEF/compiler_attributes.hpp"
 #include "LIEF/errors.hpp"
 #include "LIEF/iterators.hpp"
 #include "LIEF/span.hpp"
+#include "LIEF/visibility.h"
+
+#include "LIEF/ELF/Header.hpp"
 
 #include "LIEF/ELF/enums.hpp"
 
 namespace LIEF {
+class SpanStream;
+
 namespace ELF {
 namespace DataHandler {
 class Handler;
@@ -40,12 +45,7 @@ class Binary;
 class Section;
 class Builder;
 
-namespace details {
-struct Elf64_Phdr;
-struct Elf32_Phdr;
-}
-
-//! Class which represents the ELF segments
+/// Class which represents the ELF segments
 class LIEF_API Segment : public Object {
 
   friend class Parser;
@@ -54,122 +54,292 @@ class LIEF_API Segment : public Object {
   friend class Builder;
 
   public:
-  using sections_t        = std::vector<Section*>;
-  using it_sections       = ref_iterator<sections_t&>;
+  using sections_t = std::vector<Section*>;
+  using it_sections = ref_iterator<sections_t&>;
   using it_const_sections = const_ref_iterator<const sections_t&>;
 
-  static result<Segment> from_raw(const uint8_t* ptr, size_t size);
-  static result<Segment> from_raw(const std::vector<uint8_t>& raw);
+  // clang-format off
+  static constexpr uint64_t PT_BIT = 33;
+  static constexpr uint64_t PT_OS_BIT = 53;
+  static constexpr uint64_t PT_MASK = (uint64_t(1) << PT_BIT) - 1;
 
-  Segment();
-  Segment(const details::Elf64_Phdr& header);
-  Segment(const details::Elf32_Phdr& header);
-  ~Segment() override;
+  static constexpr uint64_t PT_ARM     = uint64_t(1) << PT_BIT;
+  static constexpr uint64_t PT_AARCH64 = uint64_t(2) << PT_BIT;
+  static constexpr uint64_t PT_MIPS    = uint64_t(3) << PT_BIT;
+  static constexpr uint64_t PT_RISCV   = uint64_t(4) << PT_BIT;
+  static constexpr uint64_t PT_IA_64   = uint64_t(5) << PT_BIT;
+
+  static constexpr uint64_t PT_HPUX = uint64_t(1) << PT_OS_BIT;
+
+  enum class TYPE : uint64_t {
+    UNKNOWN = uint64_t(-1),
+    PT_NULL_ = 0, /**< Unused segment. */
+    LOAD = 1,     /**< Loadable segment. */
+    DYNAMIC = 2,  /**< Dynamic linking information. */
+    INTERP = 3,   /**< Interpreter pathname. */
+    NOTE = 4,     /**< Auxiliary information. */
+    SHLIB = 5,    /**< Reserved. */
+    PHDR = 6,     /**< The program header table itself. */
+    TLS = 7,      /**< The thread-local storage template. */
+
+    GNU_EH_FRAME = 0x6474e550,
+
+    GNU_STACK    = 0x6474e551, /**< Indicates stack executability. */
+    GNU_PROPERTY = 0x6474e553, /**< GNU property */
+    GNU_RELRO    = 0x6474e552,    /**< Read-only after relocation. */
+    PAX_FLAGS    = 0x65041580,
+
+    ARM_ARCHEXT = 0x70000000 | PT_ARM, /**< Platform architecture compatibility info */
+    ARM_EXIDX   = 0x70000001 | PT_ARM,
+
+    AARCH64_MEMTAG_MTE = 0x70000002 | PT_AARCH64,
+
+    MIPS_REGINFO  = 0x70000000 | PT_MIPS, /**< Register usage information. */
+    MIPS_RTPROC   = 0x70000001 | PT_MIPS, /**< Runtime procedure table. */
+    MIPS_OPTIONS  = 0x70000002 | PT_MIPS, /**< Options segment. */
+    MIPS_ABIFLAGS = 0x70000003 | PT_MIPS, /**< Abiflags segment. */
+
+    RISCV_ATTRIBUTES = 0x70000003 | PT_RISCV,
+
+    IA_64_EXT    = (0x70000000 + 0x0) | PT_IA_64,
+    IA_64_UNWIND = (0x70000000 + 0x1) | PT_IA_64,
+
+    HP_TLS           = (0x60000000 + 0x00) | PT_HPUX,
+    HP_CORE_NONE     = (0x60000000 + 0x01) | PT_HPUX,
+    HP_CORE_VERSION  = (0x60000000 + 0x02) | PT_HPUX,
+    HP_CORE_KERNEL   = (0x60000000 + 0x03) | PT_HPUX,
+    HP_CORE_COMM     = (0x60000000 + 0x04) | PT_HPUX,
+    HP_CORE_PROC     = (0x60000000 + 0x05) | PT_HPUX,
+    HP_CORE_LOADABLE = (0x60000000 + 0x06) | PT_HPUX,
+    HP_CORE_STACK    = (0x60000000 + 0x07) | PT_HPUX,
+    HP_CORE_SHM      = (0x60000000 + 0x08) | PT_HPUX,
+    HP_CORE_MMF      = (0x60000000 + 0x09) | PT_HPUX,
+    HP_PARALLEL      = (0x60000000 + 0x10) | PT_HPUX,
+    HP_FASTBIND      = (0x60000000 + 0x11) | PT_HPUX,
+    HP_OPT_ANNOT     = (0x60000000 + 0x12) | PT_HPUX,
+    HP_HSL_ANNOT     = (0x60000000 + 0x13) | PT_HPUX,
+    HP_STACK         = (0x60000000 + 0x14) | PT_HPUX,
+    HP_CORE_UTSNAME  = (0x60000000 + 0x15) | PT_HPUX,
+  };
+  // clang-format on
+
+  enum class FLAGS {
+    NONE = 0,
+    X = 1,
+    W = 2,
+    R = 4,
+  };
+
+  static TYPE type_from(uint64_t value, ARCH arch, Header::OS_ABI os);
+  static uint64_t to_value(TYPE type) {
+    return static_cast<uint64_t>(type) & PT_MASK;
+  }
+
+  static result<Segment> from_raw(const uint8_t* ptr, size_t size);
+  static result<Segment> from_raw(const std::vector<uint8_t>& raw) {
+    return from_raw(raw.data(), raw.size());
+  }
+
+  Segment() = default;
+
+  ~Segment() override = default;
 
   Segment& operator=(Segment other);
   Segment(const Segment& other);
 
-  Segment& operator=(Segment&&);
-  Segment(Segment&&);
+  Segment& operator=(Segment&&) = default;
+  Segment(Segment&&) = default;
 
   void swap(Segment& other);
 
-  //! The segment's type (LOAD, DYNAMIC, ...)
-  SEGMENT_TYPES type() const;
+  bool is_load() const {
+    return type() == TYPE::LOAD;
+  }
 
-  //! The flag permissions associated with this segment
-  ELF_SEGMENT_FLAGS flags() const;
+  bool is_interpreter() const {
+    return type() == TYPE::INTERP;
+  }
 
-  //! The file offset of the data associated with this segment
-  uint64_t file_offset() const;
+  bool is_phdr() const {
+    return type() == TYPE::PHDR;
+  }
 
-  //! The virtual address of the segment.
-  uint64_t virtual_address() const;
+  /// The segment's type (LOAD, DYNAMIC, ...)
+  TYPE type() const {
+    return type_;
+  }
 
-  //! The physical address of the segment.
-  //! This value is not really relevant on systems like Linux or Android.
-  //! On the other hand, Qualcomm trustlets might use this value.
-  //!
-  //! Usually this value matches virtual_address
-  uint64_t physical_address() const;
+  /// The flag permissions associated with this segment
+  FLAGS flags() const {
+    return FLAGS(flags_);
+  }
 
-  //! The **file** size of the data associated with this segment
-  uint64_t physical_size() const;
+  /// The file offset of the data associated with this segment
+  uint64_t file_offset() const {
+    return file_offset_;
+  }
 
-  //! The in-memory size of this segment.
-  //! Usually, if the ``.bss`` segment is wrapped by this segment
-  //! then, virtual_size is larger than physical_size
-  uint64_t virtual_size() const;
+  /// The virtual address of the segment.
+  uint64_t virtual_address() const {
+    return virtual_address_;
+  }
 
-  //! The offset alignment of the segment
-  uint64_t alignment() const;
+  /// The physical address of the segment.
+  /// This value is not really relevant on systems like Linux or Android.
+  /// On the other hand, Qualcomm trustlets might use this value.
+  ///
+  /// Usually this value matches virtual_address
+  uint64_t physical_address() const {
+    return physical_address_;
+  }
 
-  //! The raw data associated with this segment.
-  span<const uint8_t> content() const;
+  /// The **file** size of the data associated with this segment
+  uint64_t physical_size() const {
+    return size_;
+  }
 
-  //! Check if the current segment has the given flag
-  bool has(ELF_SEGMENT_FLAGS flag) const;
+  /// The in-memory size of this segment.
+  /// Usually, if the `.bss` segment is wrapped by this segment
+  /// then, virtual_size is larger than physical_size
+  uint64_t virtual_size() const {
+    return virtual_size_;
+  }
 
-  //! Check if the current segment wraps the given ELF::Section
+  /// The offset alignment of the segment
+  uint64_t alignment() const {
+    return alignment_;
+  }
+
+  /// The raw data associated with this segment.
+  span<const uint8_t> content() const LIEF_LIFETIMEBOUND;
+
+  /// Check if the current segment has the given flag
+  bool has(FLAGS flag) const {
+    return (flags_ & static_cast<uint64_t>(flag)) != 0;
+  }
+
+  /// Check if the current segment wraps the given ELF::Section
   bool has(const Section& section) const;
 
-  //! Check if the current segment wraps the given section's name
+  /// Check if the current segment wraps the given section's name
   bool has(const std::string& section_name) const;
 
-  //! Append the given ELF_SEGMENT_FLAGS
-  void add(ELF_SEGMENT_FLAGS flag);
+  /// Append the given ELF_SEGMENT_FLAGS
+  void add(FLAGS flag);
 
-  //! Remove the given ELF_SEGMENT_FLAGS
-  void remove(ELF_SEGMENT_FLAGS flag);
+  /// Remove the given ELF_SEGMENT_FLAGS
+  void remove(FLAGS flag);
 
-  void type(SEGMENT_TYPES type);
-  void flags(ELF_SEGMENT_FLAGS flags);
-  void clear_flags();
+  void type(TYPE type) {
+    type_ = type;
+  }
+
+  void flags(FLAGS flags) {
+    flags_ = static_cast<uint32_t>(flags);
+  }
+
+  void flags(uint32_t flags) {
+    flags_ = flags;
+  }
+
+  void clear_flags() {
+    flags_ = 0;
+  }
+
   void file_offset(uint64_t file_offset);
-  void virtual_address(uint64_t virtual_address);
-  void physical_address(uint64_t physical_address);
+
+  void virtual_address(uint64_t virtual_address) {
+    virtual_address_ = virtual_address;
+  }
+
+  void physical_address(uint64_t physical_address) {
+    physical_address_ = physical_address;
+  }
+
   void physical_size(uint64_t physical_size);
-  void virtual_size(uint64_t virtual_size);
-  void alignment(uint64_t alignment);
+
+  void virtual_size(uint64_t virtual_size) {
+    virtual_size_ = virtual_size;
+  }
+
+  void alignment(uint64_t alignment) {
+    alignment_ = alignment;
+  }
+
   void content(std::vector<uint8_t> content);
 
-  template<typename T> T get_content_value(size_t offset) const;
-  template<typename T> void set_content_value(size_t offset, T value);
+  /// Fill the content of this segment with the value provided in parameter
+  void fill(char c) {
+    span<uint8_t> buffer = writable_content();
+    std::fill(buffer.begin(), buffer.end(), c);
+  }
+
+  /// Clear the content of this segment
+  void clear() {
+    fill('\0');
+  }
+
+  template<typename T>
+  T get_content_value(size_t offset) const;
+  template<typename T>
+  void set_content_value(size_t offset, T value);
   size_t get_content_size() const;
 
-  //! Iterator over the sections wrapped by this segment
-  it_sections       sections();
-  it_const_sections sections() const;
+  /// Iterator over the sections wrapped by this segment
+  it_sections sections() LIEF_LIFETIMEBOUND {
+    return sections_;
+  }
+
+  it_const_sections sections() const LIEF_LIFETIMEBOUND {
+    return sections_;
+  }
+
+  std::unique_ptr<SpanStream> stream() const;
 
   void accept(Visitor& visitor) const override;
 
-  Segment& operator+=(ELF_SEGMENT_FLAGS flag);
-  Segment& operator-=(ELF_SEGMENT_FLAGS flag);
+  Segment& operator+=(FLAGS flag) {
+    add(flag);
+    return *this;
+  }
 
-  bool operator==(const Segment& rhs) const;
-  bool operator!=(const Segment& rhs) const;
+  Segment& operator-=(FLAGS flag) {
+    remove(flag);
+    return *this;
+  }
 
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const Segment& segment);
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const Segment& segment);
 
   private:
-  uint64_t handler_size() const;
-  span<uint8_t> writable_content();
+  template<class T>
+  LIEF_LOCAL Segment(const T& header, ARCH arch = ARCH::NONE,
+                     Header::OS_ABI os = Header::OS_ABI::SYSTEMV);
 
-  SEGMENT_TYPES         type_ = SEGMENT_TYPES::PT_NULL;
-  ELF_SEGMENT_FLAGS     flags_ = ELF_SEGMENT_FLAGS::PF_NONE;
-  uint64_t              file_offset_ = 0;
-  uint64_t              virtual_address_ = 0;
-  uint64_t              physical_address_ = 0;
-  uint64_t              size_ = 0;
-  uint64_t              virtual_size_ = 0;
-  uint64_t              alignment_ = 0;
-  uint64_t              handler_size_ = 0;
-  sections_t            sections_;
+  LIEF_LOCAL uint64_t handler_size() const;
+  span<uint8_t> writable_content() LIEF_LIFETIMEBOUND;
+
+  TYPE type_ = TYPE::PT_NULL_;
+  ARCH arch_ = ARCH::NONE;
+  uint32_t flags_ = 0;
+  uint64_t file_offset_ = 0;
+  uint64_t virtual_address_ = 0;
+  uint64_t physical_address_ = 0;
+  uint64_t size_ = 0;
+  uint64_t virtual_size_ = 0;
+  uint64_t alignment_ = 0;
+  uint64_t handler_size_ = 0;
+  sections_t sections_;
   DataHandler::Handler* datahandler_ = nullptr;
-  std::vector<uint8_t>  content_c_;
+  std::vector<uint8_t> content_c_;
 };
 
+LIEF_API const char* to_string(Segment::TYPE e);
+LIEF_API const char* to_string(Segment::FLAGS e);
+}
+}
 
-}
-}
-#endif /* _ELF_SEGMENT_H_ */
+
+ENABLE_BITMASK_OPERATORS(LIEF::ELF::Segment::FLAGS);
+
+#endif

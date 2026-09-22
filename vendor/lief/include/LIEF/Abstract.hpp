@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ABSTRACT_H_
-#define LIEF_ABSTRACT_H_
+#ifndef LIEF_ABSTRACT_H
+#define LIEF_ABSTRACT_H
 
-#include <LIEF/Abstract/Binary.hpp>
-#include <LIEF/Abstract/enums.hpp>
-#include <LIEF/Abstract/EnumToString.hpp>
-#include <LIEF/Abstract/Parser.hpp>
-#include <LIEF/Abstract/Relocation.hpp>
-#include <LIEF/Abstract/Function.hpp>
-#include <LIEF/Abstract/Symbol.hpp>
-#include <LIEF/Abstract/Section.hpp>
+// IWYU pragma: begin_exports
+#include "LIEF/Abstract/Binary.hpp"
+#include "LIEF/Abstract/Function.hpp"
+#include "LIEF/Abstract/Parser.hpp"
+#include "LIEF/Abstract/Relocation.hpp"
+#include "LIEF/Abstract/Section.hpp"
+#include "LIEF/Abstract/Symbol.hpp"
+// IWYU pragma: end_exports
 
 #endif

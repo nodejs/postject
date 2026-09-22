@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ART_HEADER_H_
-#define LIEF_ART_HEADER_H_
+#ifndef LIEF_ART_HEADER_H
+#define LIEF_ART_HEADER_H
 
-#include "LIEF/ART/types.hpp"
+#include <array>
+#include <cstdint>
+#include <ostream>
+
 #include "LIEF/ART/enums.hpp"
+#include "LIEF/ART/types.hpp"
 
-#include "LIEF/visibility.h"
 #include "LIEF/Object.hpp"
+#include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace ART {
+
+namespace LIEF::ART {
 class Parser;
 
 class LIEF_API Header : public Object {
@@ -76,54 +80,52 @@ class LIEF_API Header : public Object {
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const Header& rhs) const;
-  bool operator!=(const Header& rhs) const;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Header& hdr);
 
-  virtual ~Header();
+  ~Header() override;
 
   private:
-  magic_t       magic_;
-  art_version_t version_;
+  magic_t magic_{};
+  art_version_t version_ = 0;
 
-  uint32_t image_begin_;
-  uint32_t image_size_;
+  uint32_t image_begin_ = 0;
+  uint32_t image_size_ = 0;
 
-  uint32_t oat_checksum_;
+  uint32_t oat_checksum_ = 0;
 
-  uint32_t oat_file_begin_;
-  uint32_t oat_file_end_;
+  uint32_t oat_file_begin_ = 0;
+  uint32_t oat_file_end_ = 0;
 
-  uint32_t oat_data_begin_;
-  uint32_t oat_data_end_;
+  uint32_t oat_data_begin_ = 0;
+  uint32_t oat_data_end_ = 0;
 
-  int32_t patch_delta_;
-  uint32_t image_roots_;
+  int32_t patch_delta_ = 0;
+  uint32_t image_roots_ = 0;
 
-  uint32_t pointer_size_;
+  uint32_t pointer_size_ = 0;
 
-  bool compile_pic_;
+  bool compile_pic_ = false;
 
-  uint32_t nb_sections_;
-  uint32_t nb_methods_;
+  uint32_t nb_sections_ = 0;
+  uint32_t nb_methods_ = 0;
 
-  bool is_pic_;
+  bool is_pic_ = false;
 
   // From ART 29
   // ===========
-  uint32_t boot_image_begin_;
-  uint32_t boot_image_size_;
+  uint32_t boot_image_begin_ = 0;
+  uint32_t boot_image_size_ = 0;
 
-  uint32_t boot_oat_begin_;
-  uint32_t boot_oat_size_;
+  uint32_t boot_oat_begin_ = 0;
+  uint32_t boot_oat_size_ = 0;
 
-  STORAGE_MODES storage_mode_;
+  STORAGE_MODES storage_mode_ = STORAGE_MODES::STORAGE_UNCOMPRESSED;
 
-  uint32_t data_size_;
+  uint32_t data_size_ = 0;
 };
 
 } // Namespace ART
-} // Namespace LIEF
+// Namespace LIEF
 
 #endif

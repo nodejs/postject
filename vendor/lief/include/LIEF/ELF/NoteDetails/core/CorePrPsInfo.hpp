@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,105 +13,84 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_CORE_PSINFO_H_
-#define LIEF_ELF_CORE_PSINFO_H_
+#ifndef LIEF_ELF_CORE_PRPSINFO_H
+#define LIEF_ELF_CORE_PRPSINFO_H
 
-#include <vector>
-#include <iostream>
+#include <ostream>
 
-#include "LIEF/Object.hpp"
+#include "LIEF/ELF/Note.hpp"
+#include "LIEF/ELF/enums.hpp"
+#include "LIEF/compiler_attributes.hpp"
 #include "LIEF/visibility.h"
 
-#include "LIEF/ELF/NoteDetails.hpp"
 
-namespace LIEF {
-namespace ELF {
+namespace LIEF::ELF {
 
-class Note;
-class Parser;
-class Builder;
-class Binary;
-
-//! Class representing core PrPsInfo object
-class LIEF_API CorePrPsInfo : public NoteDetails {
-
+/// Class representing the NT_PRPSINFO core note.
+/// This kind of note represents general information about the process
+class LIEF_API CorePrPsInfo : public Note {
   public:
-  using NoteDetails::NoteDetails;
+  struct info_t {
+    uint8_t state = 0;    ///< Numeric process state
+    char sname = ' ';     ///< Printable character representing state
+    bool zombie = false;  ///< Whether the process is a zombie
+    uint8_t nice = 0;     ///< Nice value
+    uint64_t flag = 0;    ///< Process flag
+    uint32_t uid = 0;     ///< Process user ID
+    uint32_t gid = 0;     ///< Process group ID
+    uint32_t pid = 0;     ///< Process ID
+    uint32_t ppid = 0;    ///< Process parent ID
+    uint32_t pgrp = 0;    ///< Process group
+    uint32_t sid = 0;     ///< Process session ID
+    std::string filename; ///< Filename of the executable
+    std::string args;     ///< Initial part of the arguments
 
-  public:
-  static CorePrPsInfo make(Note& note);
+    /// Return the filename without the ending `\x00`
+    std::string filename_stripped() const {
+      return filename.c_str();
+    }
 
-  CorePrPsInfo* clone() const override;
+    /// Return the args without the ending `\x00`
+    std::string args_stripped() const {
+      return args.c_str();
+    }
+  };
+  CorePrPsInfo(ARCH arch, Header::CLASS cls, std::string name, uint32_t type,
+               description_t description) :
+    Note(std::move(name), TYPE::CORE_PRPSINFO, type, std::move(description), ""),
+    arch_(arch),
+    class_(cls) {}
 
-  //! Process file name
-  std::string file_name() const;
+  std::unique_ptr<Note> clone() const override {
+    return std::unique_ptr<Note>(new CorePrPsInfo(*this));
+  }
 
-  //! Process flag
-  uint64_t flags() const;
-
-  //! Process user id
-  uint32_t uid() const;
-
-  //! Process group id
-  uint32_t gid() const;
-
-  //! Process ID
-  int32_t pid() const;
-
-  //! Process parent ID
-  int32_t ppid() const;
-
-  //! Process session group ID
-  int32_t pgrp() const;
-
-  //! Process session ID
-  int32_t sid() const;
-
-  void file_name(const std::string& file_name);
-  void flags(uint64_t);
-  void uid(uint32_t);
-  void gid(uint32_t);
-  void pid(int32_t);
-  void ppid(int32_t);
-  void pgrp(int32_t);
-  void sid(int32_t);
-
-  bool operator==(const CorePrPsInfo& rhs) const;
-  bool operator!=(const CorePrPsInfo& rhs) const;
+  /// Return a `elf_prpsinfo`-like structure or an error if it can't be parsed.
+  result<info_t> info() const;
+  void info(const info_t& info);
 
   void dump(std::ostream& os) const override;
 
   void accept(Visitor& visitor) const override;
 
-  virtual ~CorePrPsInfo();
+  static bool classof(const Note* note) {
+    return note->type() == Note::TYPE::CORE_PRPSINFO;
+  }
 
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const CorePrPsInfo& note);
+  ~CorePrPsInfo() override = default;
 
-  protected:
-  template <typename ELF_T>
-  LIEF_LOCAL void parse_();
-
-  template <typename ELF_T>
-  LIEF_LOCAL void build_();
-
-  void parse() override;
-  void build() override;
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const CorePrPsInfo& note) {
+    note.dump(os);
+    return os;
+  }
 
   private:
-  CorePrPsInfo(Note& note);
-
-  private:
-  std::string file_name_;
-  uint64_t flags_;
-  uint32_t uid_;
-  uint32_t gid_;
-  int32_t pid_;
-  int32_t ppid_;
-  int32_t pgrp_;
-  int32_t sid_;
+  LIEF_MAYBE_UNUSED ARCH arch_ = ARCH::NONE;
+  Header::CLASS class_ = Header::CLASS::NONE;
 };
 
-} // namepsace ELF
-} // namespace LIEF
+}
+
 
 #endif

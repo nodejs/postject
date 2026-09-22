@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,12 @@
  */
 #include <iostream>
 #include <memory>
-#include <iostream>
-#include <fstream>
-#include <algorithm>
-#include <iterator>
-
-#include <tuple>
 
 #include <LIEF/ELF.hpp>
 
 using namespace LIEF::ELF;
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   std::cout << "ELF Section rename" << '\n';
   if (argc != 3) {
     std::cerr << "Usage: " << argv[0] << "<binary> <binary output name>" << '\n';

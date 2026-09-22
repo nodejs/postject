@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,50 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "LIEF/Visitor.hpp"
+#include <spdlog/fmt/fmt.h>
 #include <algorithm>
-#include <iostream>
+#include <ostream>
 
 #include "LIEF/Abstract/Function.hpp"
 
+#include "frozen.hpp"
+#include "internal_utils.hpp"
+
 namespace LIEF {
-Function::Function() = default;
-Function::Function(const Function&) = default;
-Function& Function::operator=(const Function&) = default;
-Function::~Function() = default;
 
-Function::Function(uint64_t address) :
-  Symbol{"", address}
-{}
+static constexpr auto ARRAY_FLAGS = {
+    Function::FLAGS::NONE,       Function::FLAGS::CONSTRUCTOR,
+    Function::FLAGS::DESTRUCTOR, Function::FLAGS::DEBUG_INFO,
+    Function::FLAGS::EXPORTED,   Function::FLAGS::IMPORTED,
+};
 
-Function::Function(const std::string& name) :
-  Symbol{name}
-{}
-
-Function::Function(const std::string& name, uint64_t address) :
-  Symbol{name, address}
-{}
-
-Function::Function(const std::string& name, uint64_t address, const Function::flags_list_t& flags) :
-  Symbol{name, address},
-  flags_{std::begin(flags), std::end(flags)}
-{}
-
-
-uint64_t Function::address() const {
-  return value_;
-}
-
-void Function::address(uint64_t address) {
-  value_ = address;
-}
-
-Function::flags_list_t Function::flags() const {
-  return {std::begin(flags_), std::end(flags_)};
-}
-
-Function& Function::add(Function::FLAGS f) {
-  flags_.insert(f);
-  return *this;
+std::vector<Function::FLAGS> Function::flags_list() const {
+  std::vector<FLAGS> flags;
+  std::copy_if(ARRAY_FLAGS.begin(), ARRAY_FLAGS.end(), std::back_inserter(flags),
+               [this](FLAGS f) { return has(f); });
+  return flags;
 }
 
 void Function::accept(Visitor& visitor) const {
@@ -64,30 +43,23 @@ void Function::accept(Visitor& visitor) const {
 }
 
 std::ostream& operator<<(std::ostream& os, const Function& entry) {
-  std::string name = entry.name();
-  // UTF8 -> ASCII
-  std::transform(
-      std::begin(name),
-      std::end(name),
-      std::begin(name), []
-      (unsigned char c) { return (c < 127 && c > 32) ? c : ' ';});
-  if (name.size() > 20) {
-    name = name.substr(0, 17) + "...";
-  }
-  if (!name.empty()) {
-    os << name;
-  }
-
-  if (entry.address() > 0) {
-    os << std::hex << std::left << std::showbase << " - " << entry.address();
-  }
-
-  if (entry.size() > 0) {
-    os << " (" << std::dec << entry.size() << " bytes)";
-  }
-
-
+  os << fmt::format("{:#012x}: {} ({:#06x} bytes)", entry.address(),
+                    printable_string(entry.name()), entry.size());
   return os;
 }
+
+const char* to_string(Function::FLAGS e) {
+#define ENTRY(X) std::pair(Function::FLAGS::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(NONE),       ENTRY(CONSTRUCTOR), ENTRY(DESTRUCTOR),
+      ENTRY(DEBUG_INFO), ENTRY(EXPORTED),    ENTRY(IMPORTED),
+  };
+#undef ENTRY
+
+  if (auto it = enums2str.find(e); it != enums2str.end()) {
+    return it->second;
+  }
+  return "UNKNOWN";
 }
 
+}

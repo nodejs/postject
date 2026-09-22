@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,17 +15,16 @@
  */
 #include "LIEF/config.h"
 
-#include "logging.hpp"
 #include "LIEF/OAT/json.hpp"
 
 #ifdef LIEF_JSON_SUPPORT
-#include "OAT/json_internal.hpp"
+  #include "OAT/json_internal.hpp"
 #endif
 
 #include "LIEF/OAT.hpp"
 
-namespace LIEF {
-namespace OAT {
+
+namespace LIEF::OAT {
 
 std::string to_json(const Object& v) {
 #ifdef LIEF_JSON_SUPPORT
@@ -38,5 +37,4 @@ std::string to_json(const Object& v) {
 #endif
 }
 
-} // namespace OAT
-} // namespace LIEF
+}

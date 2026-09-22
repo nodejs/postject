@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.21)
 
 project(CMakeLIEF LANGUAGES NONE)
 
@@ -12,8 +12,8 @@ set(LIEF_INSTALL_DIR  "${LIEF_PREFIX}/install")
 # URL of the LIEF repo (Can be your fork)
 set(LIEF_GIT_URL "https://github.com/lief-project/LIEF.git")
 
-# LIEF's version to be used (can be 'master')
-set(LIEF_VERSION 0.12.0)
+# LIEF's version to be used (can be 'main')
+set(LIEF_VERSION 0.13.0)
 
 # LIEF compilation config
 set(LIEF_CMAKE_ARGS
@@ -26,7 +26,7 @@ set(LIEF_CMAKE_ARGS
 )
 
 if(MSVC)
-  list(APPEND ${LIEF_CMAKE_ARGS} -DLIEF_USE_CRT_RELEASE=MT)
+  list(APPEND ${LIEF_CMAKE_ARGS} -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded)
 endif()
 
 ExternalProject_Add(LIEF
@@ -49,6 +49,6 @@ ExternalProject_Add(HelloLIEF
   BINARY_DIR      "${CMAKE_CURRENT_BUILD_DIR}"
   INSTALL_COMMAND ""
   CMAKE_ARGS
-    "-DLIEF_DIR=${LIEF_INSTALL_DIR}/share/LIEF/cmake"
+    "-DLIEF_DIR=${LIEF_INSTALL_DIR}/lib/cmake/LIEF"
     -DCMAKE_BUILD_TYPE=RelWithDebInfo
 )

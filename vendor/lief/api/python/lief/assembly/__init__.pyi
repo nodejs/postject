@@ -1,0 +1,123 @@
+import enum
+from typing import Union
+
+import lief
+from lief.assembly import (
+    aarch64 as aarch64,
+    arm as arm,
+    ebpf as ebpf,
+    mips as mips,
+    powerpc as powerpc,
+    riscv as riscv,
+    x86 as x86
+)
+
+
+class Engine:
+    pass
+
+class Instruction:
+    __match_args__: tuple = ...
+
+    class MemoryAccess(enum.Flag):
+        @staticmethod
+        def from_value(arg: int, /) -> Instruction.MemoryAccess: ...
+
+        def __eq__(self, arg, /) -> bool: ...
+
+        def __ne__(self, arg, /) -> bool: ...
+
+        def __int__(self) -> int: ...
+
+        NONE = 0
+
+        READ = 1
+
+        WRITE = 2
+
+    @property
+    def address(self) -> int: ...
+
+    @property
+    def size(self) -> int: ...
+
+    @property
+    def mnemonic(self) -> str: ...
+
+    def to_string(self, with_address: bool = True) -> str: ...
+
+    @property
+    def raw(self) -> bytes: ...
+
+    @property
+    def is_call(self) -> bool: ...
+
+    @property
+    def is_terminator(self) -> bool: ...
+
+    @property
+    def is_branch(self) -> bool: ...
+
+    @property
+    def is_syscall(self) -> bool: ...
+
+    @property
+    def is_memory_access(self) -> bool: ...
+
+    @property
+    def is_move_reg(self) -> bool: ...
+
+    @property
+    def is_add(self) -> bool: ...
+
+    @property
+    def is_trap(self) -> bool: ...
+
+    @property
+    def is_barrier(self) -> bool: ...
+
+    @property
+    def is_return(self) -> bool: ...
+
+    @property
+    def is_indirect_branch(self) -> bool: ...
+
+    @property
+    def is_conditional_branch(self) -> bool: ...
+
+    @property
+    def is_unconditional_branch(self) -> bool: ...
+
+    @property
+    def is_compare(self) -> bool: ...
+
+    @property
+    def is_move_immediate(self) -> bool: ...
+
+    @property
+    def is_bitcast(self) -> bool: ...
+
+    @property
+    def memory_access(self) -> Instruction.MemoryAccess: ...
+
+    @property
+    def branch_target(self) -> Union[int, lief.lief_errors]: ...
+
+    def __str__(self) -> str: ...
+
+class AssemblerConfig:
+    def __init__(self) -> None: ...
+
+    class DIALECT(enum.Enum):
+        DEFAULT_DIALECT = 0
+
+        X86_INTEL = 1
+
+        X86_ATT = 2
+
+    @staticmethod
+    def default_config() -> AssemblerConfig: ...
+
+    dialect: AssemblerConfig.DIALECT
+
+    def resolve_symbol(self, name: str) -> int | None: ...

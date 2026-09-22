@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ART_STRUCTURES_H_
-#define LIEF_ART_STRUCTURES_H_
+#ifndef LIEF_ART_STRUCTURES_H
+#define LIEF_ART_STRUCTURES_H
 
-#include <cstring>
-#include <tuple>
-
-#include "LIEF/types.hpp"
 #include "LIEF/ART/enums.hpp"
-#include "LIEF/ART/types.hpp"
 #include "LIEF/ART/java_structures.hpp"
+#include "LIEF/ART/types.hpp"
+#include "LIEF/types.hpp"
 
 
 // ======================
@@ -41,13 +38,13 @@
 // Android 9.0.0 ART 56
 // ======================
 
-namespace LIEF {
-//! @brief Namespace related to the LIEF's ART module
-namespace ART {
 
-namespace details {
+/// Namespace related to the LIEF's ART module
 
-static constexpr uint8_t art_magic[]       = { 'a', 'r', 't', '\n' };
+
+namespace LIEF::ART::details {
+
+static constexpr uint8_t art_magic[] = {'a', 'r', 't', '\n'};
 static constexpr art_version_t art_version = 0;
 
 struct ALIGNED_(4) image_section_t {
@@ -64,9 +61,9 @@ struct ALIGNED_(4) image_section_t {
 namespace ART_17 {
 static constexpr art_version_t art_version = 17;
 
-static constexpr uint32_t nb_sections      = 5;
+static constexpr uint32_t nb_sections = 5;
 static constexpr uint32_t nb_image_methods = 6;
-static constexpr uint32_t nb_image_roots   = 2;
+static constexpr uint32_t nb_image_roots = 2;
 
 struct ALIGNED_(4) header {
   uint8_t magic[4];
@@ -97,7 +94,8 @@ struct ALIGNED_(4) header {
   // The total delta that this image has been patched.
   int32_t patch_delta;
 
-  // Absolute address of an Object[] of objects needed to reinitialize from an image.
+  // Absolute address of an Object[] of objects needed to reinitialize from an
+  // image.
   uint32_t image_roots;
 
   // Pointer size, this affects the size of the ArtMethods.
@@ -111,7 +109,6 @@ struct ALIGNED_(4) header {
 
   // Image methods.
   uint64_t image_methods[nb_image_methods];
-
 };
 
 
@@ -125,9 +122,9 @@ namespace ART_29 {
 
 static constexpr art_version_t art_version = 29;
 
-static constexpr uint32_t nb_sections      = 9;
+static constexpr uint32_t nb_sections = 9;
 static constexpr uint32_t nb_image_methods = 6;
-static constexpr uint32_t nb_image_roots   = 2;
+static constexpr uint32_t nb_image_roots = 2;
 
 struct ALIGNED_(4) header {
 
@@ -167,7 +164,8 @@ struct ALIGNED_(4) header {
   // The total delta that this image has been patched.
   int32_t patch_delta;
 
-  // Absolute address of an Object[] of objects needed to reinitialize from an image.
+  // Absolute address of an Object[] of objects needed to reinitialize from an
+  // image.
   uint32_t image_roots;
 
   // Pointer size, this affects the size of the ArtMethods.
@@ -176,9 +174,9 @@ struct ALIGNED_(4) header {
   // Boolean (0 or 1) to denote if the image was compiled with --compile-pic option
   uint32_t compile_pic;
 
-  // Boolean (0 or 1) to denote if the image can be mapped at a random address, this only refers to
-  // the .art file. Currently, app oat files do not depend on their app image. There are no pointers
-  // from the app oat code to the app image.
+  // Boolean (0 or 1) to denote if the image can be mapped at a random address,
+  // this only refers to the .art file. Currently, app oat files do not depend on
+  // their app image. There are no pointers from the app oat code to the app image.
   uint32_t is_pic;
 
   // Image sections
@@ -190,8 +188,8 @@ struct ALIGNED_(4) header {
   // Storage method for the image, the image may be compressed.
   uint32_t storage_mode;
 
-  // Data size for the image data excluding the bitmap and the header. For compressed images, this
-  // is the compressed size in the file.
+  // Data size for the image data excluding the bitmap and the header. For
+  // compressed images, this is the compressed size in the file.
   uint32_t data_size;
 };
 
@@ -208,9 +206,9 @@ namespace ART_30 {
 
 static constexpr art_version_t art_version = 30;
 
-static constexpr uint32_t nb_sections      = 10;
+static constexpr uint32_t nb_sections = 10;
 static constexpr uint32_t nb_image_methods = 6;
-static constexpr uint32_t nb_image_roots   = 2;
+static constexpr uint32_t nb_image_roots = 2;
 
 
 struct ALIGNED_(4) header {
@@ -251,7 +249,8 @@ struct ALIGNED_(4) header {
   // The total delta that this image has been patched.
   int32_t patch_delta;
 
-  // Absolute address of an Object[] of objects needed to reinitialize from an image.
+  // Absolute address of an Object[] of objects needed to reinitialize from an
+  // image.
   uint32_t image_roots;
 
   // Pointer size, this affects the size of the ArtMethods.
@@ -260,9 +259,9 @@ struct ALIGNED_(4) header {
   // Boolean (0 or 1) to denote if the image was compiled with --compile-pic option
   uint32_t compile_pic;
 
-  // Boolean (0 or 1) to denote if the image can be mapped at a random address, this only refers to
-  // the .art file. Currently, app oat files do not depend on their app image. There are no pointers
-  // from the app oat code to the app image.
+  // Boolean (0 or 1) to denote if the image can be mapped at a random address,
+  // this only refers to the .art file. Currently, app oat files do not depend on
+  // their app image. There are no pointers from the app oat code to the app image.
   uint32_t is_pic;
 
   // Image sections
@@ -274,8 +273,8 @@ struct ALIGNED_(4) header {
   // Storage method for the image, the image may be compressed.
   uint32_t storage_mode;
 
-  // Data size for the image data excluding the bitmap and the header. For compressed images, this
-  // is the compressed size in the file.
+  // Data size for the image data excluding the bitmap and the header. For
+  // compressed images, this is the compressed size in the file.
   uint32_t data_size;
 };
 
@@ -290,9 +289,9 @@ namespace ART_44 {
 
 static constexpr art_version_t art_version = 44;
 
-static constexpr uint32_t nb_sections      = 10;
+static constexpr uint32_t nb_sections = 10;
 static constexpr uint32_t nb_image_methods = 7;
-static constexpr uint32_t nb_image_roots   = 3;
+static constexpr uint32_t nb_image_roots = 3;
 
 
 struct ALIGNED_(4) header {
@@ -333,7 +332,8 @@ struct ALIGNED_(4) header {
   // The total delta that this image has been patched.
   int32_t patch_delta;
 
-  // Absolute address of an Object[] of objects needed to reinitialize from an image.
+  // Absolute address of an Object[] of objects needed to reinitialize from an
+  // image.
   uint32_t image_roots;
 
   // Pointer size, this affects the size of the ArtMethods.
@@ -342,9 +342,9 @@ struct ALIGNED_(4) header {
   // Boolean (0 or 1) to denote if the image was compiled with --compile-pic option
   uint32_t compile_pic;
 
-  // Boolean (0 or 1) to denote if the image can be mapped at a random address, this only refers to
-  // the .art file. Currently, app oat files do not depend on their app image. There are no pointers
-  // from the app oat code to the app image.
+  // Boolean (0 or 1) to denote if the image can be mapped at a random address,
+  // this only refers to the .art file. Currently, app oat files do not depend on
+  // their app image. There are no pointers from the app oat code to the app image.
   uint32_t is_pic;
 
   // Image sections
@@ -356,8 +356,8 @@ struct ALIGNED_(4) header {
   // Storage method for the image, the image may be compressed.
   uint32_t storage_mode;
 
-  // Data size for the image data excluding the bitmap and the header. For compressed images, this
-  // is the compressed size in the file.
+  // Data size for the image data excluding the bitmap and the header. For
+  // compressed images, this is the compressed size in the file.
   uint32_t data_size;
 };
 
@@ -372,7 +372,7 @@ struct ALIGNED_(4) header {
 namespace ART_46 {
 
 static constexpr art_version_t art_version = 46;
-static constexpr uint32_t nb_image_roots   = 3;
+static constexpr uint32_t nb_image_roots = 3;
 
 // No changes in the structure
 using header = ART_44::header;
@@ -386,8 +386,8 @@ using header = ART_44::header;
 namespace ART_56 {
 
 static constexpr art_version_t art_version = 56;
-static constexpr uint32_t nb_sections      = 10;
-static constexpr uint32_t nb_image_roots   = 3;
+static constexpr uint32_t nb_sections = 10;
+static constexpr uint32_t nb_image_roots = 3;
 static constexpr uint32_t nb_image_methods = 9; // Android 9.0.0 - +=2
 struct ALIGNED_(4) header {
 
@@ -427,7 +427,8 @@ struct ALIGNED_(4) header {
   // The total delta that this image has been patched.
   int32_t patch_delta;
 
-  // Absolute address of an Object[] of objects needed to reinitialize from an image.
+  // Absolute address of an Object[] of objects needed to reinitialize from an
+  // image.
   uint32_t image_roots;
 
   // Pointer size, this affects the size of the ArtMethods.
@@ -436,9 +437,9 @@ struct ALIGNED_(4) header {
   // Boolean (0 or 1) to denote if the image was compiled with --compile-pic option
   uint32_t compile_pic;
 
-  // Boolean (0 or 1) to denote if the image can be mapped at a random address, this only refers to
-  // the .art file. Currently, app oat files do not depend on their app image. There are no pointers
-  // from the app oat code to the app image.
+  // Boolean (0 or 1) to denote if the image can be mapped at a random address,
+  // this only refers to the .art file. Currently, app oat files do not depend on
+  // their app image. There are no pointers from the app oat code to the app image.
   uint32_t is_pic;
 
   // Image sections
@@ -450,8 +451,8 @@ struct ALIGNED_(4) header {
   // Storage method for the image, the image may be compressed.
   uint32_t storage_mode;
 
-  // Data size for the image data excluding the bitmap and the header. For compressed images, this
-  // is the compressed size in the file.
+  // Data size for the image data excluding the bitmap and the header. For
+  // compressed images, this is the compressed size in the file.
   uint32_t data_size;
 };
 
@@ -461,13 +462,13 @@ struct ALIGNED_(4) header {
 
 class ART17 {
   public:
-  using art_header_t                         = ART_17::header;
+  using art_header_t = ART_17::header;
   static constexpr art_version_t art_version = ART_17::art_version;
-  static constexpr uint32_t nb_image_roots   = ART_17::nb_image_roots;
+  static constexpr uint32_t nb_image_roots = ART_17::nb_image_roots;
 
-  using IMAGE_SECTIONS                       = ART::ART_17::IMAGE_SECTIONS;
-  using IMAGE_METHODS                        = ART::ART_17::IMAGE_METHODS;
-  using IMAGE_ROOTS                          = ART::ART_17::IMAGE_ROOTS;
+  using IMAGE_SECTIONS = ART::ART_17::IMAGE_SECTIONS;
+  using IMAGE_METHODS = ART::ART_17::IMAGE_METHODS;
+  using IMAGE_ROOTS = ART::ART_17::IMAGE_ROOTS;
 
   // =====================
   // Java
@@ -490,13 +491,13 @@ class ART17 {
 
 class ART29 {
   public:
-  using art_header_t                         = ART_29::header;
+  using art_header_t = ART_29::header;
   static constexpr art_version_t art_version = ART_29::art_version;
-  static constexpr uint32_t nb_image_roots   = ART_29::nb_image_roots;
+  static constexpr uint32_t nb_image_roots = ART_29::nb_image_roots;
 
-  using IMAGE_SECTIONS                       = ART::ART_29::IMAGE_SECTIONS;
-  using IMAGE_METHODS                        = ART::ART_29::IMAGE_METHODS;
-  using IMAGE_ROOTS                          = ART::ART_29::IMAGE_ROOTS;
+  using IMAGE_SECTIONS = ART::ART_29::IMAGE_SECTIONS;
+  using IMAGE_METHODS = ART::ART_29::IMAGE_METHODS;
+  using IMAGE_ROOTS = ART::ART_29::IMAGE_ROOTS;
 
   // =====================
   // Java
@@ -519,13 +520,13 @@ class ART29 {
 
 class ART30 {
   public:
-  using art_header_t                         = ART_30::header;
+  using art_header_t = ART_30::header;
   static constexpr art_version_t art_version = ART_30::art_version;
-  static constexpr uint32_t nb_image_roots   = ART_30::nb_image_roots;
+  static constexpr uint32_t nb_image_roots = ART_30::nb_image_roots;
 
-  using IMAGE_SECTIONS                       = ART::ART_30::IMAGE_SECTIONS;
-  using IMAGE_METHODS                        = ART::ART_30::IMAGE_METHODS;
-  using IMAGE_ROOTS                          = ART::ART_30::IMAGE_ROOTS;
+  using IMAGE_SECTIONS = ART::ART_30::IMAGE_SECTIONS;
+  using IMAGE_METHODS = ART::ART_30::IMAGE_METHODS;
+  using IMAGE_ROOTS = ART::ART_30::IMAGE_ROOTS;
 
   // =====================
   // Java
@@ -548,13 +549,13 @@ class ART30 {
 
 class ART44 {
   public:
-  using art_header_t                         = ART_44::header;
+  using art_header_t = ART_44::header;
   static constexpr art_version_t art_version = ART_44::art_version;
-  static constexpr uint32_t nb_image_roots   = ART_44::nb_image_roots;
+  static constexpr uint32_t nb_image_roots = ART_44::nb_image_roots;
 
-  using IMAGE_SECTIONS                       = ART::ART_44::IMAGE_SECTIONS;
-  using IMAGE_METHODS                        = ART::ART_44::IMAGE_METHODS;
-  using IMAGE_ROOTS                          = ART::ART_44::IMAGE_ROOTS;
+  using IMAGE_SECTIONS = ART::ART_44::IMAGE_SECTIONS;
+  using IMAGE_METHODS = ART::ART_44::IMAGE_METHODS;
+  using IMAGE_ROOTS = ART::ART_44::IMAGE_ROOTS;
 
   // =====================
   // Java
@@ -577,13 +578,13 @@ class ART44 {
 
 class ART46 {
   public:
-  using art_header_t                         = ART_46::header;
+  using art_header_t = ART_46::header;
   static constexpr art_version_t art_version = ART_46::art_version;
-  static constexpr uint32_t nb_image_roots   = ART_46::nb_image_roots;
+  static constexpr uint32_t nb_image_roots = ART_46::nb_image_roots;
 
-  using IMAGE_SECTIONS                       = ART::ART_46::IMAGE_SECTIONS;
-  using IMAGE_METHODS                        = ART::ART_46::IMAGE_METHODS;
-  using IMAGE_ROOTS                          = ART::ART_46::IMAGE_ROOTS;
+  using IMAGE_SECTIONS = ART::ART_46::IMAGE_SECTIONS;
+  using IMAGE_METHODS = ART::ART_46::IMAGE_METHODS;
+  using IMAGE_ROOTS = ART::ART_46::IMAGE_ROOTS;
 
   // =====================
   // Java
@@ -606,13 +607,13 @@ class ART46 {
 
 class ART56 {
   public:
-  using art_header_t                         = ART_56::header;
+  using art_header_t = ART_56::header;
   static constexpr art_version_t art_version = ART_56::art_version;
-  static constexpr uint32_t nb_image_roots   = ART_56::nb_image_roots;
+  static constexpr uint32_t nb_image_roots = ART_56::nb_image_roots;
 
-  using IMAGE_SECTIONS                       = ART::ART_46::IMAGE_SECTIONS;
-  using IMAGE_METHODS                        = ART::ART_46::IMAGE_METHODS;
-  using IMAGE_ROOTS                          = ART::ART_46::IMAGE_ROOTS;
+  using IMAGE_SECTIONS = ART::ART_46::IMAGE_SECTIONS;
+  using IMAGE_METHODS = ART::ART_46::IMAGE_METHODS;
+  using IMAGE_ROOTS = ART::ART_46::IMAGE_ROOTS;
 
   // =====================
   // Java
@@ -634,7 +635,6 @@ class ART56 {
 };
 
 }
-} /* end namespace ART */
-} /* end namespace LIEF */
-#endif
 
+
+#endif

@@ -1,5 +1,5 @@
-/* Copyright 2021 - 2022 R. Thomas
- * Copyright 2021 - 2022 Quarkslab
+/* Copyright 2021 - 2026 R. Thomas
+ * Copyright 2021 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +14,11 @@
  * limitations under the License.
  */
 #include "LIEF/PE/signature/attributes/PKCS9MessageDigest.hpp"
-#include "LIEF/utils.hpp"
+#include "LIEF/Visitor.hpp"
+#include "internal_utils.hpp"
 
-namespace LIEF {
-namespace PE {
 
-PKCS9MessageDigest::PKCS9MessageDigest() :
-  Attribute(SIG_ATTRIBUTE_TYPES::PKCS9_MESSAGE_DIGEST)
-{}
-
-PKCS9MessageDigest::PKCS9MessageDigest(const PKCS9MessageDigest&) = default;
-PKCS9MessageDigest& PKCS9MessageDigest::operator=(const PKCS9MessageDigest&) = default;
-
-PKCS9MessageDigest::PKCS9MessageDigest(std::vector<uint8_t> digest) :
-  Attribute(SIG_ATTRIBUTE_TYPES::PKCS9_MESSAGE_DIGEST),
-  digest_{std::move(digest)}
-{}
-
-std::unique_ptr<Attribute> PKCS9MessageDigest::clone() const {
-  return std::unique_ptr<Attribute>(new PKCS9MessageDigest{*this});
-}
-
+namespace LIEF::PE {
 
 void PKCS9MessageDigest::accept(Visitor& visitor) const {
   visitor.visit(*this);
@@ -42,10 +26,5 @@ void PKCS9MessageDigest::accept(Visitor& visitor) const {
 
 std::string PKCS9MessageDigest::print() const {
   return hex_dump(digest());
-}
-
-
-PKCS9MessageDigest::~PKCS9MessageDigest() = default;
-
 }
 }

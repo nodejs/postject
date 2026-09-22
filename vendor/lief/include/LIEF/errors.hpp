@@ -1,5 +1,5 @@
-/* Copyright 2021 - 2022 R. Thomas
- * Copyright 2021 - 2022 Quarkslab
+/* Copyright 2021 - 2026 R. Thomas
+ * Copyright 2021 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,13 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ERROR_H_
-#define LIEF_ERROR_H_
-#include <system_error>
-#include <LIEF/third-party/leaf.hpp>
+#ifndef LIEF_ERROR_H
+#define LIEF_ERROR_H
+#include "LIEF/compiler_attributes.hpp"
+#include "LIEF/third-party/expected.hpp"
+#include <cstdint>
+#include <string> // IWYU pragma: keep
 
-//! LIEF error codes definition
-enum class lief_errors {
+/// LIEF error codes definition
+enum class lief_errors : uint32_t {
   read_error = 1,
   not_found,
   not_implemented,
@@ -37,98 +39,107 @@ enum class lief_errors {
   build_error,
 
   data_too_large,
+  require_extended_version,
+  inconsistent,
+  runtime_error,
   /*
    * When adding a new error, do not forget
-   * to update the Python bindings as well (pyErr.cpp)
-   *
+   * to update the Python bindings as well (pyErr.cpp) and Rust bindings:
+   * lief/src/error.rs
    */
 };
 
-const std::error_category& error_category();
-std::error_code make_error_code(lief_errors e);
+const char* to_string(lief_errors err);
 
-namespace std {
-  template<>
-  struct is_error_code_enum<lief_errors>: std::true_type
-  {};
-}
-
-const std::error_category& lief_error_category();
-
-//! Create an standard error code from lief_errors
-inline std::error_code make_error_code(lief_errors e) {
-  return std::error_code(int(e), lief_error_category());
+/// Create a standard error code from lief_errors
+inline tl::unexpected<lief_errors> make_error_code(lief_errors e) {
+  return tl::make_unexpected(e);
 }
 
 
 namespace LIEF {
-//! Wrapper that contains an Object (``T``) or an error
-//!
-//! The LEAF implementation exposes the method ``value()`` to access the underlying object (if no error)
-//!
-//! Typical usage is:
-//!
-//! \code{.cpp}
-//! result<int> intval = my_function();
-//! if (intval) {
-//!  int val = intval.value();
-//! } else { // There is an error
-//!  std::cout << get_error(intval).message() << "\n";
-//! }
-//! \endcode
-//!
-//! See https://boostorg.github.io/leaf/ for more details
+/// Wrapper that contains an Object (``T``) or an error
+///
+/// The tl/expected implementation exposes the method ``value()`` to access the
+/// underlying object (if no error)
+///
+/// Typical usage is:
+///
+/// @code{.cpp}
+/// result<int> intval = my_function();
+/// if (intval) {
+///  int val = intval.value();
+/// } else { // There is an error
+///  std::cout << get_error(intval).message() << "\n";
+/// }
+/// @endcode
+///
+/// See https://tl.tartanllama.xyz/en/latest/api/expected.html for more details
 template<typename T>
-using result = boost::leaf::result<T>;
+class LIEF_MAYBE_UNUSED result : public tl::expected<T, lief_errors> {
+  public:
+  using ExpectedType = T;
+  using tl::expected<T, lief_errors>::expected;
+  result(tl::expected<T, lief_errors> e) :
+    tl::expected<T, lief_errors>::expected(std::move(e)) {}
+};
 
-//! Abstraction over the implementation
-template<typename T>
-using error_result_t = typename result<T>::error_resul;
-
-//! Abstraction over the implementation
-using error_t = boost::leaf::error_id;
-
-//! Create an error_t from a lief_errors
-error_t return_error(lief_errors);
-
-//! Get the error code associated with the result
+/// Get the error code associated with the result
 template<class T>
-std::error_code get_error(result<T>& err) {
-  return make_error_code(lief_errors(boost::leaf::error_id(err.error()).value()));
+lief_errors get_error(result<T>& err) {
+  return err.error();
 }
 
-//! Return the lief_errors when the provided ``result<T>`` is an error
+/// Return the lief_errors when the provided ``result<T>`` is an error
 template<class T>
 lief_errors as_lief_err(result<T>& err) {
-  return lief_errors(boost::leaf::error_id(err.error()).value());
+  return err.error();
 }
 
-//! Opaque structure used by ok_error_t
+/// Opaque structure used by ok_error_t
 struct ok_t {};
 
-//! Return success for function with return type ok_error_t.
+/// Return success for function with return type ok_error_t.
 inline ok_t ok() {
   return ok_t{};
 }
 
-//! Opaque structure that is used by LIEF to avoid
-//! writing ``result<void> f(...)``. Instead, it makes the output
-//! explicit such as:
-//!
-//! \code{.cpp}
-//! ok_error_t process() {
-//!   if (fail) {
-//!     return make_error_code(...);
-//!   }
-//!   return ok();
-//! }
-//! \endcode
-using ok_error_t = result<ok_t>;
+/// Opaque structure that is used by LIEF to avoid
+/// writing ``result<void> f(...)``. Instead, it makes the output
+/// explicit such as:
+///
+/// @code{.cpp}
+/// ok_error_t process() {
+///   if (fail) {
+///     return make_error_code(...);
+///   }
+///   return ok();
+/// }
+/// @endcode
+class LIEF_MAYBE_UNUSED ok_error_t : public result<ok_t> {
+  public:
+  using result<ok_t>::result;
+};
+
+inline bool is_ok(const ok_error_t& val) {
+  return val.has_value();
+}
+
+inline bool is_err(const ok_error_t& val) {
+  return !is_ok(val);
+}
 
 }
 
-
-
-
+// NOLINTBEGIN(misc-multiple-inheritance)
+extern template class tl::expected<LIEF::ok_t, lief_errors>;
+extern template class LIEF::result<LIEF::ok_t>;
+extern template class tl::expected<uint64_t, lief_errors>;
+extern template class LIEF::result<uint64_t>;
+extern template class tl::expected<uint32_t, lief_errors>;
+extern template class LIEF::result<uint32_t>;
+extern template class tl::expected<std::string, lief_errors>;
+extern template class LIEF::result<std::string>;
+// NOLINTEND(misc-multiple-inheritance)
 
 #endif

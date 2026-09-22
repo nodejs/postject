@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,98 +13,44 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <numeric>
-#include <iomanip>
+#include "LIEF/Visitor.hpp"
+#include <spdlog/fmt/fmt.h>
 
-#include "LIEF/MachO/hash.hpp"
-
-#include "LIEF/MachO/EnumToString.hpp"
 #include "LIEF/MachO/DataCodeEntry.hpp"
 #include "MachO/Structures.hpp"
 
-namespace LIEF {
-namespace MachO {
+#include "frozen.hpp"
 
-DataCodeEntry& DataCodeEntry::operator=(const DataCodeEntry&) = default;
-DataCodeEntry::DataCodeEntry(const DataCodeEntry&) = default;
-DataCodeEntry::~DataCodeEntry() = default;
 
-DataCodeEntry::DataCodeEntry() :
-  offset_{0},
-  length_{0},
-  type_{TYPES::UNKNOWN}
-{}
-
-DataCodeEntry::DataCodeEntry(uint32_t off, uint16_t length, TYPES type) :
-  offset_{off},
-  length_{length},
-  type_{type}
-{}
+namespace LIEF::MachO {
 
 DataCodeEntry::DataCodeEntry(const details::data_in_code_entry& entry) :
   offset_{entry.offset},
   length_{entry.length},
-  type_{static_cast<TYPES>(entry.kind)}
-{}
-
-
-uint32_t DataCodeEntry::offset() const {
-  return offset_;
-}
-
-uint16_t DataCodeEntry::length() const {
-  return length_;
-}
-
-DataCodeEntry::TYPES DataCodeEntry::type() const {
-  return type_;
-}
-
-void DataCodeEntry::offset(uint32_t off) {
-  offset_ = off;
-}
-
-void DataCodeEntry::length(uint16_t length) {
-  length_ = length;
-}
-
-void DataCodeEntry::type(TYPES type) {
-  type_ = type;
-}
+  type_{static_cast<TYPES>(entry.kind)} {}
 
 void DataCodeEntry::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-
-bool DataCodeEntry::operator==(const DataCodeEntry& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool DataCodeEntry::operator!=(const DataCodeEntry& rhs) const {
-  return !(*this == rhs);
-}
-
 std::ostream& operator<<(std::ostream& os, const DataCodeEntry& entry) {
-  os << std::hex;
-  os << std::left
-     << std::showbase
-
-     << entry.offset() << " "
-     << entry.length() << " "
-     << to_string(entry.type());
-
-
+  os << fmt::format("{}: offset={:#08x}, size={:#x}", to_string(entry.type()),
+                    entry.offset(), entry.length());
   return os;
 }
 
+const char* to_string(DataCodeEntry::TYPES e) {
+#define ENTRY(X) std::pair(DataCodeEntry::TYPES::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(UNKNOWN),       ENTRY(DATA),          ENTRY(JUMP_TABLE_8),
+      ENTRY(JUMP_TABLE_16), ENTRY(JUMP_TABLE_32), ENTRY(ABS_JUMP_TABLE_32),
+  };
+#undef ENTRY
 
-
-
+  if (auto it = enums2str.find(e); it != enums2str.end()) {
+    return it->second;
+  }
+  return "UNKNOWN";
 }
+
 }

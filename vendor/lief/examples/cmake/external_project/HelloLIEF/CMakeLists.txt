@@ -14,14 +14,9 @@ find_package(LIEF REQUIRED COMPONENTS STATIC) # COMPONENTS: <SHARED | STATIC> - 
 # ==================
 add_executable(HelloLIEF main.cpp)
 
-if(MSVC)
-  set_property(TARGET HelloLIEF PROPERTY LINK_FLAGS /NODEFAULTLIB:MSVCRT)
-endif()
-
-
 # Enable C++11
 set_property(TARGET HelloLIEF
-             PROPERTY CXX_STANDARD           11
+             PROPERTY CXX_STANDARD           17
              PROPERTY CXX_STANDARD_REQUIRED  ON)
 
 # Link the executable with LIEF

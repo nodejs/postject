@@ -1,0 +1,54 @@
+[lief.build]
+type             = "RelWithDebInfo"
+cache            = true
+ninja            = true
+parallel-jobs    = 0
+stable-abi       = false
+cxx-compiler     = "clang++"
+c-compiler       = "clang"
+extra-targets    = ["all"]
+extra-cmake-opt  = [
+  "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON",
+  "-DLIEF_TESTS=on",
+  "-DPython_VERSION={python_version}",
+  "-DCMAKE_COLOR_DIAGNOSTICS=ON",
+  "-DCMAKE_CXX_COMPILER=clang++",
+  "-DCMAKE_C_COMPILER=clang",
+  "-DCMAKE_MODULE_PATH=/cmake/linux/",
+]
+
+compilation-flags = [
+  "-O2",
+  "-fuse-ld=lld",
+  "-g", "-gdwarf-5",
+  "-fdata-sections", "-ffunction-sections",
+  "-Wno-unused-command-line-argument",
+  "-Wno-unused-parameter",
+  "-Wno-deprecated-declarations",
+  # Coverage flags
+  "-fprofile-instr-generate", "-fcoverage-mapping",
+  "-fno-omit-frame-pointer",
+]
+
+[lief.formats]
+elf     = true
+pe      = true
+macho   = true
+android = true
+art     = true
+vdex    = true
+oat     = true
+dex     = true
+
+[lief.features]
+json    = true
+frozen  = true
+
+[lief.logging]
+enabled = true
+debug   = false
+
+[lief.cross-compilation]
+platform  = "manylinux_2_31_x86_64"
+pyversion = "cp{python_version_alt}"
+abi       = "abi3"

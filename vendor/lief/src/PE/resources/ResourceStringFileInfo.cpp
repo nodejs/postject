@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,94 +13,101 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iomanip>
-
-#include "LIEF/PE/hash.hpp"
+#include "LIEF/Visitor.hpp"
+#include <sstream>
 
 #include "LIEF/utils.hpp"
 
+#include "LIEF/BinaryStream/BinaryStream.hpp"
 #include "LIEF/PE/resources/ResourceStringFileInfo.hpp"
+#include "LIEF/PE/resources/ResourceStringTable.hpp"
 
-namespace LIEF {
-namespace PE {
-
-ResourceStringFileInfo::ResourceStringFileInfo(const ResourceStringFileInfo&) = default;
-ResourceStringFileInfo& ResourceStringFileInfo::operator=(const ResourceStringFileInfo&) = default;
-ResourceStringFileInfo::~ResourceStringFileInfo() = default;
-
-ResourceStringFileInfo::ResourceStringFileInfo(uint16_t type, std::u16string key) :
-  type_{type},
-  key_{std::move(key)}
-{}
-
-ResourceStringFileInfo::ResourceStringFileInfo() :
-  key_{u8tou16("StringFileInfo")}
-{}
+#include "internal_utils.hpp"
+#include "logging.hpp"
 
 
-uint16_t ResourceStringFileInfo::type() const {
-  return type_;
+namespace LIEF::PE {
+
+
+result<ResourceStringFileInfo>
+    ResourceStringFileInfo::parse(BinaryStream& stream) {
+  // typedef struct {
+  //   WORD        wLength;
+  //   WORD        wValueLength;
+  //   WORD        wType;
+  //   WCHAR       szKey;
+  //   WORD        Padding;
+  //   StringTable Children;
+  // } StringFileInfo;
+  ResourceStringFileInfo info;
+  auto wLength = stream.read<uint16_t>();
+  if (!wLength) {
+    LIEF_DEBUG("Error: {}:{}", __FUNCTION__, __LINE__);
+    return make_error_code(wLength.error());
+  }
+
+  auto wValueLength = stream.read<uint16_t>();
+  if (!wValueLength) {
+    LIEF_DEBUG("Error: {}:{}", __FUNCTION__, __LINE__);
+    return make_error_code(wValueLength.error());
+  }
+
+  auto wType = stream.read<uint16_t>();
+  if (!wType) {
+    LIEF_DEBUG("Error: {}:{}", __FUNCTION__, __LINE__);
+    return make_error_code(wType.error());
+  }
+
+  if (*wType != 0 && wType != 1) {
+    LIEF_DEBUG("Error: {}:{}", __FUNCTION__, __LINE__);
+    return make_error_code(lief_errors::corrupted);
+  }
+
+  auto szKey = stream.read_u16string();
+  if (!szKey) {
+    LIEF_DEBUG("Error: {}:{}", __FUNCTION__, __LINE__);
+    return make_error_code(wType.error());
+  }
+
+  if (u16tou8(*szKey) != "StringFileInfo") {
+    LIEF_DEBUG("Error: {}:{}", __FUNCTION__, __LINE__);
+    return make_error_code(lief_errors::corrupted);
+  }
+
+  info.type(*wType).key(std::move(*szKey));
+
+  stream.align(sizeof(uint32_t));
+  while (stream) {
+    auto item = ResourceStringTable::parse(stream);
+    if (!item) {
+      LIEF_WARN("Failed to parse StringFileInfo.Children[{}]",
+                info.children_.size());
+      break;
+    }
+    info.add_child(std::move(*item));
+  }
+  return info;
 }
 
-const std::u16string& ResourceStringFileInfo::key() const {
-  return key_;
+
+std::string ResourceStringFileInfo::key_u8() const {
+  return u16tou8(key());
 }
-
-const std::vector<LangCodeItem>& ResourceStringFileInfo::langcode_items() const {
-  return childs_;
-}
-
-std::vector<LangCodeItem>& ResourceStringFileInfo::langcode_items() {
-  return const_cast<std::vector<LangCodeItem>&>(static_cast<const ResourceStringFileInfo*>(this)->langcode_items());
-}
-
-
-void ResourceStringFileInfo::type(uint16_t type) {
-  type_ = type;
-}
-
-void ResourceStringFileInfo::key(const std::u16string& key) {
-  key_ = key;
-}
-
-void ResourceStringFileInfo::key(const std::string& key) {
-  key_ = u8tou16(key);
-}
-
-void ResourceStringFileInfo::langcode_items(const std::vector<LangCodeItem>& items) {
-  childs_ = items;
-}
-
 
 void ResourceStringFileInfo::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-
-bool ResourceStringFileInfo::operator==(const ResourceStringFileInfo& rhs) const {
-  if (this == &rhs) {
-    return true;
+std::ostream& operator<<(std::ostream& os, const ResourceStringFileInfo& info) {
+  os << fmt::format("BLOCK '{}' {{\n", info.key_u8());
+  for (const ResourceStringTable& table : info.children()) {
+    std::ostringstream oss;
+    oss << table;
+    os << indent(oss.str(), 2);
   }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool ResourceStringFileInfo::operator!=(const ResourceStringFileInfo& rhs) const {
-  return !(*this == rhs);
-}
-
-std::ostream& operator<<(std::ostream& os, const ResourceStringFileInfo& string_file_info) {
-  os << std::hex << std::left;
-  os << std::setw(7) << std::setfill(' ') << "type: " << string_file_info.type()         << std::endl;
-  os << std::setw(7) << std::setfill(' ') << "key: "  << u16tou8(string_file_info.key()) << std::endl << std::endl;
-
-  for (const LangCodeItem& item : string_file_info.langcode_items()) {
-    os << item << std::endl;
-  }
+  os << '}';
   return os;
 }
 
 
-}
 }

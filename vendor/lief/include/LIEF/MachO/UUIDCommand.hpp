@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,18 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_MACHO_UUID_COMMAND_H_
-#define LIEF_MACHO_UUID_COMMAND_H_
-#include <iostream>
+#ifndef LIEF_MACHO_UUID_COMMAND_H
+#define LIEF_MACHO_UUID_COMMAND_H
 #include <array>
+#include <memory>
+#include <ostream>
 
 #include "LIEF/visibility.h"
-#include "LIEF/types.hpp"
 
 #include "LIEF/MachO/LoadCommand.hpp"
 
-namespace LIEF {
-namespace MachO {
+
+namespace LIEF::MachO {
 
 namespace details {
 struct uuid_command;
@@ -32,36 +32,41 @@ struct uuid_command;
 
 using uuid_t = std::array<uint8_t, 16>;
 
-//! Class that represents the UUID command
+/// Class that represents the UUID command
 class LIEF_API UUIDCommand : public LoadCommand {
   public:
-  UUIDCommand();
+  UUIDCommand() = default;
   UUIDCommand(const details::uuid_command& cmd);
 
-  UUIDCommand& operator=(const UUIDCommand& copy);
-  UUIDCommand(const UUIDCommand& copy);
+  UUIDCommand& operator=(const UUIDCommand& copy) = default;
+  UUIDCommand(const UUIDCommand& copy) = default;
 
-  UUIDCommand* clone() const override;
+  std::unique_ptr<LoadCommand> clone() const override {
+    return std::make_unique<UUIDCommand>(*this);
+  }
 
-  virtual ~UUIDCommand();
+  ~UUIDCommand() override = default;
 
-  //! The UUID as a 16-bytes array
-  uuid_t uuid() const;
-  void   uuid(const uuid_t& uuid);
-
-  bool operator==(const UUIDCommand& rhs) const;
-  bool operator!=(const UUIDCommand& rhs) const;
+  /// The UUID as a 16-bytes array
+  const uuid_t& uuid() const LIEF_LIFETIMEBOUND {
+    return uuid_;
+  }
+  void uuid(const uuid_t& uuid) {
+    uuid_ = uuid;
+  }
 
   void accept(Visitor& visitor) const override;
 
   std::ostream& print(std::ostream& os) const override;
 
-  static bool classof(const LoadCommand* cmd);
+  static bool classof(const LoadCommand* cmd) {
+    return cmd->command() == LoadCommand::TYPE::UUID;
+  }
 
   private:
-  uuid_t uuid_;
+  uuid_t uuid_ = {0};
 };
 
 }
-}
+
 #endif

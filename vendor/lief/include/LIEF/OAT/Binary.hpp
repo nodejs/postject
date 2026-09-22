@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_OAT_BINARY_H_
-#define LIEF_OAT_BINARY_H_
-#include <iostream>
+#ifndef LIEF_OAT_BINARY_H
+#define LIEF_OAT_BINARY_H
+#include <ostream>
 
 #include "LIEF/visibility.h"
 
+#include "LIEF/DEX/deopt.hpp"
 #include "LIEF/ELF/Binary.hpp"
 #include "LIEF/OAT/Header.hpp"
-#include "LIEF/DEX/deopt.hpp"
 
 namespace LIEF {
 namespace DEX {
@@ -42,75 +42,78 @@ class LIEF_API Binary : public ELF::Binary {
   friend class Parser;
 
   public:
-  using dex_files_t        = std::vector<std::unique_ptr<DEX::File>>;
-  using it_dex_files       = ref_iterator<dex_files_t&, DEX::File*>;
-  using it_const_dex_files = const_ref_iterator<const dex_files_t&, const DEX::File*>;
+  using dex_files_t = std::vector<std::unique_ptr<DEX::File>>;
+  using it_dex_files = ref_iterator<dex_files_t&, DEX::File*>;
+  using it_const_dex_files =
+      const_ref_iterator<const dex_files_t&, const DEX::File*>;
 
-  using classes_t         = std::unordered_map<std::string, Class*>;
-  using classes_list_t    = std::vector<std::unique_ptr<Class>>;
-  using it_classes        = ref_iterator<classes_list_t&, Class*>;
-  using it_const_classes  = const_ref_iterator<const classes_list_t&, const Class*>;
+  using classes_t = std::unordered_map<std::string, Class*>;
+  using classes_list_t = std::vector<std::unique_ptr<Class>>;
+  using it_classes = ref_iterator<classes_list_t&, Class*>;
+  using it_const_classes = const_ref_iterator<const classes_list_t&, const Class*>;
 
-  using oat_dex_files_t        = std::vector<std::unique_ptr<DexFile>>;
-  using it_oat_dex_files       = ref_iterator<oat_dex_files_t&, DexFile*>;
-  using it_const_oat_dex_files = const_ref_iterator<const oat_dex_files_t&, const DexFile*>;
+  using oat_dex_files_t = std::vector<std::unique_ptr<DexFile>>;
+  using it_oat_dex_files = ref_iterator<oat_dex_files_t&, DexFile*>;
+  using it_const_oat_dex_files =
+      const_ref_iterator<const oat_dex_files_t&, const DexFile*>;
 
-  using methods_t         = std::vector<std::unique_ptr<Method>>;
-  using it_methods        = ref_iterator<methods_t&, Method*>;
-  using it_const_methods  = const_ref_iterator<const methods_t&, const Method*>;
+  using methods_t = std::vector<std::unique_ptr<Method>>;
+  using it_methods = ref_iterator<methods_t&, Method*>;
+  using it_const_methods = const_ref_iterator<const methods_t&, const Method*>;
 
   using dex2dex_info_t = std::unordered_map<const DEX::File*, DEX::dex2dex_info_t>;
 
   public:
   Binary& operator=(const Binary& copy) = delete;
-  Binary(const Binary& copy)            = delete;
+  Binary(const Binary& copy) = delete;
 
-  //! OAT Header
-  const Header& header() const;
-  Header& header();
+  /// OAT Header
+  const Header& header() const LIEF_LIFETIMEBOUND;
+  Header& header() LIEF_LIFETIMEBOUND;
 
-  //! Iterator over LIEF::DEX::File
-  it_dex_files dex_files();
-  it_const_dex_files dex_files() const;
+  /// Iterator over LIEF::DEX::File
+  it_dex_files dex_files() LIEF_LIFETIMEBOUND;
+  it_const_dex_files dex_files() const LIEF_LIFETIMEBOUND;
 
-  //! Iterator over LIEF::OAT::DexFile
-  it_oat_dex_files       oat_dex_files();
-  it_const_oat_dex_files oat_dex_files() const;
+  /// Iterator over LIEF::OAT::DexFile
+  it_oat_dex_files oat_dex_files() LIEF_LIFETIMEBOUND;
+  it_const_oat_dex_files oat_dex_files() const LIEF_LIFETIMEBOUND;
 
-  //! Iterator over LIEF::OAT::Class
-  it_const_classes classes() const;
-  it_classes classes();
+  /// Iterator over LIEF::OAT::Class
+  it_const_classes classes() const LIEF_LIFETIMEBOUND;
+  it_classes classes() LIEF_LIFETIMEBOUND;
 
-  //! Check if the current OAT has the given class
+  /// Check if the current OAT has the given class
   bool has_class(const std::string& class_name) const;
 
 
-  //! Return the LIEF::OAT::Class with the given name or
-  //! a nullptr if the class can't be found
-  const Class* get_class(const std::string& class_name) const;
+  /// Return the LIEF::OAT::Class with the given name or
+  /// a nullptr if the class can't be found
+  const Class* get_class(const std::string& class_name) const LIEF_LIFETIMEBOUND;
 
-  Class* get_class(const std::string& class_name);
+  Class* get_class(const std::string& class_name) LIEF_LIFETIMEBOUND;
 
-  //! Return the LIEF::OAT::Class at the given index or a nullptr
-  //! if it does not exist
-  const Class* get_class(size_t index) const;
+  /// Return the LIEF::OAT::Class at the given index or a nullptr
+  /// if it does not exist
+  const Class* get_class(size_t index) const LIEF_LIFETIMEBOUND;
 
-  Class* get_class(size_t index);
+  Class* get_class(size_t index) LIEF_LIFETIMEBOUND;
 
-  //! Iterator over LIEF::OAT::Method
-  it_const_methods methods() const;
-  it_methods methods();
+  /// Iterator over LIEF::OAT::Method
+  it_const_methods methods() const LIEF_LIFETIMEBOUND;
+  it_methods methods() LIEF_LIFETIMEBOUND;
 
   dex2dex_info_t dex2dex_info() const;
 
   std::string dex2dex_json_info();
 
-  inline bool has_vdex() const {
+  bool has_vdex() const {
     return vdex_ != nullptr;
   }
 
-  bool operator==(const Binary& rhs) const;
-  bool operator!=(const Binary& rhs) const;
+  static bool classof(const LIEF::Binary* bin) {
+    return bin->format() == Binary::FORMATS::OAT;
+  }
 
   void accept(Visitor& visitor) const override;
 

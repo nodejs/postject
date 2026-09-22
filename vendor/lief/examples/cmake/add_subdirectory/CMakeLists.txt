@@ -1,6 +1,4 @@
-# Minimum of 3.5 for adding submodule of LIEF because LIEF min is 3.5,
-# otherwise 3.11+ for FetchContent command
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.21)
 
 project(SubdirLIEF LANGUAGES CXX)
 
@@ -14,7 +12,7 @@ option(LIEF_EXAMPLES "Build LIEF examples" OFF)
 option(LIEF_TESTS "Build LIEF tests" OFF)
 
 if(MSVC)
-  set(LIEF_USE_CRT_RELEASE "MT" CACHE STRING "LIEF CRT option")
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded" CACHE STRING "CRT option")
 endif()
 
 
@@ -35,8 +33,8 @@ else()
   # URL of the LIEF repo (Can be your fork)
   set(LIEF_GIT_URL "https://github.com/lief-project/LIEF.git")
 
-  # LIEF's version to be used (can be 'master')
-  set(LIEF_VERSION 0.12.0)
+  # LIEF's version to be used (can be 'main')
+  set(LIEF_VERSION 1.0.0)
 
   include(FetchContent)
   FetchContent_Declare(LIEF
@@ -66,13 +64,9 @@ endif()
 # ==================
 add_executable(HelloLIEF main.cpp)
 
-if(MSVC)
-  set_property(TARGET HelloLIEF PROPERTY LINK_FLAGS /NODEFAULTLIB:MSVCRT)
-endif()
-
 # Enable C++11
 set_property(TARGET HelloLIEF
-             PROPERTY CXX_STANDARD           11
+             PROPERTY CXX_STANDARD           17
              PROPERTY CXX_STANDARD_REQUIRED  ON)
 
 # Link the executable with LIEF

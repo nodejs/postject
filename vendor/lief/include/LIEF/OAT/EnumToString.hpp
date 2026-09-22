@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,21 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef OAT_ENUM_TO_STRING_H_
-#define OAT_ENUM_TO_STRING_H_
-#include "LIEF/visibility.h"
+#ifndef OAT_ENUM_TO_STRING_H
+#define OAT_ENUM_TO_STRING_H
 #include "LIEF/OAT/enums.hpp"
+#include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace OAT {
+
+namespace LIEF::OAT {
 
 LIEF_API const char* to_string(OAT_CLASS_TYPES e);
 LIEF_API const char* to_string(OAT_CLASS_STATUS e);
 LIEF_API const char* to_string(HEADER_KEYS e);
 LIEF_API const char* to_string(INSTRUCTION_SETS e);
 
-} // namespace OAT
-} // namespace LIEF
+}
+
 
 #endif
-

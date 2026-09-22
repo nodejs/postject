@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,68 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <numeric>
-#include <iomanip>
-
-#include "LIEF/MachO/hash.hpp"
+#include "LIEF/Visitor.hpp"
+#include "spdlog/fmt/fmt.h"
 
 #include "LIEF/MachO/LinkerOptHint.hpp"
 #include "MachO/Structures.hpp"
 
-namespace LIEF {
-namespace MachO {
 
-LinkerOptHint::LinkerOptHint() = default;
-LinkerOptHint& LinkerOptHint::operator=(const LinkerOptHint&) = default;
-LinkerOptHint::LinkerOptHint(const LinkerOptHint&) = default;
-LinkerOptHint::~LinkerOptHint() = default;
+namespace LIEF::MachO {
 
 LinkerOptHint::LinkerOptHint(const details::linkedit_data_command& cmd) :
-  LoadCommand::LoadCommand{static_cast<LOAD_COMMAND_TYPES>(cmd.cmd), cmd.cmdsize},
+  LoadCommand::LoadCommand{LoadCommand::TYPE(cmd.cmd), cmd.cmdsize},
   data_offset_{cmd.dataoff},
-  data_size_{cmd.datasize}
-{}
-
-
-LinkerOptHint* LinkerOptHint::clone() const {
-  return new LinkerOptHint(*this);
-}
+  data_size_{cmd.datasize} {}
 
 void LinkerOptHint::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-
-bool LinkerOptHint::operator==(const LinkerOptHint& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool LinkerOptHint::operator!=(const LinkerOptHint& rhs) const {
-  return !(*this == rhs);
-}
-
-bool LinkerOptHint::classof(const LoadCommand* cmd) {
-  // This must be sync with BinaryParser.tcc
-  const LOAD_COMMAND_TYPES type = cmd->command();
-  return type == LOAD_COMMAND_TYPES::LC_LINKER_OPTIMIZATION_HINT;
-}
-
-
 std::ostream& LinkerOptHint::print(std::ostream& os) const {
-  LoadCommand::print(os);
-  os << std::left;
-  os << std::endl;
-  os << "Linker Optimization Hint:" << std::endl;
-  os << std::setw(8) << "Offset" << ": 0x" << data_offset() << std::endl;
-  os << std::setw(8) << "Size"   << ": 0x" << data_size()   << std::endl;
+  LoadCommand::print(os) << '\n';
+  os << fmt::format("offset={:#08x}, size={:#08x}", data_offset(), data_size());
   return os;
 }
 
 
-}
 }

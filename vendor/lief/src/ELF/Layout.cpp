@@ -1,4 +1,4 @@
-/* Copyright 2021 - 2022 R. Thomas
+/* Copyright 2021 - 2026 R. Thomas
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,26 +14,21 @@
  */
 #include "Layout.hpp"
 #include "LIEF/ELF/Binary.hpp"
-#include "LIEF/ELF/Symbol.hpp"
 #include "LIEF/ELF/Section.hpp"
+#include "LIEF/ELF/Symbol.hpp"
 #include "internal_utils.hpp"
 
-#include <LIEF/iostream.hpp>
+#include "LIEF/iostream.hpp"
 
-namespace LIEF {
-namespace ELF {
-Layout::Layout(Binary& bin) :
-  binary_{&bin}
-{}
 
-Layout::~Layout() = default;
+namespace LIEF::ELF {
 
 bool Layout::is_strtab_shared_shstrtab() const {
   // Check if the .strtab is shared with the .shstrtab
   const size_t shstrtab_idx = binary_->header().section_name_table_idx();
   size_t strtab_idx = 0;
 
-  const Section* symtab = binary_->get(ELF_SECTION_TYPES::SHT_SYMTAB);
+  const Section* symtab = binary_->get(Section::TYPE::SYMTAB);
   if (symtab == nullptr) {
     return false;
   }
@@ -48,7 +43,7 @@ bool Layout::is_strtab_shared_shstrtab() const {
 }
 
 size_t Layout::section_strtab_size() {
-  // could be moved in the class base.
+  // Could be moved into the base class.
   if (!raw_strtab_.empty()) {
     return raw_strtab_.size();
   }
@@ -58,20 +53,24 @@ size_t Layout::section_strtab_size() {
     return 0;
   }
 
-  vector_iostream raw_strtab;
+  vector_iostream raw_strtab(should_swap());
   raw_strtab.write<uint8_t>(0);
 
   size_t offset_counter = raw_strtab.tellp();
 
-  if (binary_->static_symbols_.empty()) {
+  if (binary_->symtab_symbols_.empty()) {
     return 0;
   }
 
-  std::vector<std::string> symstr_opt = optimize(binary_->static_symbols_,
-                      [] (const std::unique_ptr<Symbol>& sym) { return sym->name(); },
-                      offset_counter, &strtab_name_map_);
+  std::vector<std::string> symstr_opt = optimize(
+      binary_->symtab_symbols_,
+      [](const std::unique_ptr<Symbol>& sym) {
+        return static_cast<const Symbol&>(*sym).name();
+      },
+      offset_counter, &strtab_name_map_
+  );
 
-  for (const std::string& name : symstr_opt) {
+  for (std::string_view name : symstr_opt) {
     raw_strtab.write(name);
   }
   raw_strtab.move(raw_strtab_);
@@ -84,45 +83,60 @@ size_t Layout::section_shstr_size() {
     return raw_shstrtab_.size();
   }
 
-  vector_iostream raw_shstrtab;
+  vector_iostream raw_shstrtab(should_swap());
 
-  // In the ELF format all the .str sections
+  // In the ELF format, all string table sections
   // start with a null entry.
   raw_shstrtab.write<uint8_t>(0);
-  std::vector<std::string> sec_names;
+  std::vector<std::string_view> sec_names;
   sec_names.reserve(binary_->sections_.size());
-  std::transform(std::begin(binary_->sections_), std::end(binary_->sections_),
+  std::transform(binary_->sections_.begin(), binary_->sections_.end(),
                  std::back_inserter(sec_names),
-                 [] (const std::unique_ptr<Section>& s) {
-                   return s->name();
-                 });
+                 [](const std::unique_ptr<Section>& s) { return s->name(); });
 
-  if (!binary_->static_symbols_.empty()) {
-    if (binary_->get(ELF_SECTION_TYPES::SHT_SYMTAB) == nullptr) {
-      sec_names.push_back(".symtab");
+  if (!binary_->symtab_symbols_.empty()) {
+    if (binary_->get(Section::TYPE::SYMTAB) == nullptr) {
+      sec_names.emplace_back(".symtab");
     }
-    if (binary_->get(ELF_SECTION_TYPES::SHT_SYMTAB) == nullptr) {
-      sec_names.push_back(".strtab");
+    if (binary_->get(Section::TYPE::SYMTAB) == nullptr) {
+      sec_names.emplace_back(".strtab");
+    }
+  }
+
+  for (const Note& note : binary_->notes()) {
+    std::string_view secname = note.section_name();
+    if (secname.empty()) {
+      continue;
+    }
+
+    if (const Section* sec = binary_->get_section(secname); sec == nullptr) {
+      sec_names.push_back(secname);
     }
   }
 
   // First write section names
   size_t offset_counter = raw_shstrtab.tellp();
-  std::vector<std::string> shstrtab_opt = optimize(sec_names, [] (const std::string& s) { return s; },
-                      offset_counter, &shstr_name_map_);
+  std::vector<std::string> shstrtab_opt = optimize(
+      sec_names, [](const std::string_view& s) { return s; }, offset_counter,
+      &shstr_name_map_
+  );
 
-  for (const std::string& name : shstrtab_opt) {
+  for (std::string_view name : shstrtab_opt) {
     raw_shstrtab.write(name);
   }
 
   // Check if the .shstrtab and the .strtab are shared (optimization used by clang)
-  // in this case, include the static symbol names
-  if (!binary_->static_symbols_.empty() && is_strtab_shared_shstrtab()) {
+  // in this case, include the symtab symbol names
+  if (!binary_->symtab_symbols_.empty() && is_strtab_shared_shstrtab()) {
     offset_counter = raw_shstrtab.tellp();
-    std::vector<std::string> symstr_opt = optimize(binary_->static_symbols_,
-                       [] (const std::unique_ptr<Symbol>& sym) { return sym->name(); },
-                       offset_counter, &shstr_name_map_);
-    for (const std::string& name : symstr_opt) {
+    std::vector<std::string> symstr_opt = optimize(
+        binary_->symtab_symbols_,
+        [](const std::unique_ptr<Symbol>& sym) {
+          return static_cast<const Symbol&>(*sym).name();
+        },
+        offset_counter, &shstr_name_map_
+    );
+    for (std::string_view name : symstr_opt) {
       raw_shstrtab.write(name);
     }
   }
@@ -131,8 +145,4 @@ size_t Layout::section_shstr_size() {
   return raw_shstrtab_.size();
 }
 
-
-
-
-}
 }

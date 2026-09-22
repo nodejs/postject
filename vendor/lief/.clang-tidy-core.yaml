@@ -1,0 +1,76 @@
+Checks: [
+  -*,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  cppcoreguidelines-*,
+  misc-*,
+  clang-taidy-*,
+  modernize-*,
+
+  -clang-taidy-avoid-implicit-enum-to-integer-conversion,
+  -clang-taidy-avoid-high-cyclomatic-complexity,
+
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  -modernize-avoid-c-arrays,
+
+  # `modernize-avoid-c-style-cast` also rejects the functional-style suggested by
+  # `clang-taidy-avoid-static-integer-cast` (caught by -Wold-style-cast though)
+  -modernize-avoid-c-style-cast,
+
+  -modernize-use-ranges,
+  -modernize-use-constraints,
+  -modernize-use-designated-initializers,
+  -modernize-use-integer-sign-comparison,
+  -modernize-use-string-view,
+
+  -bugprone-derived-method-shadowing-base-method,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-macro-parentheses,
+  -bugprone-narrowing-conversions,
+  -bugprone-reserved-identifier,
+  -bugprone-signed-bitwise,
+  -bugprone-signed-char-misuse,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-avoid-do-while,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-explicit-constructor,
+  -cppcoreguidelines-macro-to-enum,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-missing-std-forward,
+  -cppcoreguidelines-narrowing-conversions,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-const-cast,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-static-cast-downcast,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-special-member-functions,
+  -cppcoreguidelines-use-enum-class,
+  -misc-const-correctness,
+  -misc-explicit-constructor,
+  -misc-include-cleaner,
+  -misc-misplaced-const,
+  -misc-no-recursion,
+  -misc-non-private-member-variables-in-classes,
+  -misc-override-with-different-visibility,
+  -misc-static-assert,
+  -misc-use-anonymous-namespace,
+  -misc-use-internal-linkage,
+  -performance-enum-size,
+  -performance-no-int-to-ptr,
+  -portability-avoid-pragma-once,
+]
+
+CheckOptions:
+  bugprone-unused-return-value.CheckedReturnTypes: '^::std::error_code$;^::std::error_condition$;^::std::errc$;^::std::expected$;^::LIEF::result$'
+  bugprone-unused-return-value.AllowCastToVoid: true
+
+HeaderFilterRegex: '.*'
+ExcludeHeaderFilterRegex: '(builds|build|api/rust/include|utils/ordinals_lookup_tables_std|utils/ordinals_lookup_tables)/*'

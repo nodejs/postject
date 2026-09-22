@@ -1,102 +1,126 @@
-#!/usr/bin/env python
-import itertools
-import logging
 import os
-import random
 import stat
 import subprocess
 import sys
-import tempfile
-import unittest
-from unittest import TestCase
+from pathlib import Path
 from subprocess import Popen
-import re
+from textwrap import dedent
 
 import lief
-from utils import get_sample, is_linux, is_x86_64, is_64bits_platform
-
-lief.logging.set_level(lief.logging.LOGGING_LEVEL.INFO)
-
-class TestLargeBss(TestCase):
-
-    def setUp(self):
-        self.logger = logging.getLogger(__name__)
-
-    def test_issue_671(self):
-        """
-        Test on the support of bss-like segments where virtual_address - imagebase != offset
-        cf. https://github.com/lief-project/LIEF/issues/671
-        """
-        binary_name = "nopie_bss_671.elf"
-        target: lief.ELF.Binary = lief.parse(get_sample("ELF/{}".format(binary_name)))
-
-        for s in filter(lambda e: e.exported, target.static_symbols):
-            target.add_dynamic_symbol(s)
-
-        tmp_dir = tempfile.mkdtemp(prefix="lief_", suffix='_{}'.format(self.__class__.__name__))
-        self.logger.debug("temp dir: {}".format(tmp_dir))
-        output = "{}/{}.built".format(tmp_dir, binary_name)
-        target.write(output)
-
-        # Make sure that the PHDR has been relocated at the end:
-        built = lief.parse(output)
-        self.assertEqual(built[lief.ELF.SEGMENT_TYPES.PHDR].file_offset,     0x3000)
-        self.assertEqual(built[lief.ELF.SEGMENT_TYPES.PHDR].physical_size,   0x1f8)
-        self.assertEqual(built[lief.ELF.SEGMENT_TYPES.PHDR].virtual_address, 0x403000)
-
-        if is_linux() and is_x86_64():
-            st = os.stat(output)
-            os.chmod(output, st.st_mode | stat.S_IEXEC)
-
-            p = Popen(output, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            stdout, _ = p.communicate()
-            self.logger.debug(stdout.decode("utf8"))
-            self.assertTrue(len(stdout) > 0)
+import pytest
+from utils import (
+    address_space_limiter,
+    check_layout,
+    get_sample,
+    is_64bits_platform,
+    is_linux,
+    is_x86_64,
+    parse_elf,
+)
 
 
-    @unittest.skipUnless(is_64bits_platform(), "requires a 64-bits platform")
-    def test_all(self):
-        binary_name = "544ca2035a9c15e7756ed8d8067d860bd3157e4eeaa39b4ee932458eebe2434b.elf"
-        target: lief.ELF.Binary = lief.parse(get_sample("ELF/{}".format(binary_name)))
-        bss = target.get_section(".bss")
-        self.assertEqual(bss.virtual_address, 0x65a3e0)
-        self.assertEqual(bss.size, 0x1ccb6330)
-        self.assertEqual(bss.file_offset, 0x05a3e0)
-        self.assertEqual(len(bss.content), 0)
+def test_issue_671(tmp_path: Path):
+    """
+    Test the support of bss-like segments where `virtual_address - imagebase != offset`
+    see: https://github.com/lief-project/LIEF/issues/671
+    """
+    binary_name = "nopie_bss_671.elf"
+    target = parse_elf(f"ELF/{binary_name}")
 
-        target.add_library("libcap.so.2")
-        # Add segment
-        new_segment = lief.ELF.Segment()
-        new_segment.type = lief.ELF.SEGMENT_TYPES.LOAD
-        new_segment.content = [0xCC] * 0x50
-        target.add(new_segment)
+    for s in filter(lambda e: e.exported, target.symtab_symbols):
+        target.add_dynamic_symbol(s)
 
-        tmp_dir = tempfile.mkdtemp(prefix="lief_", suffix='_{}'.format(self.__class__.__name__))
-        self.logger.debug("temp dir: {}".format(tmp_dir))
-        output = "{}/{}.built".format(tmp_dir, binary_name)
-        target.write(output)
+    output = tmp_path / binary_name
+    target.write(output)
 
-        if is_linux() and is_x86_64():
-            st = os.stat(output)
-            os.chmod(output, st.st_mode | stat.S_IEXEC)
+    # Make sure that the PHDR has been relocated at the end:
+    built = lief.ELF.parse(output)
+    assert built is not None
+    check_layout(built)
+    phdr_seg = built.get(lief.ELF.Segment.TYPE.PHDR)
+    assert phdr_seg is not None
+    assert phdr_seg.file_offset == 0x3000
+    # PT_PHDR describes the whole area reserved for the segment table
+    assert phdr_seg.physical_size == 0x460
+    assert phdr_seg.virtual_address == 0x403000
 
-            p = Popen(output, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            stdout, _ = p.communicate()
-            self.logger.debug(stdout.decode("utf8"))
-            self.assertTrue(len(stdout) > 0)
+    if is_linux() and is_x86_64():
+        st = os.stat(output)
+        os.chmod(output, st.st_mode | stat.S_IEXEC)
 
-        # Check that the written binary contains our modifications
-        new: lief.ELF.Binary = lief.parse(output)
-        self.assertEqual(new.get_library("libcap.so.2").name, "libcap.so.2")
+        with Popen(
+            output.as_posix(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        ) as P:
+            assert P.stdout is not None
+            stdout = P.stdout.read().decode("utf8")
+            lief.logging.info(stdout)
+            assert len(stdout) > 0
 
 
-if __name__ == '__main__':
+@pytest.mark.slow
+def test_all(tmp_path: Path):
+    if not is_64bits_platform():
+        pytest.skip("requires a 64-bits platform")
 
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
+    binary_name = "544ca2035a9c15e7756ed8d8067d860bd3157e4eeaa39b4ee932458eebe2434b.elf"
+    target = parse_elf(f"ELF/{binary_name}")
+    bss = target.get_section(".bss")
+    assert bss is not None
 
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    root_logger.addHandler(ch)
+    assert bss.virtual_address == 0x65A3E0
+    assert bss.size == 0x1CCB6330
+    assert bss.file_offset == 0x05A3E0
+    assert len(bss.content) == 0
 
-    unittest.main(verbosity=2)
+    target.add_library("libcap.so.2")
+    # Add segment
+    new_segment = lief.ELF.Segment()
+    new_segment.type = lief.ELF.Segment.TYPE.LOAD
+    new_segment.content = [0xCC] * 0x50
+    target.add(new_segment)
+
+    output = tmp_path / f"{binary_name}.build"
+    target.write(output)
+
+    check_layout(output)
+
+    if is_linux() and is_x86_64():
+        st = os.stat(output)
+        os.chmod(output, st.st_mode | stat.S_IEXEC)
+
+        with Popen(output, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as P:
+            assert P.stdout is not None
+            stdout = P.stdout.read().decode("utf8")
+            lief.logging.info(stdout)
+            assert len(stdout) > 0
+
+    # Check that the written binary contains our modifications
+    new = parse_elf(output)
+    lib = new.get_library("libcap.so.2")
+    assert lib is not None
+    assert lib.name == "libcap.so.2"
+
+
+@pytest.mark.private
+def test_patch_address_out_of_segment():
+    GAP = 0x20_000_000
+    sample = Path(get_sample("private/ELF/bss_issue.elf")).absolute()
+
+    code = dedent(f"""\
+    import lief
+    import sys
+    lief.logging.disable()
+    elf = lief.ELF.parse(sys.argv[1])
+    seg = next(s for s in elf.segments
+               if s.type == lief.ELF.Segment.TYPE.LOAD and s.virtual_size > s.physical_size)
+    addr = seg.virtual_address + seg.physical_size + {GAP // 2}
+    elf.patch_address(addr, 0x4141414141414141, 8)
+    print("OK")""")
+
+    stdout = subprocess.check_output(
+        [sys.executable, "-c", code, str(sample)],
+        timeout=60.0,
+        preexec_fn=address_space_limiter(),
+    )
+
+    assert b"OK" in stdout

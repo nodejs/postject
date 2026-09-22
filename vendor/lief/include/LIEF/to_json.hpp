@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,28 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_TO_JSON_H_
-#define LIEF_TO_JSON_H_
+#ifndef LIEF_TO_JSON_H
+#define LIEF_TO_JSON_H
 
+// IWYU pragma: begin_exports
 #include "LIEF/config.h"
 
 #ifdef LIEF_JSON_SUPPORT
 
 
-#ifdef LIEF_ELF_SUPPORT
-#include "LIEF/ELF/json.hpp"
+  #ifdef LIEF_ELF_SUPPORT
+    #include "LIEF/ELF/json.hpp"
+  #endif
+
+  #ifdef LIEF_PE_SUPPORT
+    #include "LIEF/PE/json.hpp"
+  #endif
+
+  #include "LIEF/Abstract/json.hpp"
+
+  #include "LIEF/Abstract.hpp"
+  #include "LIEF/ELF.hpp"
+  #include "LIEF/PE.hpp"
+  // IWYU pragma: end_exports
+
 #endif
-
-#ifdef LIEF_PE_SUPPORT
-#include "LIEF/PE/json.hpp"
-#endif
-
-#include "LIEF/Abstract/json.hpp"
-
-#include "LIEF/Abstract.hpp"
-#include "LIEF/ELF.hpp"
-#include "LIEF/PE.hpp"
-
-#endif // LIEF_JSON_SUPPORT
 
 #endif

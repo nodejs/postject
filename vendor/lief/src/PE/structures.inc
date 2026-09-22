@@ -1,13 +1,8 @@
-//! The maximum number of sections that a COFF object can have (inclusive).
+/// The maximum number of sections that a COFF object can have (inclusive).
 static const int32_t MaxNumberOfSections16 = 65279;
 
-//! The PE signature bytes that follows the DOS stub header.
+/// The PE signature bytes that follows the DOS stub header.
 static const char PE_Magic[] = { 'P', 'E', '\0', '\0' };
-
-static const char Rich_Magic[] = {'R', 'i', 'c', 'h'};
-static const char DanS_Magic[] = {'D', 'a', 'n', 'S'};
-
-static const uint32_t DanS_Magic_number = 0x536E6144;
 
 static const char BigObjMagic[] = {
   '\xc7', '\xa1', '\xba', '\xd1', '\xee', '\xba', '\xa9', '\x4b',
@@ -273,7 +268,7 @@ struct pe_pdb_70 {
   uint32_t cv_signature;
   uint8_t  signature[16];
   uint32_t age;
-  char*    filename;
+  //char*    filename;
 };
 
 struct pe_pdb_20 {
@@ -281,13 +276,13 @@ struct pe_pdb_20 {
   uint32_t offset;
   uint32_t signature;
   uint32_t age;
-  char*    filename;
+  //char*    filename;
 };
 
 struct pe_pogo {
   uint32_t start_rva;
   uint32_t size;
-  char     name[1];
+  //char     name[1];
 };
 
 
@@ -373,10 +368,10 @@ struct pe_resource_version_info {
   // uint16_t children
 };
 
-//! Resource icons directory structure
-//! Based on https://docs.microsoft.com/en-us/windows/win32/menurc/resources-reference
-//!
-//! This is the begining of the RESOURCE_TYPES::GROUP_ICON content
+/// Resource icons directory structure
+/// Based on https://docs.microsoft.com/en-us/windows/win32/menurc/resources-reference
+///
+/// This is the begining of the RESOURCE_TYPES::GROUP_ICON content
 struct pe_resource_icon_dir {
   uint16_t reserved; ///< Reserved
   uint16_t type;     ///< Resource type (1 for icons)
@@ -385,7 +380,7 @@ struct pe_resource_icon_dir {
 };
 
 
-//! Structure that follows pe_resource_icon_dir in a resource entry
+/// Structure that follows pe_resource_icon_dir in a resource entry
 struct pe_resource_icon_group {
   uint8_t width;        ///< Width, in pixels, of the image
   uint8_t height;       ///< Height, in pixels, of the image
@@ -397,7 +392,7 @@ struct pe_resource_icon_group {
   uint16_t ID;          ///< The associated ID
 };
 
-//! Structure that follows pe_resource_icon_dir in a icon **file**
+/// Structure that follows pe_resource_icon_dir in a icon **file**
 struct pe_icon_header {
   uint8_t width;        ///< Width, in pixels, of the image
   uint8_t height;       ///< Height, in pixels, of the image
@@ -409,7 +404,7 @@ struct pe_icon_header {
   uint32_t offset;      ///< Offset to the pixels
 };
 
-//! Extended dialog box template
+/// Extended dialog box template
 struct pe_dialog_template_ext {
   uint16_t version;
   uint16_t signature;
@@ -431,7 +426,7 @@ struct pe_dialog_template_ext {
   // char16_t  typeface[stringLen];
 };
 
-//! Dialog box template
+/// Dialog box template
 struct pe_dialog_template {
   uint32_t style;
   uint32_t ext_style;
@@ -443,7 +438,7 @@ struct pe_dialog_template {
 };
 
 
-//! Extended dialog box template item
+/// Extended dialog box template item
 struct pe_dialog_item_template_ext {
   uint32_t help_id;
   uint32_t ext_style;
@@ -459,7 +454,7 @@ struct pe_dialog_item_template_ext {
 };
 
 
-//! Dialog box template item
+/// Dialog box template item
 struct pe_dialog_item_template {
   uint32_t style;
   uint32_t ext_style;

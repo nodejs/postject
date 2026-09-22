@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,15 @@
  */
 
 #include "LIEF/VDEX/File.hpp"
-#include "LIEF/VDEX/hash.hpp"
 #include "LIEF/DEX/File.hpp"
+#include "LIEF/VDEX/hash.hpp"
 
 #if defined(LIEF_JSON_SUPPORT)
-#include "visitors/json.hpp"
+  #include "visitors/json.hpp"
 #endif
 
-namespace LIEF {
-namespace VDEX {
+
+namespace LIEF::VDEX {
 
 File::~File() = default;
 File::File() = default;
@@ -61,7 +61,7 @@ std::string File::dex2dex_json_info() {
 
   for (const std::unique_ptr<DEX::File>& dex_file : dex_files_) {
     json dex2dex = json::parse(dex_file->dex2dex_json_info());
-    mapping[dex_file->name()] = dex2dex;
+    mapping[std::string(dex_file->name())] = dex2dex;
   }
 
   return mapping.dump();
@@ -74,38 +74,23 @@ void File::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool File::operator==(const File& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool File::operator!=(const File& rhs) const {
-  return !(*this == rhs);
-}
-
-
 
 std::ostream& operator<<(std::ostream& os, const File& vdex_file) {
-  os << "Header" << std::endl;
-  os << "======" << std::endl;
+  os << "Header" << '\n';
+  os << "======" << '\n';
 
-  os << vdex_file.header() << std::endl << std::endl;
+  os << vdex_file.header() << '\n' << '\n';
 
 
-  os << "DEX Files" << std::endl;
-  os << "=========" << std::endl;
+  os << "DEX Files" << '\n';
+  os << "=========" << '\n';
 
   for (const DEX::File& f : vdex_file.dex_files()) {
-    os << f << std::endl << std::endl;
+    os << f << '\n' << '\n';
   }
 
 
   return os;
 }
 
-} // Namespace VDEX
-} // Namespace LIEF
+}

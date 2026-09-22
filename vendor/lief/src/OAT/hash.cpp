@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,20 @@
  */
 
 #include "LIEF/OAT/hash.hpp"
-#include "LIEF/OAT.hpp"
 
+#include "LIEF/OAT/Binary.hpp"
+#include "LIEF/OAT/Class.hpp"
+#include "LIEF/OAT/DexFile.hpp"
+#include "LIEF/OAT/Header.hpp"
+#include "LIEF/OAT/Method.hpp"
+
+#include "LIEF/DEX/Class.hpp"  // IWYU pragma: keep
+#include "LIEF/DEX/File.hpp"   // IWYU pragma: keep
+#include "LIEF/DEX/Method.hpp" // IWYU pragma: keep
 #include "LIEF/DEX/hash.hpp"
 
-namespace LIEF {
-namespace OAT {
+
+namespace LIEF::OAT {
 
 Hash::~Hash() = default;
 
@@ -32,9 +40,9 @@ size_t Hash::hash(const Object& obj) {
 void Hash::visit(const Binary& binary) {
   process(binary.header());
 
-  process(std::begin(binary.oat_dex_files()), std::end(binary.oat_dex_files()));
-  process(std::begin(binary.classes()), std::end(binary.classes()));
-  process(std::begin(binary.methods()), std::end(binary.methods()));
+  process(binary.oat_dex_files().begin(), binary.oat_dex_files().end());
+  process(binary.classes().begin(), binary.classes().end());
+  process(binary.methods().begin(), binary.methods().end());
 }
 
 
@@ -58,8 +66,8 @@ void Hash::visit(const Header& header) {
   process(header.image_file_location_oat_data_begin());
   process(header.key_value_size());
 
-  process(std::begin(header.keys()), std::end(header.keys()));
-  process(std::begin(header.values()), std::end(header.values()));
+  process(header.keys().begin(), header.keys().end());
+  process(header.values().begin(), header.values().end());
 }
 
 
@@ -85,7 +93,7 @@ void Hash::visit(const Class& cls) {
   process(cls.fullname());
   process(cls.bitmap());
   Class::it_const_methods it = cls.methods();
-  process(std::begin(it), std::end(it));
+  process(it.begin(), it.end());
 }
 
 
@@ -93,13 +101,10 @@ void Hash::visit(const Method& meth) {
   if (meth.has_dex_method()) {
     process(DEX::Hash::hash(*meth.dex_method()));
   }
-  process(static_cast<size_t>(meth.is_dex2dex_optimized()));
-  process(static_cast<size_t>(meth.is_compiled()));
+  process(size_t{meth.is_dex2dex_optimized()});
+  process(size_t{meth.is_compiled()});
   process(meth.quick_code());
 }
 
 
-
-} // namespace OAT
-} // namespace LIEF
-
+}

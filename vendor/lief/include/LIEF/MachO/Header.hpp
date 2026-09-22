@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,118 +13,254 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_MACHO_HEADER_H_
-#define LIEF_MACHO_HEADER_H_
+#ifndef LIEF_MACHO_HEADER_H
+#define LIEF_MACHO_HEADER_H
 
-#include <iostream>
-#include <set>
+#include <ostream>
+#include <vector>
 
 #include "LIEF/Object.hpp"
+#include "LIEF/enums.hpp"
 #include "LIEF/visibility.h"
-
-#include "LIEF/Abstract/enums.hpp"
 
 #include "LIEF/MachO/enums.hpp"
 
-namespace LIEF {
-namespace MachO {
+
+namespace LIEF::MachO {
+class BinaryParser;
 
 namespace details {
 struct mach_header_64;
 struct mach_header;
 }
 
-//! Class that represents the Mach-O header
+/// Class that represents the Mach-O header
 class LIEF_API Header : public Object {
-  public:
-  using flags_list_t = std::set<HEADER_FLAGS>;
+  friend class BinaryParser;
 
   public:
-  Header();
-  Header(const details::mach_header_64& header);
-  Header(const details::mach_header&    header);
+  Header() = default;
 
-  Header& operator=(const Header& copy);
-  Header(const Header& copy);
+  Header& operator=(const Header& copy) = default;
+  Header(const Header& copy) = default;
 
-  virtual ~Header();
+  ~Header() override = default;
 
-  //! The Mach-O magic bytes. These bytes determine whether it is
-  //! a 32 bits Mach-O, a 64 bits Mach-O files etc.
-  MACHO_TYPES magic() const;
+  // clang-format off
+  enum class FILE_TYPE : uint32_t {
+    UNKNOWN     = 0,
+    OBJECT      = 0x1u,
+    EXECUTE     = 0x2u,
+    FVMLIB      = 0x3u,
+    CORE        = 0x4u,
+    PRELOAD     = 0x5u,
+    DYLIB       = 0x6u,
+    DYLINKER    = 0x7u,
+    BUNDLE      = 0x8u,
+    DYLIB_STUB  = 0x9u,
+    DSYM        = 0xAu,
+    KEXT_BUNDLE = 0xBu,
+    FILESET     = 0xCu,
+    GPU_EXECUTE = 0xDu,
+    GPU_DYLIB   = 0xEu,
+  };
+  // clang-format on
 
-  //! The CPU architecture targeted by this binary
-  CPU_TYPES cpu_type() const;
+  // clang-format off
+  enum class FLAGS : uint32_t {
+    NOUNDEFS                      = 0x00000001u,
+    INCRLINK                      = 0x00000002u,
+    DYLDLINK                      = 0x00000004u,
+    BINDATLOAD                    = 0x00000008u,
+    PREBOUND                      = 0x00000010u,
+    SPLIT_SEGS                    = 0x00000020u,
+    LAZY_INIT                     = 0x00000040u,
+    TWOLEVEL                      = 0x00000080u,
+    FORCE_FLAT                    = 0x00000100u,
+    NOMULTIDEFS                   = 0x00000200u,
+    NOFIXPREBINDING               = 0x00000400u,
+    PREBINDABLE                   = 0x00000800u,
+    ALLMODSBOUND                  = 0x00001000u,
+    SUBSECTIONS_VIA_SYMBOLS       = 0x00002000u,
+    CANONICAL                     = 0x00004000u,
+    WEAK_DEFINES                  = 0x00008000u,
+    BINDS_TO_WEAK                 = 0x00010000u,
+    ALLOW_STACK_EXECUTION         = 0x00020000u,
+    ROOT_SAFE                     = 0x00040000u,
+    SETUID_SAFE                   = 0x00080000u,
+    NO_REEXPORTED_DYLIBS          = 0x00100000u,
+    PIE                           = 0x00200000u,
+    DEAD_STRIPPABLE_DYLIB         = 0x00400000u,
+    HAS_TLV_DESCRIPTORS           = 0x00800000u,
+    NO_HEAP_EXECUTION             = 0x01000000u,
+    APP_EXTENSION_SAFE            = 0x02000000u,
+    NLIST_OUTOFSYNC_WITH_DYLDINFO = 0x04000000u,
+    SIM_SUPPORT                   = 0x08000000u,
+    IMPLICIT_PAGEZERO             = 0x10000000u,
+    DYLIB_IN_CACHE                = 0x80000000u,
+  };
+  // clang-format on
 
-  //! Return the CPU subtype supported by the Mach-O binary.
-  //! For ARM architectures, this value could represent the minimum version
-  //! for which the Mach-O binary has been compiled for.
-  uint32_t cpu_subtype() const;
+  static constexpr int ABI64 = 0x01000000;
 
-  //! Return the type of the Mach-O file (executable, object, shared library, ...)
-  FILE_TYPES file_type() const;
+  // clang-format off
+  enum class CPU_TYPE : int32_t {
+    ANY       = -1,
+    X86       = 7,
+    X86_64    = 7 | ABI64,
+    MIPS      = 8,
+    MC98000   = 10,
+    HPPA      = 11,
+    ARM       = 12,
+    ARM64     = 12 | ABI64,
+    MC88000   = 13,
+    SPARC     = 14,
+    I860      = 15,
+    ALPHA     = 16,
+    POWERPC   = 18,
+    POWERPC64 = 18 | ABI64,
+    APPLE_GPU = 19 | ABI64,
+    AMD_GPU   = 20 | ABI64,
+    INTEL_GPU = 21 | ABI64,
+    AIR64     = 23 | ABI64,
+  };
+  // clang-format on
 
-  //! Return the HEADER_FLAGS as a std::set
-  flags_list_t flags_list() const;
+  static constexpr uint32_t SUBTYPE_MASK = 0xff000000;
+  static constexpr uint32_t SUBTYPE_LIB64 = 0x80000000;
 
-  //! Check if the given HEADER_FLAGS is present in the header's flags
-  bool has(HEADER_FLAGS flag) const;
+  static constexpr auto CPU_SUBTYPE_ARM64_ARM64E = 2;
 
-  //! Number of LoadCommand present in the Mach-O binary
-  uint32_t nb_cmds() const;
+  /// The Mach-O magic bytes. These bytes determine whether it is
+  /// a 32 bits Mach-O, a 64 bits Mach-O files etc.
+  MACHO_TYPES magic() const {
+    return magic_;
+  }
 
-  //! The size of **all** the LoadCommand
-  uint32_t sizeof_cmds() const;
+  /// The CPU architecture targeted by this binary
+  CPU_TYPE cpu_type() const {
+    return cputype_;
+  }
 
-  //! Header flags (cf. HEADER_FLAGS)
-  //!
-  //! @see flags_list
-  uint32_t flags() const;
+  /// Return the CPU subtype supported by the Mach-O binary.
+  /// For ARM architectures, this value could represent the minimum version
+  /// for which the Mach-O binary has been compiled for.
+  uint32_t cpu_subtype() const {
+    return cpusubtype_;
+  }
 
-  //! According to the official documentation, a reserved value
-  uint32_t reserved() const;
+  /// Return the type of the Mach-O file (executable, object, shared library, ...)
+  FILE_TYPE file_type() const {
+    return filetype_;
+  }
 
-  void add(HEADER_FLAGS flag);
+  /// Return the FLAGS as a list
+  std::vector<FLAGS> flags_list() const;
 
-  //! LIEF abstract object type
-  OBJECT_TYPES abstract_object_type() const;
+  /// Check if the given HEADER_FLAGS is present in the header's flags
+  bool has(FLAGS flag) const;
 
-  std::pair<ARCHITECTURES, std::set<MODES>> abstract_architecture() const;
+  /// Number of LoadCommand present in the Mach-O binary
+  uint32_t nb_cmds() const {
+    return ncmds_;
+  }
 
-  //! LIEF abstract endiannes
-  ENDIANNESS abstract_endianness() const;
+  /// The size of **all** the LoadCommand
+  uint32_t sizeof_cmds() const {
+    return sizeofcmds_;
+  }
 
-  void magic(MACHO_TYPES magic);
-  void cpu_type(CPU_TYPES cputype);
-  void cpu_subtype(uint32_t cpusubtype);
-  void file_type(FILE_TYPES filetype);
-  void nb_cmds(uint32_t ncmds);
-  void sizeof_cmds(uint32_t sizeofcmds);
-  void flags(uint32_t flags);
-  void remove(HEADER_FLAGS flag);
-  void reserved(uint32_t reserved);
+  /// Header flags (cf. HEADER_FLAGS)
+  ///
+  /// @see flags_list
+  uint32_t flags() const {
+    return flags_;
+  }
 
-  Header& operator+=(HEADER_FLAGS c);
-  Header& operator-=(HEADER_FLAGS c);
+  /// According to the official documentation, a reserved value
+  uint32_t reserved() const {
+    return reserved_;
+  }
 
-  bool operator==(const Header& rhs) const;
-  bool operator!=(const Header& rhs) const;
+  void add(FLAGS flag);
+
+  void magic(MACHO_TYPES magic) {
+    magic_ = magic;
+  }
+  void cpu_type(CPU_TYPE type) {
+    cputype_ = type;
+  }
+
+  void cpu_subtype(uint32_t cpusubtype) {
+    cpusubtype_ = cpusubtype;
+  }
+
+  void file_type(FILE_TYPE filetype) {
+    filetype_ = filetype;
+  }
+
+  void nb_cmds(uint32_t ncmds) {
+    ncmds_ = ncmds;
+  }
+
+  void sizeof_cmds(uint32_t sizeofcmds) {
+    sizeofcmds_ = sizeofcmds;
+  }
+
+  void flags(uint32_t flags) {
+    flags_ = flags;
+  }
+
+  /// True if the binary is 32-bit
+  bool is_32bit() const {
+    return magic_ == MACHO_TYPES::MAGIC || magic_ == MACHO_TYPES::CIGAM;
+  }
+
+  /// True if the binary is 64-bit
+  bool is_64bit() const {
+    return magic_ == MACHO_TYPES::MAGIC_64 || magic_ == MACHO_TYPES::CIGAM_64;
+  }
+
+  void remove(FLAGS flag);
+
+  void reserved(uint32_t reserved) {
+    reserved_ = reserved;
+  }
+
+  Header& operator+=(FLAGS c) {
+    add(c);
+    return *this;
+  }
+  Header& operator-=(FLAGS c) {
+    remove(c);
+    return *this;
+  }
 
   void accept(Visitor& visitor) const override;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Header& hdr);
 
   private:
-  MACHO_TYPES magic_;
-  CPU_TYPES   cputype_;
-  uint32_t    cpusubtype_;
-  FILE_TYPES  filetype_;
-  uint32_t    ncmds_;
-  uint32_t    sizeofcmds_;
-  uint32_t    flags_;
-  uint32_t    reserved_;
+  template<class T>
+  LIEF_LOCAL Header(const T& header);
+
+  MACHO_TYPES magic_ = MACHO_TYPES::UNKNOWN;
+  CPU_TYPE cputype_ = CPU_TYPE::ANY;
+  uint32_t cpusubtype_{};
+  FILE_TYPE filetype_ = FILE_TYPE::UNKNOWN;
+  uint32_t ncmds_ = 0;
+  uint32_t sizeofcmds_ = 0;
+  uint32_t flags_ = 0;
+  uint32_t reserved_ = 0;
 };
 
+LIEF_API const char* to_string(Header::FILE_TYPE e);
+LIEF_API const char* to_string(Header::CPU_TYPE e);
+LIEF_API const char* to_string(Header::FLAGS e);
+
 }
-}
+
+
+ENABLE_BITMASK_OPERATORS(LIEF::MachO::Header::FLAGS);
+
 #endif

@@ -1,135 +1,291 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+#!python
+import ctypes
+import subprocess
+import sys
+from multiprocessing import Process
+from pathlib import Path
+from subprocess import Popen
+from typing import Any, cast
 
 import lief
-import unittest
-import logging
-import os
-import sys
-import stat
-import re
-import subprocess
-import tempfile
-import shutil
-import time
-import ctypes
-import zipfile
+import pytest
+from utils import (
+    get_sample,
+    is_windows,
+    is_windows_x86_64,
+    is_x86_64,
+    parse_pe,
+    win_exec,
+)
 
-from subprocess import Popen
-
-from unittest import TestCase
-from utils import get_sample
-
-class TestBuilder(TestCase):
-    def setUp(self):
-        self.logger = logging.getLogger(__name__)
-        self.tmp_dir = tempfile.mkdtemp(suffix='_lief_test_builder')
-        self.logger.debug("temp dir: {}".format(self.tmp_dir))
-
-        if sys.platform.startswith("win"):
-            SEM_NOGPFAULTERRORBOX = 0x0002 # From MSDN
-            ctypes.windll.kernel32.SetErrorMode(SEM_NOGPFAULTERRORBOX);
-
-    def test_add_multiples_sections(self):
-        sample_file = get_sample('PE/PE32_x86_binary_Notepad++.zip')
-        sample_dir  = os.path.join(self.tmp_dir, "Notepad++")
-
-        sample = os.path.join(sample_dir, "notepad++.exe")
-        output = os.path.join(sample_dir, "notepad++_sections.exe")
-
-        zip_ref = zipfile.ZipFile(sample_file, 'r')
-        zip_ref.extractall(self.tmp_dir)
-        zip_ref.close()
-
-        notepadpp = lief.parse(sample)
-
-        # Add 20 sections to the binary
-        for i in range(20):
-            section = lief.PE.Section(".section_{}".format(i))
-            section.content = [i & 0xFF for i in range(0x200)]
-            notepadpp.add_section(section)
-
-        builder = lief.PE.Builder(notepadpp)
-        builder.build()
-
-        builder.write(output)
-
-        st = os.stat(output)
-        os.chmod(output, st.st_mode | stat.S_IEXEC)
-
-        if sys.platform.startswith("win"):
-            subprocess_flags = 0x8000000 # win32con.CREATE_NO_WINDOW?
-            p = Popen(["START", output], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=subprocess_flags)
-            time.sleep(3)
-            q = Popen(["taskkill", "/im", "notepad++_sections.exe"], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-            stdout, _ = p.communicate()
-            self.logger.debug(stdout.decode("utf8"))
-
-            stdout, _ = q.communicate()
-            self.logger.debug(stdout.decode("utf8"))
-
-            self.assertEqual(q.returncode, 0)
+if is_windows():
+    SEM_NOGPFAULTERRORBOX = 0x0002  # From MSDN
+    ctypes.windll.kernel32.SetErrorMode(SEM_NOGPFAULTERRORBOX)  # type: ignore
 
 
-    def test_imports_notepadpp(self):
-        sample_file = get_sample('PE/PE32_x86_binary_Notepad++.zip')
-        sample_dir  = os.path.join(self.tmp_dir, "Notepad++")
-
-        sample = os.path.join(sample_dir, "notepad++.exe")
-        output = os.path.join(sample_dir, "notepad++_imports.exe")
-
-        zip_ref = zipfile.ZipFile(sample_file, 'r')
-        zip_ref.extractall(self.tmp_dir)
-        zip_ref.close()
-
-        notepadpp = lief.parse(sample)
-
-        # Disable ASLR
-        notepadpp.optional_header.dll_characteristics &= ~lief.PE.DLL_CHARACTERISTICS.DYNAMIC_BASE
-
-        # Disable NX protection
-        notepadpp.optional_header.dll_characteristics &= ~lief.PE.DLL_CHARACTERISTICS.NX_COMPAT
-
-        builder = lief.PE.Builder(notepadpp)
-        builder.build_imports(True).patch_imports(True)
-        builder.build()
-
-        builder.write(output)
-
-        st = os.stat(output)
-        os.chmod(output, st.st_mode | stat.S_IEXEC)
-
-        if sys.platform.startswith("win"):
-            subprocess_flags = 0x8000000 # win32con.CREATE_NO_WINDOW?
-            p = Popen(["START", output], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=subprocess_flags)
-            time.sleep(3)
-            q = Popen(["taskkill", "/im", "notepad++_imports.exe"], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-            stdout, _ = p.communicate()
-            self.logger.debug(stdout.decode("utf8"))
-
-            stdout, _ = q.communicate()
-            self.logger.debug(stdout.decode("utf8"))
-
-            self.assertEqual(q.returncode, 0)
-
-    def tearDown(self):
-        # Delete it
-        try:
-            if os.path.isdir(self.tmp_dir):
-                shutil.rmtree(self.tmp_dir)
-        except Exception as e:
-            self.logger.error(e)
+def _load_library(path: Path):  # pragma: no cover
+    lib = ctypes.windll.LoadLibrary(path.as_posix())  # type: ignore
+    assert lib is not None
 
 
-if __name__ == '__main__':
+@pytest.mark.parametrize(
+    "sample",
+    [
+        "PE/ucrtbase.dll",
+        "PE/LIEF-win64.dll",
+        "PE/pe_reader.exe",
+    ],
+)
+def test_add_sections(tmp_path: Path, sample: str):
+    input_path = Path(get_sample(sample))
+    pe = lief.PE.parse(input_path)
+    assert pe is not None
 
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
+    for i in range(20):
+        section = lief.PE.Section(f".lief_{i}")
+        if i % 3 == 0:
+            section.characteristics = (
+                lief.PE.Section.CHARACTERISTICS.CNT_CODE
+                | lief.PE.Section.CHARACTERISTICS.MEM_EXECUTE
+                | lief.PE.Section.CHARACTERISTICS.MEM_READ
+            ).value
+            section.content = [0x90] * 123
+        if i % 3 == 1:
+            section.characteristics = (
+                lief.PE.Section.CHARACTERISTICS.CNT_INITIALIZED_DATA
+                | lief.PE.Section.CHARACTERISTICS.MEM_WRITE
+                | lief.PE.Section.CHARACTERISTICS.MEM_READ
+            ).value
+            section.content = [0x41] * 456
+        if i % 3 == 2:
+            section.characteristics = (
+                lief.PE.Section.CHARACTERISTICS.CNT_UNINITIALIZED_DATA
+                | lief.PE.Section.CHARACTERISTICS.MEM_WRITE
+                | lief.PE.Section.CHARACTERISTICS.MEM_READ
+            ).value
+            section.content = [0x42] * 789
+        else:
+            section.content = [0x90] * 0x200
+        pe.add_section(section)
 
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    root_logger.addHandler(ch)
+    output = tmp_path / input_path.name
+    pe.write(output)
 
-    unittest.main(verbosity=2)
+    new = parse_pe(output)
+    assert (
+        len([s for s in new.sections if cast(str, s.name).startswith(".lief_")]) == 20
+    )
+    checked, msg = lief.PE.check_layout(new)
+    assert checked, msg
+
+    if is_windows() and is_x86_64():
+        if input_path.name.endswith(".dll"):
+            p = Process(target=_load_library, args=(output,))
+            p.start()
+            p.join()
+            assert p.exitcode == 0
+
+        if input_path.name == "pe_reader.exe":
+            ret = win_exec(
+                output,
+                gui=False,
+                args=[
+                    output.as_posix(),
+                ],
+            )
+            assert ret is not None
+
+            retcode, stdout = ret
+            assert retcode == 0
+            assert len(stdout) > 0
+
+
+def test_issue_952(tmp_path: Path):
+    pe = parse_pe("PE/PE32_x86_binary_HelloWorld.exe")
+    stub = bytes(pe.dos_stub)
+    assert not all(x == 0 for x in stub)
+
+    out = tmp_path / "out.exe"
+    pe.write(out)
+
+    new = lief.PE.parse(out)
+    assert new is not None
+    assert bytes(new.dos_stub) == stub
+
+    checked, msg = lief.PE.check_layout(new)
+    assert checked, msg
+
+
+def test_issue_1261(tmp_path: Path):
+    pe = parse_pe("PE/ANCUtility.dll")
+
+    rtype = lief.PE.RelocationEntry.BASE_TYPES.HIGHLOW
+
+    R1 = lief.PE.Relocation()
+    R1.virtual_address = 0x1000
+    R1.add_entry(lief.PE.RelocationEntry(0x10, rtype))
+    pe.add_relocation(R1)
+
+    R2 = lief.PE.Relocation()
+    R2.virtual_address = 0x2000
+    R2.add_entry(lief.PE.RelocationEntry(0x20, rtype))
+    pe.add_relocation(R2)
+
+    config = lief.PE.Builder.config_t()
+    config.relocations = True
+
+    output = tmp_path / "issue_1261.pe"
+    pe.write(str(output), config)
+
+    new = lief.PE.parse(output)
+    assert new is not None
+
+    checked, msg = lief.PE.check_layout(new)
+    assert checked, msg
+
+
+def test_code_injection(tmp_path: Path):
+    def resolved_import(
+        pe: lief.PE.Binary, _: lief.PE.Import, entry: lief.PE.ImportEntry, rva: int
+    ):
+        fixup_location = pe.get_section(".lief")
+        assert fixup_location is not None
+
+        LEA_SZ = 7
+        JMP_SZ = 6
+        FIXUP_POS = 7 + 2  # The jmp offset is encoded after the 2 first byes
+        FIXUP_SIZE = 4  # Size of the jump is 4 bytes
+
+        # rip is 'ahead' of the jmp
+        rip_at_jmp = fixup_location.virtual_address + LEA_SZ + JMP_SZ
+
+        # Delta to reach the IAT
+        delta = rva - rip_at_jmp
+
+        content = list(fixup_location.content)
+        content = (
+            content[:FIXUP_POS]
+            + list(delta.to_bytes(length=FIXUP_SIZE, byteorder="little"))
+            + content[FIXUP_POS + FIXUP_SIZE :]
+        )
+        fixup_location.content = content
+
+        lief.logging.info(f"{entry.name}: IAT: 0x{rva:08x}")
+
+    input_path = Path(get_sample("PE/LIEF-win64.dll"))
+    pe = lief.PE.parse(input_path)
+    assert pe is not None
+
+    # import 'puts' from 'api-ms-win-crt-stdio-l1-1-0.dll'
+    stdio = pe.add_import("api-ms-win-crt-stdio-l1-1-0.dll")
+    stdio.add_entry("puts")
+
+    code = [
+        # lea rcx, [rip + size next inst] -> Hello World
+        0x48,
+        0x8D,
+        0x0D,
+        0x06,
+        0x00,
+        0x00,
+        0x00,
+        # jmp qword ptr [rip + <fixup>]
+        0xFF,
+        0x25,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+    ] + list(b"Hello World")
+
+    section = lief.PE.Section(".lief")
+    section.content = code
+    section.characteristics = (
+        lief.PE.Section.CHARACTERISTICS.MEM_READ
+        | lief.PE.Section.CHARACTERISTICS.MEM_EXECUTE
+        | lief.PE.Section.CHARACTERISTICS.CNT_CODE
+        | lief.PE.Section.CHARACTERISTICS.CNT_INITIALIZED_DATA
+    ).value
+
+    new_section = pe.add_section(section)
+    assert new_section is not None
+    pe.tls.callbacks += [new_section.virtual_address + pe.imagebase]
+
+    config = lief.PE.Builder.config_t()
+    config.imports = True
+    config.resolved_iat_cbk = resolved_import
+
+    output = tmp_path / input_path.name
+
+    pe.write(output, config)
+
+    new = lief.PE.parse(output)
+    assert new is not None
+    err, msg = lief.PE.check_layout(new)
+    assert err, msg
+
+    if is_windows_x86_64():
+        popen_args: dict[str, Any] = {
+            "universal_newlines": True,
+            "shell": True,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "creationflags": 0x8000000,  # win32con.CREATE_NO_WINDOW
+        }
+
+        args = [
+            sys.executable,
+            "-c",
+            f'import ctypes; ctypes.windll.LoadLibrary("{output.as_posix()}")',
+        ]
+        with Popen(args, **popen_args) as proc:
+            stdout, _ = proc.communicate(timeout=10)
+            lief.logging.info(stdout)
+            assert proc.returncode == 0
+            assert "Hello World" in stdout
+
+
+def test_build_remove_imports(tmp_path: Path):
+    """Clear all imports and rebuild. Covers the imports-empty path."""
+    pe = lief.PE.parse(get_sample("PE/PE64_x86-64_binary_winhello64-mingw.exe"))
+    assert pe is not None
+    assert len(pe.imports) > 0
+
+    pe.remove_all_imports()
+
+    config = lief.PE.Builder.config_t()
+    config.imports = True
+
+    output = tmp_path / "no_imports.exe"
+    pe.write(output, config)
+
+    new = lief.PE.parse(output)
+    assert new is not None
+    check, msg = lief.PE.check_layout(new)
+    assert check, msg
+    assert len(new.imports) == 0
+
+
+@pytest.mark.private
+def test_issue_1284(tmp_path: Path):
+    input_path = Path(get_sample("private/PE/ig2_AddOn.exe"))
+    pe = lief.PE.parse(input_path)
+    assert pe is not None
+    pe.relocations[0].virtual_address = 0xDEADC0DE
+
+    config = lief.PE.Builder.config_t()
+    config.resources = False
+    config.debug = False
+    config.tls = False
+    config.load_configuration = False
+
+    config.dos_stub = True
+    config.overlay = True
+    config.relocations = True
+
+    out_path = tmp_path / input_path.name
+    pe.write(out_path, config)
+
+    new_pe = lief.PE.parse(out_path)
+    assert new_pe is not None
+    assert new_pe.relocations[0].virtual_address == 0xDEADC0DE

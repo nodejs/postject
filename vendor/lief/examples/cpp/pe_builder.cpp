@@ -1,53 +1,56 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* PE binary modification and rebuild.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Demonstrates how to parse a PE binary, make modifications (add a section,
+ * modify DLL characteristics, add an import), and write the result.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Usage: ./pe_builder <input_binary> <output_binary>
  */
-//
-// Description
-// ===========
-// This program shows how to use the LIEF's PE Builder API.
-// It takes a PE binary as input and write the reconstructed binary in the file
-// given in the second argument.
 
 #include <iostream>
 #include <memory>
-#include <fstream>
-#include <algorithm>
-#include <iterator>
+#include <vector>
 
 #include <LIEF/PE.hpp>
 
 using namespace LIEF::PE;
-int main(int argc, char **argv) {
-  std::cout << "PE Rebuilder" << '\n';
+
+int main(int argc, char** argv) {
   if (argc != 3) {
-    std::cerr << "Usage: " << argv[0] << " <Input Binary> <Output Binary>" << '\n';
-    return -1;
+    std::cerr << "Usage: " << argv[0] << " <Input Binary> <Output Binary>\n";
+    return EXIT_FAILURE;
   }
 
-  std::unique_ptr<Binary> binary{Parser::parse(argv[1])};
-  Builder builder{*binary};
+  auto binary = Parser::parse(argv[1]);
+  if (binary == nullptr) {
+    std::cerr << "Failed to parse: " << argv[1] << "\n";
+    return EXIT_FAILURE;
+  }
 
-  builder
-    .build_imports(false)
-    .patch_imports(false)
-    .build_tls(false)
-    .build_resources(false);
+  // Add a new section with custom data
+  Section new_section(".lief");
+  new_section.add_characteristic(Section::CHARACTERISTICS::MEM_READ);
+  new_section.add_characteristic(Section::CHARACTERISTICS::CNT_INITIALIZED_DATA);
+  std::vector<uint8_t> content = {'L', 'I', 'E', 'F'};
+  new_section.content(content);
+  binary->add_section(new_section);
 
-  builder.build();
-  builder.write(argv[2]);
-  std::cout << binary->name() << '\n';
+  // Enable ASLR if not already enabled
+  auto& opt = binary->optional_header();
+  if (!opt.has(OptionalHeader::DLL_CHARACTERISTICS::DYNAMIC_BASE)) {
+    opt.add(OptionalHeader::DLL_CHARACTERISTICS::DYNAMIC_BASE);
+    std::cout << "Enabled ASLR (DYNAMIC_BASE)\n";
+  }
 
-  return 0;
+  // Enable NX/DEP if not already enabled
+  if (!opt.has(OptionalHeader::DLL_CHARACTERISTICS::NX_COMPAT)) {
+    opt.add(OptionalHeader::DLL_CHARACTERISTICS::NX_COMPAT);
+    std::cout << "Enabled DEP (NX_COMPAT)\n";
+  }
+
+  // Write the modified binary
+  Builder::config_t config;
+  binary->write(argv[2], config);
+
+  std::cout << "Modified binary written to: " << argv[2] << "\n";
+  return EXIT_SUCCESS;
 }

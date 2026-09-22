@@ -1,191 +1,107 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-# LIEF documentation build configuration file
+import sys
+from pathlib import Path
 
-import lief
-import os
-import pathlib
-from docutils import nodes
+sys.path.insert(0, Path(__file__).parent.as_posix())
 
-GENERATE_DOXYGEN = False
-DOXYGEN_XML_PATH = None
-USE_RTD_THEME = False
-
-try:
-    import sphinx_lief
-except Exception:
-    import sphinx_rtd_theme
-    USE_RTD_THEME = True
-
-
-try:
-    import breathe
-    DOXYGEN_XML_PATH = os.getenv("LIEF_DOXYGEN_XML", None)
-    if DOXYGEN_XML_PATH is not None and pathlib.Path(DOXYGEN_XML_PATH).exists():
-        DOXYGEN_XML_PATH = pathlib.Path(DOXYGEN_XML_PATH).resolve().absolute()
-        GENERATE_DOXYGEN = True
-except Exception:
-    GENERATE_DOXYGEN = False
-
-
-FORCE_RTD_THEME = os.environ.get("FORCE_RTD_THEME", False)
-FORCE_RTD_THEME = FORCE_RTD_THEME in ("1", "true", "yes")
-
-if FORCE_RTD_THEME:
-    import sphinx_rtd_theme
-
-USE_RTD_THEME = USE_RTD_THEME or FORCE_RTD_THEME
+from sphinx.application import Sphinx
+from sphinx_lief_doc.ai import setup as setup_ai
+from sphinx_lief_doc.config import init_config as lief_init_config
+from sphinx_lief_doc.img_comparison import setup as setup_img_comparison
+from sphinx_lief_doc.inheritance_diagram import LIEFInheritanceDiagram
+from sphinx_lief_doc.lief_api import setup as setup_lief_api
+from sphinx_lief_doc.literalinclude import LiteralInclude
+from sphinx_lief_doc.plugin_package import setup as setup_plugin_packages
+from sphinx_lief_doc.python_typing import setup as setup_python_typing
+from sphinx_lief_doc.roles import setup as setup_roles
+from sphinx_lief_doc.rust_domain import RustDomain
+from sphinx_lief_doc.sdk_package import setup as setup_sdk_packages
+from sphinx_lief_doc.seo import setup as setup_seo
+from sphinx_lief_doc.writers.html5 import HTML5Translator
 
 extensions = [
-    'sphinx.ext.mathjax',
-    'sphinx.ext.autodoc',
+    "myst_parser",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.extlinks",
+    "sphinx_tabs.tabs",
+    "sphinx.ext.inheritance_diagram",
+    "breathe",
+    "sphinx_lief",
 ]
-
-if GENERATE_DOXYGEN:
-    extensions += ["breathe"]
-    breathe_projects = {
-        "lief": DOXYGEN_XML_PATH,
-    }
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
+source_suffix = {".md": "markdown"}
+exclude_patterns = ["_cross_api.md"]
 
-source_suffix = '.rst'
+myst_enable_extensions = [
+    "colon_fence",
+    "substitution",
+]
+myst_all_links_external = True
+myst_footnote_sort = False
+myst_substitutions = {
+    "cross_api": "```{include} /_cross_api.md\n```",
+    "literalinclude": LiteralInclude(),
+}
 
-master_doc = 'index'
+extlinks = {
+    "github-ref": ("https://github.com/%s", "%s"),
+    "llvm-pr": ("https://github.com/llvm/llvm-project/pull/%s", "llvm/llvm-project#%s"),
+}
 
-project    = 'LIEF'
+# Can be used for debugging breathe
+# breathe_debug_trace_directives = True
+# breathe_debug_trace_doxygen_ids = True
+# breathe_debug_trace_qualification = True
+
+master_doc = "index"
+
+suppress_warnings = ["config.cache"]
+
+project = "LIEF"
 html_title = "LIEF Documentation"
-copyright  = '2020, Quarkslab'
-author     = 'Romain Thomas'
-
-version = lief.__tag__ if lief.__is_tagged__ else lief.__version__
-release = lief.__version__
-commit  = lief.__commit__
+copyright = "2020, Quarkslab"
+author = "Romain Thomas"
 
 language = "en"
-autoclass_content = 'both'
-
-if GENERATE_DOXYGEN:
-    breathe_default_members = ('members', 'protected-members', 'undoc-members')
-    breathe_show_enumvalue_initializer = True
-
-exclude_patterns = []
-
-# -- Options for HTML output ----------------------------------------------
-def commit_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
-    commit_link = nodes.reference(
-            "", text[:7], refuri="https://github.com/lief-project/LIEF/commit/{}".format(text), **options)
-
-    return [commit_link], []
-
-
-def pr_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
-    pr_link = nodes.reference(
-            "", '#' + text, refuri="https://github.com/lief-project/LIEF/pull/{}".format(text), **options)
-
-    return [pr_link], []
-
-
-def issue_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
-    issue_link = nodes.reference(
-            "", '#' + text, refuri="https://github.com/lief-project/LIEF/issues/{}".format(text), **options)
-
-    return [issue_link], []
-
-def github_user(name, rawtext, text, lineno, inliner, options={}, content=[]):
-    issue_link = nodes.reference(
-            "", text, refuri="https://github.com/{}".format(text), **options)
-
-    return [issue_link], []
-
-def setup(app):
-    app.add_css_file('css/custom.css')  # may also be an URL
-
-    app.add_role('commit', commit_role)
-    app.add_role('pr', pr_role)
-    app.add_role('issue', issue_role)
-    app.add_role('github_user', github_user)
-
-linkcheck_request_headers = {
-    "*": {
-        "Accept": "text/html,application/atom+xml",
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:83.0) Gecko/20100101 Firefox/83.0",
-    }
+autoclass_content = "both"
+autodoc_default_options = {
+    "exclude-members": "@entries",
+    "undoc-members": True,
+    "inherited-members": False,
+    "show-inheritance": False,
+    "members": True,
 }
-linkcheck_workers = 1
-linkcheck_ignore = [
-    'https://github.com',
-    'http://github.com',
-]
+
+# exclude_patterns = [
+#    "api",
+#    "tutorials/*.md",
+#    "changelog/*.md",
+#    "extended",
+#    "formats",
+#    "changelog.md",
+#    "references.md",
+#    "intro.md",
+#    "installation.md",
+#    "compilation.md",
+# ]
 
 
-if not USE_RTD_THEME:
-    pygments_style = "xcode"
-    endpoint = "stable" if lief.__is_tagged__ else "latest"
-    extensions.append("sphinx_lief")
-    html_theme_path = sphinx_lief.html_theme_path()
-    html_context    = sphinx_lief.get_html_context()
-    html_theme      = "sphinx_lief"
-    html_base_url   = "https://lief-project.github.io/"
-    base_url        = "{}/doc/{}".format(html_base_url, endpoint)
-    html_theme_options = {
-        "commit": commit,
-        "base_url": "{}/".format(base_url),
-        "repo_url": "https://github.com/lief-project/LIEF/",
-        "repo_name": "LIEF",
-        "html_minify": True,
-        "html_prettify": False,
-        "css_minify": True,
-        "logo_icon": "logo_blue.png",
-        "globaltoc_depth": 2,
-        "color_primary": "blue",
-        "color_accent": "cyan",
-        "touch_icon": "favicon.ico",
-        "nav_links": [
-            {
-                "href": html_base_url,
-                "internal": False,
-                "title": "Home"
-            },
-            {
-                "href": "{}/blog".format(html_base_url),
-                "internal": False,
-                "title": "Blog"
-            },
-            {
-                "href": "{}/download".format(html_base_url),
-                "internal": False,
-                "title": "Download"
-            },
-            {
-                "href": "index",
-                "internal": True,
-                "title": "Documentation",
-                "subnav": [
-                    {
-                        "title": "Doxygen",
-                        "href": "{}/doxygen".format(base_url),
-                    },
-                ]
-            },
-            {
-                "href": "{}/about".format(html_base_url),
-                "internal": False,
-                "title": "About",
-            },
-        ],
-        "table_classes": ["plain"],
-    }
-else:
-    html_theme = "sphinx_rtd_theme"
-    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+def setup(app: Sphinx):
+    lief_init_config(app)
 
-html_last_updated_fmt = '%d/%m/%Y, %H:%M:%S'
-html_logo        = '_static/logo_blue.png'
-html_favicon     = '_static/favicon.ico'
-html_static_path = ['_static']
+    app.add_css_file("css/custom.css")  # may also be an URL
+    app.add_domain(RustDomain)
 
-htmlhelp_basename = 'LIEFdoc'
+    setup_python_typing(app)
+    setup_roles(app)
+    setup_lief_api(app)
+    setup_img_comparison(app)
+    setup_plugin_packages(app)
+    setup_sdk_packages(app)
+    setup_seo(app)
+    setup_ai(app)
 
+    app.add_directive("lief-inheritance", LIEFInheritanceDiagram)
+    app.set_translator("html", HTML5Translator)

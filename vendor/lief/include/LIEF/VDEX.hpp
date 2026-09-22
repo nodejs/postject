@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_VDEX_H_
-#define LIEF_VDEX_H_
+#ifndef LIEF_VDEX_H
+#define LIEF_VDEX_H
 
+// IWYU pragma: begin_exports
 #include "LIEF/config.h"
 
 #if defined(LIEF_VDEX_SUPPORT)
-#if !defined(LIEF_DEX_SUPPORT)
-#error "The VDEX module can't be used without the DEX support"
+  #if !defined(LIEF_DEX_SUPPORT)
+    #error "The VDEX module can't be used without the DEX support"
+  #endif
+  #include "LIEF/DEX.hpp"
+  #include "LIEF/VDEX/File.hpp"
+  #include "LIEF/VDEX/Parser.hpp"
+  #include "LIEF/VDEX/utils.hpp"
 #endif
-#include "LIEF/DEX.hpp"
-#include "LIEF/VDEX/Parser.hpp"
-#include "LIEF/VDEX/utils.hpp"
-#include "LIEF/VDEX/File.hpp"
-#endif
+
+// IWYU pragma: end_exports
 
 #endif

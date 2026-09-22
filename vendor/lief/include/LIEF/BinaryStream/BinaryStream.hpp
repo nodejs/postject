@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,90 +13,118 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_BINARY_STREAM_H_
-#define LIEF_BINARY_STREAM_H_
+#ifndef LIEF_BINARY_STREAM_H
+#define LIEF_BINARY_STREAM_H
 
-#include <cstdint>
-#include <climits>
-#include <vector>
-#include <istream>
-#include <utility>
-#include <memory>
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <string>
+#include <utility>
+#include <vector>
 
-#include "LIEF/BinaryStream/Convert.hpp"
+#include "LIEF/endianness_support.hpp"
 #include "LIEF/errors.hpp"
-
-struct mbedtls_x509_crt;
-struct mbedtls_x509_time;
+#include "LIEF/visibility.h"
 
 namespace LIEF {
+class ASN1Reader;
+class Binary;
 
-
-//! Class that is used to a read stream of data from different sources
-class BinaryStream {
+/// Class that is used to a read stream of data from different sources
+class LIEF_API BinaryStream {
   public:
+  friend class ASN1Reader;
+
   enum class STREAM_TYPE {
     UNKNOWN = 0,
     VECTOR,
     MEMORY,
     SPAN,
     FILE,
+    DUMP,
 
     ELF_DATA_HANDLER,
   };
 
-  BinaryStream();
-  virtual ~BinaryStream();
+  BinaryStream(STREAM_TYPE type) :
+    stype_(type) {}
+  virtual ~BinaryStream() = default;
   virtual uint64_t size() const = 0;
 
-  inline STREAM_TYPE type() const {
+  STREAM_TYPE type() const {
     return stype_;
   }
 
-  result<uint64_t> read_uleb128() const;
-  result<uint64_t> read_sleb128() const;
+  bool is_memory_stream() const {
+    return type() == STREAM_TYPE::MEMORY;
+  }
+
+  bool is_dump_stream() const {
+    return type() == STREAM_TYPE::DUMP;
+  }
+
+  bool is_memory_view() const {
+    return is_memory_stream() || is_dump_stream();
+  }
+
+  const BinaryStream& skip_uleb128() const LIEF_LIFETIMEBOUND {
+    static_cast<void>(read_uleb128());
+    return *this;
+  }
+
+  const BinaryStream& skip_sleb128() const LIEF_LIFETIMEBOUND {
+    static_cast<void>(read_sleb128());
+    return *this;
+  }
+
+  result<uint64_t> read_uleb128(size_t* size = nullptr) const;
+  result<uint64_t> read_sleb128(size_t* size = nullptr) const;
 
   result<int64_t> read_dwarf_encoded(uint8_t encoding) const;
 
-  result<std::string> read_string(size_t maxsize = ~static_cast<size_t>(0)) const;
-  result<std::string> peek_string(size_t maxsize = ~static_cast<size_t>(0)) const;
-  result<std::string> peek_string_at(size_t offset, size_t maxsize = ~static_cast<size_t>(0)) const;
+  result<std::string> read_string(size_t maxsize = ~size_t{0}) const;
+  result<std::string> peek_string(size_t maxsize = ~size_t{0}) const;
+  result<std::string> peek_string_at(size_t offset,
+                                     size_t maxsize = ~size_t{0}) const;
 
   result<std::u16string> read_u16string() const;
   result<std::u16string> peek_u16string() const;
 
-  result<std::string> read_mutf8(size_t maxsize = ~static_cast<size_t>(0)) const;
+  result<std::string> read_mutf8(size_t maxsize = ~size_t{0}) const;
 
   result<std::u16string> read_u16string(size_t length) const;
   result<std::u16string> peek_u16string(size_t length) const;
   result<std::u16string> peek_u16string_at(size_t offset, size_t length) const;
 
 
-  virtual inline ok_error_t peek_data(std::vector<uint8_t>& container,
-                                      uint64_t offset, uint64_t size)
-  {
-
+  virtual ok_error_t peek_data(std::vector<uint8_t>& container, uint64_t offset,
+                               uint64_t size, uint64_t virtual_address = 0) {
     if (size == 0) {
       return ok();
     }
     // Even though offset + size < ... => offset < ...
     // the addition could overflow so it's worth checking both
-    const bool read_ok = offset <= this->size() && (offset + size) <= this->size()
-                                                /* Check for an overflow */
-                                                && (static_cast<int64_t>(offset) >= 0 && static_cast<int64_t>(size) >= 0)
-                                                && (static_cast<int64_t>(offset + size) >= 0);
+    const bool read_ok = offset <= this->size() &&
+                         (offset + size) <= this->size()
+                         /* Check for an overflow */
+                         && (int64_t(offset) >= 0 && int64_t(size) >= 0) &&
+                         (int64_t(offset + size) >= 0);
     if (!read_ok) {
       return make_error_code(lief_errors::read_error);
     }
-    container.resize(size);
-    if (peek_in(container.data(), offset, size)) {
-      return ok();
+
+    if (container.size() < size) {
+      std::vector<uint8_t> buffer(size);
+      const ok_error_t res = peek_in(buffer.data(), offset, size, virtual_address);
+      container = std::move(buffer);
+      return res;
     }
-    return make_error_code(lief_errors::read_error);
+
+    return peek_in(container.data(), offset, size, virtual_address);
   }
 
-  virtual inline ok_error_t read_data(std::vector<uint8_t>& container, uint64_t size) {
+  virtual ok_error_t read_data(std::vector<uint8_t>& container, uint64_t size) {
     if (!peek_data(container, pos(), size)) {
       return make_error_code(lief_errors::read_error);
     }
@@ -105,15 +133,123 @@ class BinaryStream {
     return ok();
   }
 
-  void setpos(size_t pos) const;
-  void increment_pos(size_t value) const;
-  void decrement_pos(size_t value) const;
-  size_t pos() const;
+  ok_error_t read_data(std::vector<uint8_t>& container) {
+    const size_t size = this->size() - this->pos();
+    return read_data(container, size);
+  }
 
-  operator bool() const;
+  template<class T>
+  ok_error_t read_objects(std::vector<T>& container, uint64_t count) {
+    if (count == 0) {
+      return ok();
+    }
+    const size_t size = count * sizeof(T);
+    auto ret = peek_objects(container, count);
+    if (!ret) {
+      return make_error_code(lief_errors::read_error);
+    }
+    increment_pos(size);
+    return ok();
+  }
+
+  template<class T>
+  ok_error_t peek_objects(std::vector<T>& container, uint64_t count) {
+    return peek_objects_at(pos(), container, count);
+  }
+
+  template<class T>
+  ok_error_t peek_objects_at(uint64_t offset, std::vector<T>& container,
+                             uint64_t count) {
+    if (count == 0) {
+      return ok();
+    }
+    const auto current_p = pos();
+    setpos(offset);
+
+    const size_t size = count * sizeof(T);
+
+    if (!can_read(offset, size)) {
+      setpos(current_p);
+      return make_error_code(lief_errors::read_error);
+    }
+
+    ok_error_t res = make_error_code(lief_errors::inconsistent);
+
+    if (container.size() < count) {
+      std::vector<T> buffer(count);
+      res = peek_in(buffer.data(), pos(), size);
+      container = std::move(buffer);
+    } else {
+      res = peek_in(container.data(), pos(), size);
+    }
+
+    setpos(current_p);
+    return res;
+  }
+
+  void setpos(size_t pos) const {
+    pos_ = pos;
+  }
+
+  const BinaryStream& increment_pos(size_t value) const LIEF_LIFETIMEBOUND {
+    pos_ += value;
+    return *this;
+  }
+
+  void decrement_pos(size_t value) const {
+    if (pos_ > value) {
+      pos_ -= value;
+    } else {
+      pos_ = 0;
+    }
+  }
+
+  size_t pos() const {
+    return pos_;
+  }
+
+  bool is_valid() const {
+    return pos_ < size();
+  }
+
+  operator bool() const {
+    return is_valid();
+  }
 
   template<class T>
   const T* read_array(size_t size) const;
+
+  template<class T, size_t N>
+  ok_error_t peek_array(std::array<T, N>& dst) const {
+    if /*constexpr*/ (N == 0) {
+      return ok();
+    }
+    // Even though offset + size < ... => offset < ...
+    // the addition could overflow so it's worth checking both
+    const bool read_ok = pos_ <= size() &&
+                         (pos_ + N) <= size()
+                         /* Check for an overflow */
+                         && (int64_t(pos_) >= 0 && int64_t(N) >= 0) &&
+                         (int64_t(pos_ + N) >= 0);
+
+    if (!read_ok) {
+      return make_error_code(lief_errors::read_error);
+    }
+    if (peek_in(dst.data(), pos_, N)) {
+      return ok();
+    }
+    return make_error_code(lief_errors::read_error);
+  }
+
+  template<class T, size_t N>
+  ok_error_t read_array(std::array<T, N>& dst) const {
+    if (!peek_array<T, N>(dst)) {
+      return make_error_code(lief_errors::read_error);
+    }
+
+    increment_pos(N);
+    return ok();
+  }
 
   template<class T>
   result<T> peek() const;
@@ -130,72 +266,71 @@ class BinaryStream {
   template<class T>
   result<T> read() const;
 
+  template<class T>
+  const BinaryStream& skip() const LIEF_LIFETIMEBOUND {
+    static_cast<void>(read<T>());
+    return *this;
+  }
+
   template<typename T>
   bool can_read() const;
 
   template<typename T>
   bool can_read(size_t offset) const;
 
+  bool can_read(int64_t offset, int64_t size) const {
+    return offset < (int64_t)this->size() &&
+           size < ((int64_t)this->size() - offset);
+  }
+
   size_t align(size_t align_on) const;
 
-  /* Functions that are endianness aware */
-  template<class T>
-  typename std::enable_if<std::is_integral<T>::value, result<T>>::type peek_conv() const;
-
-  template<class T>
-  typename std::enable_if<!std::is_integral<T>::value, result<T>>::type peek_conv() const;
-
-  template<class T>
-  result<T> peek_conv(size_t offset) const;
-
-  template<class T>
-  result<T> read_conv() const;
-
-  /* Read an array of values and adjust endianness as needed */
-  template<typename T>
-  std::unique_ptr<T[]> read_conv_array(size_t size) const;
-
-  template<typename T>
-  std::unique_ptr<T[]> peek_conv_array(size_t offset, size_t size) const;
-
-  template<typename T>
-  static T swap_endian(T u);
-
-  void set_endian_swap(bool swap);
-
-  /* ASN.1 & X509 parsing functions */
-  virtual result<size_t>                             asn1_read_tag(int tag);
-  virtual result<size_t>                             asn1_read_len();
-  virtual result<std::string>                        asn1_read_alg();
-  virtual result<std::string>                        asn1_read_oid();
-  virtual result<int32_t>                            asn1_read_int();
-  virtual result<std::vector<uint8_t>>               asn1_read_bitstring();
-  virtual result<std::vector<uint8_t>>               asn1_read_octet_string();
-  virtual result<std::unique_ptr<mbedtls_x509_crt>>  asn1_read_cert();
-  virtual result<std::string>                        x509_read_names();
-  virtual result<std::vector<uint8_t>>               x509_read_serial();
-  virtual result<std::unique_ptr<mbedtls_x509_time>> x509_read_time();
-
+  void set_endian_swap(bool swap) {
+    endian_swap_ = swap;
+  }
 
   template<class T>
   static bool is_all_zero(const T& buffer) {
-    const auto* ptr = reinterpret_cast<const uint8_t *const>(&buffer);
-    return std::all_of(ptr, ptr + sizeof(T),
-                       [] (uint8_t x) { return x == 0; });
+    const auto* ptr = reinterpret_cast<const uint8_t* const>(&buffer);
+    return std::all_of(ptr, ptr + sizeof(T), [](uint8_t x) { return x == 0; });
   }
 
-  inline bool should_swap() const {
+  bool should_swap() const {
     return endian_swap_;
   }
 
-  protected:
-  virtual result<const void*> read_at(uint64_t offset, uint64_t size) const = 0;
-  inline virtual ok_error_t peek_in(void* dst, uint64_t offset, uint64_t size) const {
-    if (auto raw = read_at(offset, size)) {
-      if (dst == nullptr) {
-        return make_error_code(lief_errors::read_error);
-      }
+  virtual const uint8_t* p() const {
+    return nullptr;
+  }
 
+  virtual uint8_t* start() {
+    return const_cast<uint8_t*>(static_cast<const BinaryStream*>(this)->start());
+  }
+
+  virtual uint8_t* p() {
+    return const_cast<uint8_t*>(static_cast<const BinaryStream*>(this)->p());
+  }
+
+  virtual uint8_t* end() {
+    return const_cast<uint8_t*>(static_cast<const BinaryStream*>(this)->end());
+  }
+
+  virtual const uint8_t* start() const {
+    return nullptr;
+  }
+
+  virtual const uint8_t* end() const {
+    return nullptr;
+  }
+
+  virtual result<const void*> read_at(uint64_t offset, uint64_t size,
+                                      uint64_t virtual_address = 0) const = 0;
+  virtual ok_error_t peek_in(void* dst, uint64_t offset, uint64_t size,
+                             uint64_t virtual_address = 0) const {
+    if (dst == nullptr) {
+      return make_error_code(lief_errors::read_error);
+    }
+    if (auto raw = read_at(offset, size, virtual_address)) {
       const void* ptr = *raw;
 
       if (ptr == nullptr) {
@@ -207,6 +342,29 @@ class BinaryStream {
     }
     return make_error_code(lief_errors::read_error);
   }
+
+  template<class T>
+  const T* cast() const {
+    static_assert(std::is_base_of_v<BinaryStream, T>,
+                  "Require BinaryStream inheritance");
+    if (T::classof(*this)) {
+      return static_cast<const T*>(this);
+    }
+    return nullptr;
+  }
+
+  template<class T>
+  T* cast() {
+    return const_cast<T*>(static_cast<const BinaryStream*>(this)->cast<T>());
+  }
+
+  virtual bool bind_binary(Binary& /*bin*/) {
+    return false;
+  }
+
+  protected:
+  BinaryStream() = default;
+
   mutable size_t pos_ = 0;
   bool endian_swap_ = false;
   STREAM_TYPE stype_ = STREAM_TYPE::UNKNOWN;
@@ -222,22 +380,73 @@ class ScopedStream {
 
   explicit ScopedStream(BinaryStream& stream, uint64_t pos) :
     pos_{stream.pos()},
-    stream_{stream}
-  {
+    stream_{stream} {
     stream_.setpos(pos);
   }
 
   explicit ScopedStream(BinaryStream& stream) :
     pos_{stream.pos()},
-    stream_{stream}
-  {}
+    stream_{stream} {}
 
-  inline ~ScopedStream() {
+  ~ScopedStream() {
     stream_.setpos(pos_);
+  }
+
+  BinaryStream* operator->() {
+    return &stream_;
+  }
+
+  BinaryStream& operator*() {
+    return stream_;
+  }
+
+  const BinaryStream& operator*() const {
+    return stream_;
   }
 
   private:
   uint64_t pos_ = 0;
+  BinaryStream& stream_;
+};
+
+class ToggleEndianness {
+  public:
+  ToggleEndianness(const ToggleEndianness&) = delete;
+  ToggleEndianness& operator=(const ToggleEndianness&) = delete;
+
+  ToggleEndianness(ToggleEndianness&&) = delete;
+  ToggleEndianness& operator=(ToggleEndianness&&) = delete;
+
+  explicit ToggleEndianness(BinaryStream& stream, bool value) :
+    endian_swap_(stream.should_swap()),
+    stream_{stream} {
+    stream.set_endian_swap(value);
+  }
+
+  explicit ToggleEndianness(BinaryStream& stream) :
+    endian_swap_(stream.should_swap()),
+    stream_{stream} {
+    stream.set_endian_swap(!stream_.should_swap());
+  }
+
+  ~ToggleEndianness() {
+    stream_.set_endian_swap(endian_swap_);
+  }
+
+  BinaryStream* operator->() {
+    return &stream_;
+  }
+
+  BinaryStream& operator*() {
+    return stream_;
+  }
+
+  const BinaryStream& operator*() const {
+    return stream_;
+  }
+
+  private:
+  bool endian_swap_ = false;
   BinaryStream& stream_;
 };
 
@@ -246,7 +455,7 @@ template<class T>
 result<T> BinaryStream::read() const {
   result<T> tmp = this->peek<T>();
   if (!tmp) {
-    return tmp.error();
+    return tmp;
   }
   this->increment_pos(sizeof(T));
   return tmp;
@@ -258,6 +467,9 @@ result<T> BinaryStream::peek() const {
   T ret{};
   if (auto res = peek_in(&ret, pos(), sizeof(T))) {
     setpos(current_p);
+    if (endian_swap_) {
+      swap_endian(&ret);
+    }
     return ret;
   }
 
@@ -267,7 +479,7 @@ result<T> BinaryStream::peek() const {
 
 template<class T>
 result<T> BinaryStream::peek(size_t offset) const {
-  size_t saved_offset = this->pos();
+  const size_t saved_offset = this->pos();
   this->setpos(offset);
   result<T> r = this->peek<T>();
   this->setpos(saved_offset);
@@ -286,7 +498,7 @@ const T* BinaryStream::peek_array(size_t size) const {
 
 template<class T>
 const T* BinaryStream::peek_array(size_t offset, size_t size) const {
-  size_t saved_offset = this->pos();
+  const size_t saved_offset = this->pos();
   this->setpos(offset);
   const T* r = this->peek_array<T>(size);
   this->setpos(saved_offset);
@@ -317,89 +529,5 @@ const T* BinaryStream::read_array(size_t size) const {
   return tmp;
 }
 
-
-template<class T>
-result<T> BinaryStream::read_conv() const {
-  result<T> tmp = this->peek_conv<T>();
-  if (!tmp) {
-    return tmp.error();
-  }
-  this->increment_pos(sizeof(T));
-  return tmp;
-}
-
-template<class T>
-typename std::enable_if<std::is_integral<T>::value, result<T>>::type BinaryStream::peek_conv() const {
-  T ret;
-  if (auto res = peek_in(&ret, pos(), sizeof(T))) {
-    if (endian_swap_) {
-      return swap_endian<T>(ret);
-    }
-    return ret;
-  }
-  return make_error_code(lief_errors::read_error);
-}
-
-template<class T>
-typename std::enable_if<!std::is_integral<T>::value, result<T>>::type BinaryStream::peek_conv() const {
-  T ret;
-  if (auto res = peek_in(&ret, pos(), sizeof(T))) {
-    if (endian_swap_) {
-      LIEF::Convert::swap_endian<T>(&ret);
-    }
-    return ret;
-  }
-  return make_error_code(lief_errors::read_error);
-}
-
-
-template<class T>
-result<T> BinaryStream::peek_conv(size_t offset) const {
-  size_t saved_offset = this->pos();
-  this->setpos(offset);
-  result<T> r = this->peek_conv<T>();
-  this->setpos(saved_offset);
-  return r;
-}
-
-
-template<typename T>
-std::unique_ptr<T[]> BinaryStream::read_conv_array(size_t size) const {
-  const T *t = this->read_array<T>(size);
-
-  if (t == nullptr) {
-    return nullptr;
-  }
-
-  std::unique_ptr<T[]> uptr(new T[size]);
-
-  for (size_t i = 0; i < size; i++) {
-    uptr[i] = t[i];
-    if (this->endian_swap_) {
-      LIEF::Convert::swap_endian<T>(& uptr[i]);
-    } /* else no conversion, just provide the copied data */
-  }
-  return uptr;
-}
-
-
-template<typename T>
-std::unique_ptr<T[]> BinaryStream::peek_conv_array(size_t offset, size_t size) const {
-  const T *t = this->peek_array<T>(offset, size);
-
-  if (t == nullptr) {
-    return nullptr;
-  }
-
-  std::unique_ptr<T[]> uptr(new T[size]);
-
-  for (size_t i = 0; i < size; i++) {
-    uptr[i] = t[i];
-    if (this->endian_swap_) {
-      LIEF::Convert::swap_endian<T>(& uptr[i]);
-    } /* else no conversion, just provide the copied data */
-  }
-  return uptr;
-}
 }
 #endif

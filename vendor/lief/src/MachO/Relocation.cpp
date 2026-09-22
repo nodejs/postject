@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,100 +13,47 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <numeric>
-#include <iomanip>
-
-#include "LIEF/MachO/hash.hpp"
-#include "LIEF/MachO/Symbol.hpp"
+#include "LIEF/MachO/Relocation.hpp"
+#include "LIEF/MachO/DyldInfo.hpp"
+#include "LIEF/MachO/EnumToString.hpp"
 #include "LIEF/MachO/Section.hpp"
 #include "LIEF/MachO/SegmentCommand.hpp"
-#include "LIEF/MachO/Relocation.hpp"
-#include "LIEF/MachO/EnumToString.hpp"
+#include "LIEF/MachO/Symbol.hpp"
+#include "LIEF/Visitor.hpp"
+#include "frozen.hpp"
+#include "spdlog/fmt/fmt.h"
 
-namespace LIEF {
-namespace MachO {
 
-Relocation::~Relocation() = default;
-Relocation::Relocation() = default;
+namespace LIEF::MachO {
 
 Relocation::Relocation(const Relocation& other) :
   LIEF::Relocation{other},
   type_{other.type_},
-  architecture_{other.architecture_}
-{}
+  architecture_{other.architecture_} {}
 
-Relocation::Relocation(uint64_t address, uint8_t type) {
+Relocation::Relocation(uint64_t address, uint8_t type) :
+  type_(type) {
   address_ = address;
-  type_    = type;
 }
-
 
 Relocation& Relocation::operator=(const Relocation& other) {
   if (&other != this) {
-    /* Do not copy pointer as they could be not bind to the same Binary */
-    address_      = other.address_;
-    size_         = other.size_;
-    type_         = other.type_;
+    /* Do not copy pointers as they could be bound to a different Binary */
+    address_ = other.address_;
+    size_ = other.size_;
+    type_ = other.type_;
     architecture_ = other.architecture_;
   }
   return *this;
 }
-void Relocation::swap(Relocation& other) {
+void Relocation::swap(Relocation& other) noexcept {
   LIEF::Relocation::swap(other);
 
-  std::swap(symbol_,       other.symbol_);
-  std::swap(type_,         other.type_);
+  std::swap(symbol_, other.symbol_);
+  std::swap(type_, other.type_);
   std::swap(architecture_, other.architecture_);
-  std::swap(section_,      other.section_);
-  std::swap(segment_,      other.segment_);
-}
-
-uint8_t Relocation::type() const {
-  return type_;
-}
-
-CPU_TYPES Relocation::architecture() const {
-  return architecture_;
-}
-
-bool Relocation::has_symbol() const {
-  return symbol_ != nullptr;
-}
-
-Symbol* Relocation::symbol() {
-  return const_cast<Symbol*>(static_cast<const Relocation*>(this)->symbol());
-}
-
-const Symbol* Relocation::symbol() const {
-  return symbol_;
-}
-
-
-// Section
-// =======
-bool Relocation::has_section() const {
-  return section_ != nullptr;
-}
-
-Section* Relocation::section() {
-  return const_cast<Section*>(static_cast<const Relocation*>(this)->section());
-}
-
-const Section* Relocation::section() const {
-  return section_;
-}
-
-
-bool Relocation::has_segment() const {
-  return segment_ != nullptr;
-}
-
-SegmentCommand* Relocation::segment() {
-  return const_cast<SegmentCommand*>(static_cast<const Relocation*>(this)->segment());
-}
-
-const SegmentCommand* Relocation::segment() const {
-  return segment_;
+  std::swap(section_, other.section_);
+  std::swap(segment_, other.segment_);
 }
 
 void Relocation::type(uint8_t type) {
@@ -117,104 +64,66 @@ void Relocation::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-
-bool Relocation::operator==(const Relocation& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool Relocation::operator!=(const Relocation& rhs) const {
-  return !(*this == rhs);
-}
-
-
 std::ostream& Relocation::print(std::ostream& os) const {
-  os << std::hex;
-  os << std::left;
-
   std::string symbol_name;
-  if (has_symbol()) {
-    symbol_name = symbol()->name();
+  if (const Symbol* sym = symbol()) {
+    symbol_name = sym->name();
   }
 
   std::string section_name;
-  if (has_section()) {
-    section_name = section()->name();
+  if (const Section* sec = section()) {
+    section_name = sec->name();
   }
 
   std::string segment_name;
-  if (has_segment()) {
-    segment_name = segment()->name();
+  if (const SegmentCommand* seg = segment()) {
+    segment_name = seg->name();
   }
 
   std::string segment_section_name;
   if (!section_name.empty() && !segment_name.empty()) {
-    segment_section_name = segment_name + "." + section_name;
-  }
-  else if (!segment_name.empty()) {
+    segment_section_name = segment_name + '.' + section_name;
+  } else if (!segment_name.empty()) {
     segment_section_name = segment_name;
-  }
-  else if (!section_name.empty()) {
+  } else if (!section_name.empty()) {
     segment_section_name = section_name;
   }
 
   std::string relocation_type;
-  if (origin() == RELOCATION_ORIGINS::ORIGIN_RELOC_TABLE) {
+  if (origin() == Relocation::ORIGIN::RELOC_TABLE) {
     switch (architecture()) {
-      case CPU_TYPES::CPU_TYPE_X86:
-        {
-          relocation_type = to_string(static_cast<X86_RELOCATION>(type()));
-          break;
-        }
+      case Header::CPU_TYPE::X86:
+        relocation_type = to_string(X86_RELOCATION(type()));
+        break;
 
-      case CPU_TYPES::CPU_TYPE_X86_64:
-        {
-          relocation_type = to_string(static_cast<X86_64_RELOCATION>(type()));
-          break;
-        }
+      case Header::CPU_TYPE::X86_64:
+        relocation_type = to_string(X86_64_RELOCATION(type()));
+        break;
 
-      case CPU_TYPES::CPU_TYPE_ARM:
-        {
-          relocation_type = to_string(static_cast<ARM_RELOCATION>(type()));
-          break;
-        }
+      case Header::CPU_TYPE::ARM:
+        relocation_type = to_string(ARM_RELOCATION(type()));
+        break;
 
-      case CPU_TYPES::CPU_TYPE_ARM64:
-        {
-          relocation_type = to_string(static_cast<ARM64_RELOCATION>(type()));
-          break;
-        }
+      case Header::CPU_TYPE::ARM64:
+        relocation_type = to_string(ARM64_RELOCATION(type()));
+        break;
 
-      case CPU_TYPES::CPU_TYPE_POWERPC:
-        {
-          relocation_type = to_string(static_cast<PPC_RELOCATION>(type()));
-          break;
-        }
+      case Header::CPU_TYPE::POWERPC:
+        relocation_type = to_string(PPC_RELOCATION(type()));
+        break;
 
-      default:
-        {
-          relocation_type = std::to_string(type());
-        }
+      default: relocation_type = std::to_string(type());
     }
   }
 
-  if (origin() == RELOCATION_ORIGINS::ORIGIN_DYLDINFO) {
-    relocation_type = to_string(static_cast<REBASE_TYPES>(type()));
+  if (origin() == Relocation::ORIGIN::DYLDINFO) {
+    relocation_type = to_string(DyldInfo::REBASE_TYPE(type()));
   }
 
-
-  os << std::setw(10) << address()
-     << std::setw(20) << relocation_type
-     << std::setw(4) << std::dec << static_cast<uint32_t>(size());
-
-  os << std::setw(10) << to_string(origin());
-
+  os << fmt::format("address={:#x}, type={}, size={}, origin={} ", address(),
+                    relocation_type, size(), to_string(origin()));
   if (!segment_section_name.empty()) {
-      os << segment_section_name;
+    os << segment_section_name;
   } else {
     if (!section_name.empty()) {
       os << section_name;
@@ -224,10 +133,7 @@ std::ostream& Relocation::print(std::ostream& os) const {
       os << section_name;
     }
   }
-
-  os << " ";
-  os << std::setw(10) << symbol_name;
-
+  os << ' ' << symbol_name;
   return os;
 }
 
@@ -235,7 +141,20 @@ std::ostream& Relocation::print(std::ostream& os) const {
 std::ostream& operator<<(std::ostream& os, const Relocation& reloc) {
   return reloc.print(os);
 }
+const char* to_string(Relocation::ORIGIN e) {
+#define ENTRY(X) std::pair(Relocation::ORIGIN::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(UNKNOWN),
+      ENTRY(DYLDINFO),
+      ENTRY(RELOC_TABLE),
+      ENTRY(CHAINED_FIXUPS),
+  };
+#undef ENTRY
 
-
+  if (auto it = enums2str.find(e); it != enums2str.end()) {
+    return it->second;
+  }
+  return "UNKNOWN";
 }
+
 }

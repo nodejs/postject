@@ -1,31 +1,59 @@
-#include "LIEF/ELF.hpp"
-#include "LIEF/PE.hpp"
-#include "LIEF/MachO.hpp"
-#include "LIEF/DEX.hpp"
-#include "LIEF/OAT.hpp"
-#include "LIEF/VDEX.hpp"
 #include "LIEF/ART.hpp"
-#include "logging.hpp"
+#include "LIEF/DEX.hpp"
+#include "LIEF/ELF.hpp"
+#include "LIEF/MachO.hpp"
+#include "LIEF/OAT.hpp"
+#include "LIEF/PE.hpp"
+#include "LIEF/VDEX.hpp"
+#include "LIEF/logging.hpp"
 #include <sstream>
+#include <string>
+
+#include <iostream>
+
+void check_abstract(LIEF::Binary& bin) {
+  std::stringstream ss;
+  for (LIEF::Relocation& rel : bin.relocations()) {
+    ss << rel;
+  }
+
+  for (LIEF::Section& sec : bin.sections()) {
+    ss << sec;
+  }
+
+  for (LIEF::Symbol& sym : bin.symbols()) {
+    ss << sym;
+  }
+
+  for (LIEF::Function& func : bin.exported_functions()) {
+    ss << func;
+  }
+
+  for (LIEF::Function& func : bin.imported_functions()) {
+    ss << func;
+  }
+}
 
 void check(LIEF::PE::Binary& bin) {
   std::stringstream ss;
   ss << bin;
-  LIEF::PE::Builder builder{bin};
-  builder.build();
+  std::ostringstream os;
+  bin.write(os);
 }
 
 void check(std::unique_ptr<LIEF::MachO::FatBinary> bin) {
   std::stringstream ss;
   for (LIEF::MachO::Binary& fit : *bin) {
+    check_abstract(fit);
     ss << fit;
     {
       for (size_t i = 0; i < 5; ++i) {
-        LIEF::MachO::SegmentCommand seg("__LIEF_" + std::to_string(i), std::vector<uint8_t>(0x345, 1));
+        LIEF::MachO::SegmentCommand seg("__LIEF_" + std::to_string(i),
+                                        std::vector<uint8_t>(0x345, 1));
         fit.add(seg);
       }
       auto target = &fit;
-      if (auto* uuid = target->get(LIEF::MachO::LOAD_COMMAND_TYPES::LC_UUID)) {
+      if (auto* uuid = target->get(LIEF::MachO::LoadCommand::TYPE::UUID)) {
         target->extend(*uuid, uuid->size() + 0x100);
       }
       if (auto* seg = target->get_segment("__LINKEDIT")) {
@@ -67,7 +95,9 @@ void check(LIEF::ART::File& file) {
 void check(LIEF::OAT::Binary& bin) {
   std::stringstream ss;
   ss << bin;
-  for (auto& _ : bin.dex_files()) { ss << _; }
+  for (auto& _ : bin.dex_files()) {
+    ss << _;
+  }
   for (auto& oat_dex : bin.oat_dex_files()) {
     ss << oat_dex;
     check(*oat_dex.dex_file());
@@ -86,22 +116,30 @@ void check(LIEF::OAT::Binary& bin) {
   ss << bin.dex2dex_json_info();
 }
 
+
 int main(int argc, char** argv) {
+
+  using namespace std::literals::string_literals;
+
   if (argc < 2) {
-    LIEF_ERR("Usage: {} <binary>", argv[0]);
+    LIEF::logging::log(LIEF::logging::Level::Err,
+                       "Usage: "s + argv[0] + " <binary>");
     return EXIT_FAILURE;
   }
+  LIEF::logging::set_level(LIEF::logging::Level::Err);
   const std::string path = argv[1];
 
   if (LIEF::ELF::is_elf(path)) {
     std::unique_ptr<LIEF::ELF::Binary> bin = LIEF::ELF::Parser::parse(path);
     check(*bin);
+    check_abstract(*bin);
     return EXIT_SUCCESS;
   }
 
   if (LIEF::PE::is_pe(path)) {
     std::unique_ptr<LIEF::PE::Binary> bin = LIEF::PE::Parser::parse(path);
     check(*bin);
+    check_abstract(*bin);
     return EXIT_SUCCESS;
   }
 

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ART_PARSER_H_
-#define LIEF_ART_PARSER_H_
+#ifndef LIEF_ART_PARSER_H
+#define LIEF_ART_PARSER_H
+#include <string_view>
 #include <memory>
 #include <vector>
 
 #include "LIEF/ART/types.hpp"
+#include "LIEF/path.hpp"
 #include "LIEF/visibility.h"
-
-struct Profiler;
 
 namespace LIEF {
 class BinaryStream;
@@ -29,23 +29,31 @@ namespace ART {
 class File;
 
 
-//! @brief Class which parses an ART file and transform into a ART::File object
+/// Class which parses an ART file and transforms it into an ART::File object
 class LIEF_API Parser {
   public:
-  friend struct ::Profiler;
-  static std::unique_ptr<File> parse(const std::string& file);
-  static std::unique_ptr<File> parse(std::vector<uint8_t> data, const std::string& name = "");
+  static std::unique_ptr<File> parse(std::string_view file);
+
+  /// Same as parse(std::string_view) but the file is given as a
+  /// `std::filesystem::path`
+  template<class PathT, enable_if_path_t<PathT> = 0>
+  static std::unique_ptr<File> parse(const PathT& file) {
+    return parse(file.string());
+  }
+
+  static std::unique_ptr<File> parse(std::vector<uint8_t> data,
+                                     std::string_view name = "");
 
   Parser& operator=(const Parser& copy) = delete;
-  Parser(const Parser& copy)            = delete;
+  Parser(const Parser& copy) = delete;
 
   private:
   Parser();
-  Parser(const std::string& file);
+  Parser(std::string_view file);
   Parser(std::vector<uint8_t> data);
-  virtual ~Parser();
+  ~Parser();
 
-  void init(const std::string& name, art_version_t version);
+  void init(std::string_view name, art_version_t version);
 
   template<typename ART_T>
   void parse_file();
@@ -97,13 +105,13 @@ class LIEF_API Parser {
 
 
   //// Parse a **Single** java.lang.DexCache object
-  //template<typename ART_T, typename PTR_T>
-  //void parse_class_roots(size_t object_offset);
+  // template<typename ART_T, typename PTR_T>
+  // void parse_class_roots(size_t object_offset);
 
   std::unique_ptr<File> file_;
   std::unique_ptr<BinaryStream> stream_;
   uint32_t imagebase_ = 0;
 };
-} // namespace ART
-} // namespace LIEF
+}
+}
 #endif

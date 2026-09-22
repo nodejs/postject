@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_PE_DATADIRECTORY_H_
-#define LIEF_PE_DATADIRECTORY_H_
+#ifndef LIEF_PE_DATADIRECTORY_H
+#define LIEF_PE_DATADIRECTORY_H
 
+#include <cstdint>
 #include <memory>
-#include <iostream>
+#include <ostream>
 
 #include "LIEF/Object.hpp"
+#include "LIEF/span.hpp"
 #include "LIEF/visibility.h"
-#include "LIEF/PE/enums.hpp"
 
 namespace LIEF {
+class SpanStream;
+
 namespace PE {
 
 class Builder;
@@ -35,7 +38,7 @@ namespace details {
 struct pe_data_directory;
 }
 
-//! Class that represents a PE data directory entry
+/// Class that represents a PE data directory entry
 class LIEF_API DataDirectory : public Object {
 
   friend class Builder;
@@ -43,50 +46,107 @@ class LIEF_API DataDirectory : public Object {
   friend class Binary;
 
   public:
-  DataDirectory();
-  DataDirectory(DATA_DIRECTORY type);
-  DataDirectory(const details::pe_data_directory& header, DATA_DIRECTORY type);
+  static constexpr size_t DEFAULT_NB = 16;
 
-  DataDirectory(const DataDirectory& other);
-  DataDirectory& operator=(DataDirectory other);
-  void swap(DataDirectory& other);
-  virtual ~DataDirectory();
+  enum class TYPES : uint32_t {
+    EXPORT_TABLE = 0,
+    IMPORT_TABLE,
+    RESOURCE_TABLE,
+    EXCEPTION_TABLE,
+    CERTIFICATE_TABLE,
+    BASE_RELOCATION_TABLE,
+    DEBUG_DIR,
+    ARCHITECTURE,
+    GLOBAL_PTR,
+    TLS_TABLE,
+    LOAD_CONFIG_TABLE,
+    BOUND_IMPORT,
+    IAT,
+    DELAY_IMPORT_DESCRIPTOR,
+    CLR_RUNTIME_HEADER,
+    RESERVED,
 
-  //! The relative virtual address of the content of this data
-  //! directory
-  uint32_t RVA() const;
+    UNKNOWN,
+  };
+  DataDirectory() = default;
+  DataDirectory(TYPES type) :
+    type_{type} {}
 
-  //! The size of the content
-  uint32_t size() const;
+  DataDirectory(const details::pe_data_directory& header, TYPES type);
 
-  //! Check if the content of this data directory is associated
-  //! with a PE Cection
-  bool has_section() const;
+  DataDirectory(const DataDirectory& other) = default;
+  DataDirectory& operator=(const DataDirectory& other) = default;
 
-  //! Section associated with the DataDirectory
-  Section* section();
-  const Section* section() const;
+  DataDirectory(DataDirectory&& other) noexcept = default;
+  DataDirectory& operator=(DataDirectory&& other) noexcept = default;
 
-  //! Type of the data directory
-  DATA_DIRECTORY type() const;
+  ~DataDirectory() override = default;
 
-  void size(uint32_t size);
-  void RVA(uint32_t rva);
+  /// The relative virtual address of the content of this data
+  /// directory
+  uint32_t RVA() const {
+    return rva_;
+  }
+
+  /// The size of the content
+  uint32_t size() const {
+    return size_;
+  }
+
+  /// Check if the content of this data directory is associated
+  /// with a PE Section
+  bool has_section() const {
+    return section_ != nullptr;
+  }
+
+  /// Raw content (bytes) referenced by this data directory
+  span<const uint8_t> content() const LIEF_LIFETIMEBOUND {
+    return const_cast<DataDirectory*>(this)->content();
+  }
+
+  span<uint8_t> content() LIEF_LIFETIMEBOUND;
+
+  /// Section associated with the DataDirectory
+  Section* section() LIEF_LIFETIMEBOUND {
+    return section_;
+  }
+
+  const Section* section() const LIEF_LIFETIMEBOUND {
+    return section_;
+  }
+
+  /// Type of the data directory
+  TYPES type() const {
+    return type_;
+  }
+
+  void size(uint32_t size) {
+    size_ = size;
+  }
+
+  void RVA(uint32_t rva) {
+    rva_ = rva;
+  }
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const DataDirectory& rhs) const;
-  bool operator!=(const DataDirectory& rhs) const;
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const DataDirectory& entry);
 
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const DataDirectory& entry);
+  /// @private
+  LIEF_LOCAL
+  std::unique_ptr<SpanStream> stream(bool sized = true) const;
 
   private:
-  uint32_t       rva_ = 0;
-  uint32_t       size_ = 0;
-  DATA_DIRECTORY type_ = DATA_DIRECTORY::NUM_DATA_DIRECTORIES;
-  Section*       section_ = nullptr;
+  uint32_t rva_ = 0;
+  uint32_t size_ = 0;
+  TYPES type_ = TYPES::UNKNOWN;
+  Section* section_ = nullptr;
 };
+
+LIEF_API const char* to_string(DataDirectory::TYPES e);
+
 }
 }
 
-#endif /* LIEF_PE_DATADIRECTORY_H_ */
+#endif

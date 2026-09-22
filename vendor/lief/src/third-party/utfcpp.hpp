@@ -1,4 +1,4 @@
-/* Copyright 2021 - 2022 R. Thomas
+/* Copyright 2021 - 2026 R. Thomas
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,14 +12,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_UTFCPP_H_
-#define LIEF_UTFCPP_H_
-#include "LIEF/config.h"
+#ifndef LIEF_UTFCPP_H
+#define LIEF_UTFCPP_H
+#include "LIEF/config.h" // IWYU pragma: keep
 
 #ifndef LIEF_EXTERNAL_UTF8CPP
-#include <internal/utfcpp/utf8.h>
+  #include <internal/utfcpp/utf8/unchecked.h>
 #else
-#include <utf8.h>
+  #include <utf8/unchecked.h>
 #endif
 
 #endif

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,80 +13,97 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_PE_RESOURCE_VAR_FILE_INFO_H_
-#define LIEF_PE_RESOURCE_VAR_FILE_INFO_H_
-#include <iostream>
-#include <sstream>
-
-#include "LIEF/visibility.h"
+#ifndef LIEF_PE_RESOURCE_VAR_FILE_INFO_H
+#define LIEF_PE_RESOURCE_VAR_FILE_INFO_H
+#include <cstdint>
+#include <ostream>
+#include <vector>
 
 #include "LIEF/Object.hpp"
+#include "LIEF/PE/resources/ResourceVar.hpp"
+#include "LIEF/errors.hpp"
+#include "LIEF/iterators.hpp"
+#include "LIEF/visibility.h"
+
 namespace LIEF {
+class BinaryStream;
 namespace PE {
 
-class ResourcesManager;
-class ResourceVersion;
-struct ResourcesParser;
-
-//! This object describes information about languages supported by the application
-//!
-//! @see LIEF::PE::ResourceVersion
+/// Representation of the `VarFileInfo` structure
+///
+/// This structure represents the organization of data in a file-version resource.
+/// It contains version information not dependent on a particular language and
+/// code page combination.
+///
+/// See: https://learn.microsoft.com/en-us/windows/win32/menurc/varfileinfo
 class LIEF_API ResourceVarFileInfo : public Object {
-
-  friend class ResourcesManager;
-  friend class ResourceVersion;
-  friend struct ResourcesParser;
-
   public:
-  ResourceVarFileInfo();
-  ResourceVarFileInfo(uint16_t type, std::u16string key);
-  ResourceVarFileInfo(const ResourceVarFileInfo&);
-  ResourceVarFileInfo& operator=(const ResourceVarFileInfo&);
-  virtual ~ResourceVarFileInfo();
+  using vars_t = std::vector<ResourceVar>;
 
-  //! The type of data in the version resource
-  //! * ``1`` if it contains text data
-  //! * ``0`` if it contains binary data
-  uint16_t type() const;
+  using it_vars = ref_iterator<vars_t&>;
+  using it_const_vars = const_ref_iterator<const vars_t&>;
 
-  //! Signature of the structure:
-  //! Must be the unicode string "VarFileInfo"
-  const std::u16string& key() const;
+  static result<ResourceVarFileInfo> parse(BinaryStream& stream);
 
-  //! List of languages that the application supports
-  //!
-  //! The **least** significant 16-bits  must contain a Microsoft language identifier,
-  //! and the **most** significant 16-bits must contain the PE::CODE_PAGES
-  //! Either **most** or **least** 16-bits can be zero, indicating that the file is language or code page independent.
-  const std::vector<uint32_t>& translations() const;
-  std::vector<uint32_t>&       translations();
+  ResourceVarFileInfo() = default;
 
-  void type(uint16_t type);
+  ResourceVarFileInfo(const ResourceVarFileInfo&) = default;
+  ResourceVarFileInfo& operator=(const ResourceVarFileInfo&) = default;
 
-  void key(const std::u16string& key);
-  void key(const std::string& key);
+  ResourceVarFileInfo(ResourceVarFileInfo&&) = default;
+  ResourceVarFileInfo& operator=(ResourceVarFileInfo&&) = default;
 
-  void translations(const std::vector<uint32_t>& translations);
+  ~ResourceVarFileInfo() override = default;
+
+  /// The type of data in the version resource
+  /// * `1` if it contains text data
+  /// * `0` if it contains binary data
+  uint16_t type() const {
+    return type_;
+  }
+
+  /// Signature of the structure. Must be the unicode string "VarFileInfo"
+  const std::u16string& key() const {
+    return key_;
+  }
+
+  /// Key as an utf8 string
+  std::string key_u8() const;
+
+  /// Iterator over the embedded variables associated to the structure
+  it_vars vars() {
+    return vars_;
+  }
+
+  it_const_vars vars() const {
+    return vars_;
+  }
+
+  ResourceVarFileInfo& type(uint16_t type) {
+    type_ = type;
+    return *this;
+  }
+
+  ResourceVarFileInfo& key(std::u16string key) {
+    key_ = std::move(key);
+    return *this;
+  }
+
+  void add_var(ResourceVar var) {
+    vars_.push_back(std::move(var));
+  }
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const ResourceVarFileInfo& rhs) const;
-  bool operator!=(const ResourceVarFileInfo& rhs) const;
-
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const ResourceVarFileInfo& entry);
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const ResourceVarFileInfo& entry);
 
   private:
-  uint16_t       type_ = 0;
+  uint16_t type_ = 0;
   std::u16string key_;
-  std::vector<uint32_t> translations_;
-
+  vars_t vars_;
 };
-
-
-
-
 }
 }
-
 
 #endif

@@ -1,0 +1,60 @@
+target_include_directories(pyLIEF PUBLIC
+  "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+target_sources(pyLIEF PRIVATE
+  pyLIEF.cpp
+  pySafeString.cpp
+  pyErr.cpp
+  pyIOStream.cpp
+  pyutils.cpp
+  pyParser.cpp
+  pyWriteStream.cpp
+  pyDebugDeclOpt.cpp
+)
+
+add_subdirectory(typing)
+add_subdirectory(Abstract)
+add_subdirectory(platforms)
+
+add_subdirectory(DWARF)
+add_subdirectory(PDB)
+add_subdirectory(ObjC)
+add_subdirectory(DyldSharedCache)
+add_subdirectory(asm)
+add_subdirectory(BinaryStream)
+
+add_subdirectory(runtime)
+
+if(LIEF_ELF)
+  add_subdirectory(ELF)
+endif()
+
+if(LIEF_PE)
+  add_subdirectory(PE)
+endif()
+
+if(LIEF_MACHO)
+  add_subdirectory(MachO)
+endif()
+
+if(LIEF_COFF)
+  add_subdirectory(COFF)
+endif()
+
+if(LIEF_OAT)
+  add_subdirectory(OAT)
+endif()
+
+if(LIEF_DEX)
+  add_subdirectory(DEX)
+endif()
+
+if(LIEF_VDEX)
+  add_subdirectory(VDEX)
+endif()
+
+if(LIEF_ART)
+  add_subdirectory(ART)
+endif()
+

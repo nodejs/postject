@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <LIEF/ELF.hpp>
 #include <iostream>
 #include <memory>
-#include <iostream>
-#include <fstream>
-#include <algorithm>
-#include <iterator>
-
-#include <LIEF/ELF.hpp>
 
 //
 // Rename the first section name.
 // Ex: ./tools/ELFSectionRename /bin/ls ./lsRename
 //
+// ```
 // $ readelf -S /bin/ls
 //
 //  [Nr] Nom               Type             Adresse           Décalage
@@ -49,13 +45,13 @@
 //  [ 2] .note.ABI-tag     NOTE             0000000000400254  00000254
 //       0000000000000020  0000000000000000   A       0     0     4
 //  ....
+// ```
 //
-//
-//
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   std::cout << "ELF Section rename" << '\n';
   if (argc != 3) {
-    std::cerr << "Usage: " << argv[0] << " <Original Binary> <Output Binary>" << '\n';
+    std::cerr << "Usage: " << argv[0] << " <Original Binary> <Output Binary>"
+              << '\n';
     return -1;
   }
 
@@ -66,6 +62,4 @@ int main(int argc, char **argv) {
   binary->write(argv[2]);
 
   return 0;
-
-
 }

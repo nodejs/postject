@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_PARSER_H_
-#define LIEF_ELF_PARSER_H_
+#ifndef LIEF_ELF_PARSER_H
+#define LIEF_ELF_PARSER_H
+#include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 
-#include "LIEF/visibility.h"
+#include "LIEF/path.hpp"
 #include "LIEF/utils.hpp"
+#include "LIEF/visibility.h"
 
 #include "LIEF/Abstract/Parser.hpp"
 #include "LIEF/errors.hpp"
-#include "LIEF/ELF/enums.hpp"
 
-struct Profiler;
+#include "LIEF/ELF/ParserConfig.hpp"
 
 namespace LIEF {
 class BinaryStream;
@@ -36,203 +39,324 @@ namespace ELF {
 class Section;
 class Binary;
 class Segment;
+class Symbol;
+class Note;
+class Relocation;
 
-//! Class which parses and transforms an ELF file into a ELF::Binary object
+/// Class which parses and transforms an ELF file into a ELF::Binary object
 class LIEF_API Parser : public LIEF::Parser {
   friend class OAT::Parser;
+
   public:
-  friend struct ::Profiler;
-
-  static constexpr uint32_t NB_MAX_SYMBOLS         = 1000000;
-  static constexpr uint32_t DELTA_NB_SYMBOLS       = 3000;
-  static constexpr uint32_t NB_MAX_BUCKETS         = NB_MAX_SYMBOLS;
-  static constexpr uint32_t NB_MAX_CHAINS          = 1000000;
-  static constexpr uint32_t NB_MAX_SEGMENTS        = 10000;
-  static constexpr uint32_t NB_MAX_RELOCATIONS     = 3000000;
+  static constexpr uint32_t NB_MAX_SYMBOLS = 1000000;
+  static constexpr uint32_t DELTA_NB_SYMBOLS = 3000;
+  static constexpr uint32_t NB_MAX_BUCKETS = NB_MAX_SYMBOLS;
+  static constexpr uint32_t NB_MAX_CHAINS = 1000000;
+  static constexpr uint32_t NB_MAX_SEGMENTS = 10000;
+  static constexpr uint32_t NB_MAX_RELOCATIONS = 3000000;
   static constexpr uint32_t NB_MAX_DYNAMIC_ENTRIES = 1000;
-  static constexpr uint32_t NB_MAX_MASKWORD        = 512;
-  static constexpr uint32_t MAX_NOTE_DESCRIPTION   = 1_MB;
-  static constexpr uint32_t MAX_SECTION_SIZE       = 2_GB;
-  static constexpr uint32_t MAX_SEGMENT_SIZE       = 3_GB;
+  static constexpr uint32_t MAX_SEGMENT_SIZE = 3_GB;
 
-  //! Parse an ELF file and return a LIEF::ELF::Binary object
-  //!
-  //! For weird binaries (e.g. sectionless) you can choose which method to use for counting dynamic symbols
-  //!
-  //! @param[in] file      Path to the ELF binary
-  //! @param[in] count_mtd Method used to count dynamic symbols.
-  //!                      Default: LIEF::ELF::DYNSYM_COUNT_METHODS::COUNT_AUTO
-  //!
-  //! @return LIEF::ELF::Binary
-  static std::unique_ptr<Binary> parse(const std::string& file,
-                                       DYNSYM_COUNT_METHODS count_mtd = DYNSYM_COUNT_METHODS::COUNT_AUTO);
+  enum ELF_TYPE {
+    ELF_UNKNOWN,
+    ELF32,
+    ELF64,
+  };
 
-  //! Parse the given raw data as an ELF binary and return a LIEF::ELF::Binary object
-  //!
-  //! For weird binaries (e.g. sectionless) you can choose which method use to count dynamic symbols
-  //!
-  //! @param[in] data      Raw ELF
-  //! @param[in] name      Binary name (optional)
-  //! @param[in] count_mtd Method used to count dynamic symbols.
-  //                       Default: LIEF::ELF::DYNSYM_COUNT_METHODS::COUNT_AUTO
-  //!
-  //! @return LIEF::ELF::Binary
-  static std::unique_ptr<Binary> parse(const std::vector<uint8_t>& data, const std::string& name = "",
-                                       DYNSYM_COUNT_METHODS count_mtd = DYNSYM_COUNT_METHODS::COUNT_AUTO);
+  /// Parse an ELF file and return a LIEF::ELF::Binary object
+  ///
+  /// For weird binaries (e.g. sectionless) you can choose which method to use for
+  /// counting dynamic symbols
+  ///
+  /// @param[in] file Path to the ELF binary
+  /// @param[in] conf Optional configuration for the parser
+  ///
+  /// @return LIEF::ELF::Binary as a `unique_ptr`
+  static std::unique_ptr<Binary>
+      parse(std::string_view file, const ParserConfig& conf = ParserConfig::all());
+
+  /// Same as parse(std::string_view, const ParserConfig&) but the file is
+  /// given as a `std::filesystem::path`
+  template<class PathT, enable_if_path_t<PathT> = 0>
+  static std::unique_ptr<Binary>
+      parse(const PathT& file, const ParserConfig& conf = ParserConfig::all()) {
+    return parse(file.string(), conf);
+  }
+
+  /// Parse the given raw data as an ELF binary and return a LIEF::ELF::Binary
+  /// object
+  ///
+  /// For weird binaries (e.g. sectionless) you can choose which method to use to
+  /// count dynamic symbols
+  ///
+  /// @param[in] data Raw ELF as a std::vector of uint8_t
+  /// @param[in] conf Optional configuration for the parser
+  ///
+  /// @return LIEF::ELF::Binary
+  static std::unique_ptr<Binary>
+      parse(const std::vector<uint8_t>& data,
+            const ParserConfig& conf = ParserConfig::all());
+
+  /// Parse the ELF binary from the given stream and return a LIEF::ELF::Binary
+  /// object
+  ///
+  /// For weird binaries (e.g. sectionless) you can choose which method to use to
+  /// count dynamic symbols
+  ///
+  /// @param[in] stream  The stream which wraps the ELF binary
+  /// @param[in] conf    Optional configuration for the parser
+  ///
+  /// @return LIEF::ELF::Binary
+  static std::unique_ptr<Binary>
+      parse(std::unique_ptr<BinaryStream> stream,
+            const ParserConfig& conf = ParserConfig::all());
+
+  /// Parse the ELF binary from the given memory address
+  ///
+  /// @param[in] address Base address of the ELF binary in memory
+  /// @param[in] conf    Optional configuration for the parser
+  ///
+  /// @return LIEF::ELF::Binary
+  static std::unique_ptr<Binary>
+      parse_from_memory(uintptr_t address,
+                        const ParserConfig& conf = ParserConfig::all());
+
+  /// Parse the ELF binary from the given memory address with the given size
+  ///
+  /// @param[in] address Base address of the ELF binary in memory
+  /// @param[in] size    Size of the memory region
+  /// @param[in] conf    Optional configuration for the parser
+  ///
+  /// @return LIEF::ELF::Binary
+  static std::unique_ptr<Binary>
+      parse_from_memory(uintptr_t address, size_t size,
+                        const ParserConfig& conf = ParserConfig::all());
+
+  /// Parse an ELF binary from a memory dump located on disk.
+  ///
+  /// A dump is a raw capture of the process memory that was mapped starting at
+  /// the virtual address `addr`. This is typically used to parse an ELF image
+  /// that has been dumped from memory (e.g. from a debugger or a runtime hook).
+  ///
+  /// @param[in] filepath Path to the file that contains the memory dump
+  /// @param[in] addr     Virtual address at which the dump was mapped
+  /// @param[in] conf     Optional configuration for the parser
+  static std::unique_ptr<Binary>
+      parse_from_dump(std::string_view filepath, uint64_t addr,
+                      const ParserConfig& conf = ParserConfig::all());
+
+  /// Same as parse_from_dump(std::string_view, uint64_t, const ParserConfig&)
+  /// but the dump file is given as a `std::filesystem::path`
+  template<class PathT, enable_if_path_t<PathT> = 0>
+  static std::unique_ptr<Binary>
+      parse_from_dump(const PathT& filepath, uint64_t addr,
+                      const ParserConfig& conf = ParserConfig::all()) {
+    return parse_from_dump(filepath.string(), addr, conf);
+  }
+
+  /// Same as parse_from_dump(std::string_view, uint64_t, const ParserConfig&)
+  /// but the dump is wrapped in the given **non-owned** stream.
+  static std::unique_ptr<Binary>
+      parse_from_dump(BinaryStream& stream, uint64_t addr,
+                      const ParserConfig& conf = ParserConfig::all());
+
+  /// Same as parse_from_dump(std::string_view, uint64_t, const ParserConfig&)
+  /// but the dump is wrapped in the given **owned** stream.
+  static std::unique_ptr<Binary>
+      parse_from_dump(std::unique_ptr<BinaryStream> stream, uint64_t addr,
+                      const ParserConfig& conf = ParserConfig::all());
 
   Parser& operator=(const Parser&) = delete;
-  Parser(const Parser&)            = delete;
-
-  protected:
-  Parser();
-  Parser(const std::string& file,
-         DYNSYM_COUNT_METHODS count_mtd = DYNSYM_COUNT_METHODS::COUNT_AUTO);
-
-  Parser(const std::vector<uint8_t>& data,
-         DYNSYM_COUNT_METHODS count_mtd = DYNSYM_COUNT_METHODS::COUNT_AUTO);
+  Parser(const Parser&) = delete;
 
   ~Parser();
 
-  ok_error_t init(const std::string& name = "");
+  protected:
+  LIEF_LOCAL Parser();
+  LIEF_LOCAL Parser(std::unique_ptr<BinaryStream> stream, ParserConfig config);
+  LIEF_LOCAL Parser(std::string_view file, ParserConfig config);
+  LIEF_LOCAL Parser(const std::vector<uint8_t>& data, ParserConfig config);
 
-  bool should_swap() const;
+  LIEF_LOCAL ok_error_t init();
+
+  LIEF_LOCAL bool should_swap() const;
 
   // map, dynamic_symbol.version <----> symbol_version
   // symbol_version comes from symbol_version table
-  void link_symbol_version();
+  LIEF_LOCAL void link_symbol_version();
+
+  LIEF_LOCAL ok_error_t link_symbol_section(Symbol& sym);
 
   template<typename ELF_T>
-  ok_error_t parse_binary();
+  LIEF_LOCAL ok_error_t parse_binary();
 
   template<typename ELF_T>
-  ok_error_t parse_header();
+  LIEF_LOCAL ok_error_t parse_header();
 
   template<typename ELF_T>
-  ok_error_t parse_sections();
+  LIEF_LOCAL ok_error_t parse_sections();
 
   template<typename ELF_T>
-  ok_error_t parse_segments();
+  LIEF_LOCAL ok_error_t parse_segments();
 
-  uint64_t get_dynamic_string_table() const;
+  LIEF_LOCAL uint64_t
+      get_dynamic_string_table(BinaryStream* stream = nullptr) const;
 
-  result<uint64_t> get_dynamic_string_table_from_segments() const;
+  LIEF_LOCAL result<uint64_t>
+      get_dynamic_string_table_from_segments(BinaryStream* stream = nullptr) const;
 
-  uint64_t get_dynamic_string_table_from_sections() const;
+  LIEF_LOCAL uint64_t get_dynamic_string_table_from_sections() const;
 
-  //! Return the number of dynamic symbols using the given method
+  /// Return the number of dynamic symbols using the given method
   template<typename ELF_T>
-  result<uint32_t> get_numberof_dynamic_symbols(DYNSYM_COUNT_METHODS mtd) const;
+  LIEF_LOCAL result<uint32_t>
+      get_numberof_dynamic_symbols(ParserConfig::DYNSYM_COUNT mtd) const;
 
-  //! Count based on hash table (reliable)
+  /// Count based on hash table (reliable)
   template<typename ELF_T>
-  result<uint32_t> nb_dynsym_hash() const;
+  LIEF_LOCAL result<uint32_t> nb_dynsym_hash() const;
 
-  //! Count based on SYSV hash table
+  /// Count based on SYSV hash table
   template<typename ELF_T>
-  result<uint32_t> nb_dynsym_sysv_hash() const;
+  LIEF_LOCAL result<uint32_t> nb_dynsym_sysv_hash() const;
 
-  //! Count based on GNU hash table
+  /// Count based on GNU hash table
   template<typename ELF_T>
-  result<uint32_t> nb_dynsym_gnu_hash() const;
+  LIEF_LOCAL result<uint32_t> nb_dynsym_gnu_hash() const;
 
-  //! Count based on sections (not very reliable)
+  /// Count based on sections (not very reliable)
   template<typename ELF_T>
-  result<uint32_t> nb_dynsym_section() const;
+  LIEF_LOCAL result<uint32_t> nb_dynsym_section() const;
 
-  //! Count based on PLT/GOT relocations (very reliable but not accurate)
+  /// Count based on PLT/GOT relocations (very reliable but not accurate)
   template<typename ELF_T>
-  result<uint32_t> nb_dynsym_relocations() const;
-
-  template<typename ELF_T>
-  ok_error_t parse_dynamic_entries(uint64_t offset, uint64_t size);
+  LIEF_LOCAL result<uint32_t> nb_dynsym_relocations() const;
 
   template<typename ELF_T>
-  ok_error_t parse_dynamic_symbols(uint64_t offset);
+  LIEF_LOCAL ok_error_t parse_dynamic_entries(BinaryStream& stream);
 
-  //! Parse static Symbol
-  //!
-  //! Parser find Symbols offset by using the file offset attribute of the
-  //! ELF_SECTION_TYPES::SHT_SYMTAB Section.
-  //!
-  //! The number of symbols is taken from the `information` attribute in the section header.
-  //!
-  //! The section containing symbols name is found with the `link` attribute.
   template<typename ELF_T>
-  ok_error_t parse_static_symbols(uint64_t offset, uint32_t nb_symbols,
-                                  const Section& string_section);
+  LIEF_LOCAL ok_error_t parse_dynamic_symbols(uint64_t offset);
 
-  //! Parse Dynamic relocations
-  //!
-  //! It uses DT_REL/DT_RELA dynamic entries to parse it
+  /// Parse symtab Symbol
+  ///
+  /// Parser find Symbols offset by using the file offset attribute of the
+  /// ELF_SECTION_TYPES::SHT_SYMTAB Section.
+  ///
+  /// The number of symbols is taken from the `information` attribute in the
+  /// section header.
+  ///
+  /// The section containing symbols name is found with the `link` attribute.
+  template<typename ELF_T>
+  LIEF_LOCAL ok_error_t parse_symtab_symbols(const Section& symtab_section,
+                                             const Section& string_section);
+
+  /// Parse Dynamic relocations
+  ///
+  /// It uses DT_REL/DT_RELA dynamic entries to parse it
   template<typename ELF_T, typename REL_T>
-  ok_error_t parse_dynamic_relocations(uint64_t relocations_offset, uint64_t size);
+  LIEF_LOCAL ok_error_t parse_dynamic_relocations(uint64_t relocations_offset,
+                                                  uint64_t size);
 
-  //! Parse `.plt.got`/`got` relocations
-  //!
-  //! For:
-  //! * ELF32 it uses **DT_JMPREL** and **DT_PLTRELSZ**
-  //! * ELF64 it uses **DT_PLTREL** and **DT_PLTRELSZ**
+  /// Parse `.plt.got`/`got` relocations
+  ///
+  /// For:
+  /// * ELF32 it uses **DT_JMPREL** and **DT_PLTRELSZ**
+  /// * ELF64 it uses **DT_PLTREL** and **DT_PLTRELSZ**
   template<typename ELF_T, typename REL_T>
-  ok_error_t parse_pltgot_relocations(uint64_t offset, uint64_t size);
+  LIEF_LOCAL ok_error_t parse_pltgot_relocations(uint64_t offset, uint64_t size);
 
 
-  //! Parse relocations using LIEF::ELF::Section.
-  //! Section relocations are usually found in object files
+  /// Parse *relative* relocations
+  template<typename ELF_T>
+  LIEF_LOCAL ok_error_t parse_relative_relocations(uint64_t offset, uint64_t size);
+
+  /// Parse Android packed relocations
+  template<typename ELF_T>
+  LIEF_LOCAL ok_error_t parse_packed_relocations(uint64_t offset, uint64_t size);
+
+  template<typename ELF_T>
+  LIEF_LOCAL ok_error_t process_dynamic_table();
+
+  /// Parse relocations using LIEF::ELF::Section.
+  /// Section relocations are usually found in object files
   template<typename ELF_T, typename REL_T>
-  ok_error_t parse_section_relocations(const Section& section);
+  LIEF_LOCAL ok_error_t parse_section_relocations(const Section& section);
 
-  //! Parse SymbolVersionRequirement
-  //!
-  //! We use the virtual address stored in the
-  //! DYNAMIC_TAGS::DT_VERNEED entry to get the offset.
-  //! and DYNAMIC_TAGS::DT_VERNEEDNUM to get the number of entries
+  /// Parse SymbolVersionRequirement
+  ///
+  /// We use the virtual address stored in the
+  /// DynamicEntry::TAG::VERNEED entry to get the offset.
+  /// and DynamicEntry::TAG::VERNEEDNUM to get the number of entries
   template<typename ELF_T>
-  ok_error_t parse_symbol_version_requirement(uint64_t offset, uint32_t nb_entries);
+  LIEF_LOCAL ok_error_t parse_symbol_version_requirement(uint64_t offset,
+                                                         uint32_t nb_entries);
 
 
-  //! Parse SymbolVersionDefinition.
-  //!
-  //! We use the virtual address stored in
-  //! the DYNAMIC_TAGS::DT_VERDEF DT_VERDEF entry to get the offset.
-  //! DYNAMIC_TAGS::DT_VERDEFNUM gives the number of entries
+  /// Parse SymbolVersionDefinition.
+  ///
+  /// We use the virtual address stored in
+  /// the DynamicEntry::TAG::VERDEF DT_VERDEF entry to get the offset.
+  /// DynamicEntry::TAG::VERDEFNUM gives the number of entries
   template<typename ELF_T>
-  ok_error_t parse_symbol_version_definition(uint64_t offset, uint32_t nb_entries);
+  LIEF_LOCAL ok_error_t parse_symbol_version_definition(uint64_t offset,
+                                                        uint32_t nb_entries);
 
 
-  //! Parse @link SymbolVersion Symbol version @endlink.
-  //!
-  //! We use the virtual address stored in the
-  //! DYNAMIC_TAGS::DT_VERSYM entry to parse it.
-  //!
-  //! @see http://dev.gentoo.org/~solar/elf/symbol-versioning
-  ok_error_t parse_symbol_version(uint64_t symbol_version_offset);
+  /// Parse @link SymbolVersion Symbol version @endlink.
+  ///
+  /// We use the virtual address stored in the
+  /// DynamicEntry::TAG::VERSYM entry to parse it.
+  ///
+  /// @see http://dev.gentoo.org/~solar/elf/symbol-versioning
+  LIEF_LOCAL ok_error_t parse_symbol_version(uint64_t symbol_version_offset);
 
-  //! Parse Symbols's GNU hash
-  //!
-  //! @see https://blogs.oracle.com/ali/entry/gnu_hash_elf_sections
+  /// Parse the symbols' GNU hash
+  ///
+  /// @see https://blogs.oracle.com/ali/entry/gnu_hash_elf_sections
   template<typename ELF_T>
-  ok_error_t parse_symbol_gnu_hash(uint64_t offset);
+  LIEF_LOCAL ok_error_t parse_symbol_gnu_hash(uint64_t offset);
 
-  //! Parse Note (.gnu.note)
-  ok_error_t parse_notes(uint64_t offset, uint64_t size);
+  /// Parse Note (.gnu.note)
+  LIEF_LOCAL ok_error_t parse_notes(uint64_t offset, uint64_t size);
 
-  //! Parse Symbols's SYSV hash
-  ok_error_t parse_symbol_sysv_hash(uint64_t offset);
+  LIEF_LOCAL std::unique_ptr<Note> get_note(uint32_t type, std::string name,
+                                            std::vector<uint8_t> desc_bytes);
 
-  ok_error_t parse_overlay();
+  /// Parse the symbols' SYSV hash
+  LIEF_LOCAL ok_error_t parse_symbol_sysv_hash(uint64_t offset);
+
+  LIEF_LOCAL ok_error_t parse_overlay();
 
   template<typename ELF_T, typename REL_T>
-  uint32_t max_relocation_index(uint64_t relocations_offset, uint64_t size) const;
+  LIEF_LOCAL uint32_t max_relocation_index(uint64_t relocations_offset,
+                                           uint64_t size) const;
 
-  //! Check if the given Section is wrapped by the given segment
-  static bool check_section_in_segment(const Section& section, const Segment& segment);
+  /// Check if the given Section is wrapped by the given segment
+  LIEF_LOCAL static bool check_section_in_segment(const Section& section,
+                                                  const Segment& segment);
+
+  LIEF_LOCAL bool bind_symbol(Relocation& R);
+  LIEF_LOCAL Relocation& insert_relocation(std::unique_ptr<Relocation> R);
+
+  template<class ELF_T>
+  LIEF_LOCAL ok_error_t parse_dyn_table(Segment& pt_dyn);
 
   std::unique_ptr<BinaryStream> stream_;
-  std::unique_ptr<Binary>       binary_;
-  ELF_CLASS                     type_ = ELF_CLASS::ELFCLASSNONE;
-  DYNSYM_COUNT_METHODS          count_mtd_ = DYNSYM_COUNT_METHODS::COUNT_AUTO;
+  std::unique_ptr<Binary> binary_;
+  ParserConfig config_;
+  /*
+   * parse_sections() may skip some sections so that
+   * binary_->sections_ is not contiguous based on the index of the sections.
+   *
+   * On the other hand, we need these indexes to bind symbols that
+   * reference sections. That's why we have this unordered_map.
+   */
+  std::unordered_map<size_t, Section*> sections_idx_;
+  uint64_t memory_address_ = 0;
+  std::unordered_set<uint64_t> notes_offset_;
 };
 
-} // namespace ELF
-} // namespace LIEF
+}
+}
 #endif
