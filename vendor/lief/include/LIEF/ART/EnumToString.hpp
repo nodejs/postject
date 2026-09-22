@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,13 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ART_ENUM_TO_STRING_H_
-#define LIEF_ART_ENUM_TO_STRING_H_
-#include "LIEF/visibility.h"
+#ifndef LIEF_ART_ENUM_TO_STRING_H
+#define LIEF_ART_ENUM_TO_STRING_H
 #include "LIEF/ART/enums.hpp"
+#include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace ART {
+
+namespace LIEF::ART {
 
 LIEF_API const char* to_string(STORAGE_MODES e);
 
@@ -33,8 +33,7 @@ LIEF_API const char* to_string(ART_44::IMAGE_METHODS e);
 LIEF_API const char* to_string(ART_17::IMAGE_ROOTS e);
 LIEF_API const char* to_string(ART_44::IMAGE_ROOTS e);
 
-} // namespace ART
-} // namespace LIEF
+}
+
 
 #endif
-

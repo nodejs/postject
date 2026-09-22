@@ -1,123 +1,129 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import lief
-import unittest
-import logging
-import os
-import sys
-import random
-
-from unittest import TestCase
-from utils import get_sample
-
-class TestDelayImport(TestCase):
-    def setUp(self):
-        self.logger = logging.getLogger(__name__)
-
-    def test_simple(self):
-        """
-        Referential test on a simple case
-        This test aims at checking we cover correctly a regular binary
-        """
-        binary: lief.PE.Binary = lief.parse(get_sample("PE/test.delay.exe"))
-
-        self.assertEqual(binary.has_delay_imports, True)
-        self.assertEqual(len(binary.delay_imports), 2)
-        self.assertIsNot(binary.get_delay_import("USER32.dll"), None)
-        self.assertEqual(binary.has_delay_import("USER32.dll"), True)
-
-        # Check that took care of updating the abstract layer
-        self.assertEqual(len(binary.imported_functions), 87)
-        self.assertEqual(len(binary.libraries), 3)
-
-        # Now check in depth the delay imports
-        shlwapi = binary.delay_imports[0]
-        self.assertEqual(shlwapi.name,         "SHLWAPI.dll")
-        self.assertEqual(shlwapi.attribute,    1)
-        self.assertEqual(shlwapi.handle,       0x29dc8)
-        self.assertEqual(shlwapi.iat,          0x25d30)
-        self.assertEqual(shlwapi.names_table,  0x23f48)
-        self.assertEqual(shlwapi.biat,         0x23f80)
-        self.assertEqual(shlwapi.uiat,         0)
-        self.assertEqual(shlwapi.timestamp,    0)
-        self.assertEqual(len(shlwapi.entries), 1)
-
-        strstra = shlwapi.entries[0]
-
-        self.assertEqual(strstra.name,      "StrStrA")
-        self.assertEqual(strstra.value,     0x00025d30)
-        self.assertEqual(strstra.iat_value, 0x0300905a4d)
-        self.assertEqual(strstra.data,      0x23f68)
-        self.assertEqual(strstra.hint,      0x14d)
-
-        user32 = binary.delay_imports[1]
-        self.assertEqual(user32.name,         "USER32.dll")
-        self.assertEqual(user32.attribute,    1)
-        self.assertEqual(user32.handle,       0x29dd0)
-        self.assertEqual(user32.iat,          0x25d40)
-        self.assertEqual(user32.names_table,  0x23f58)
-        self.assertEqual(user32.biat,         0x23f90)
-        self.assertEqual(user32.uiat,         0)
-        self.assertEqual(user32.timestamp,    0)
-        self.assertEqual(len(user32.entries), 1)
-
-        messageboxa = user32.entries[0]
-
-        self.assertEqual(messageboxa.name,      "MessageBoxA")
-        self.assertEqual(messageboxa.value,     0x25d40)
-        self.assertEqual(messageboxa.iat_value, 0x0300905a4d)
-        self.assertEqual(messageboxa.data,      0x23f72)
-        self.assertEqual(messageboxa.hint,      0x285)
-
-    def test_cmd(self):
-        """
-        Test on cmd.exe
-        """
-        binary: lief.PE.Binary = lief.parse(get_sample("PE/PE64_x86-64_binary_cmd.exe"))
-
-        self.assertEqual(binary.has_delay_imports, True)
-        self.assertEqual(len(binary.delay_imports), 4)
-
-        self.assertEqual(len(binary.imported_functions), 247)
-        self.assertEqual(len(binary.libraries), 8)
-
-        shell32 = binary.get_delay_import("SHELL32.dll")
-        self.assertEqual(shell32.name,         "SHELL32.dll")
-        self.assertEqual(shell32.attribute,    1)
-        self.assertEqual(shell32.handle,       0x2e2e8)
-        self.assertEqual(shell32.iat,          0x2e078)
-        self.assertEqual(shell32.names_table,  0x2a5a0)
-        self.assertEqual(shell32.biat,         0)
-        self.assertEqual(shell32.uiat,         0)
-        self.assertEqual(shell32.timestamp,    0)
-        self.assertEqual(len(shell32.entries), 2)
-
-        SHChangeNotify = shell32.entries[0]
-
-        self.assertEqual(SHChangeNotify.name,      "SHChangeNotify")
-        self.assertEqual(SHChangeNotify.value,     0x0002e078)
-        self.assertEqual(SHChangeNotify.iat_value, 0x0300905a4d)
-        self.assertEqual(SHChangeNotify.data,      0x2a6ee)
-        self.assertEqual(SHChangeNotify.hint,      0)
-
-        ShellExecuteExW = shell32.entries[1]
-
-        self.assertEqual(ShellExecuteExW.name,      "ShellExecuteExW")
-        self.assertEqual(ShellExecuteExW.value,     0x0002e080)
-        self.assertEqual(ShellExecuteExW.iat_value, 0xffff00000004)
-        self.assertEqual(ShellExecuteExW.data,      0x2a700)
-        self.assertEqual(ShellExecuteExW.hint,      0)
+import pytest
+from utils import get_sample, parse_pe
 
 
-if __name__ == '__main__':
+def test_simple():
+    """
+    Referential test on a simple case
+    This test aims at checking we cover correctly a regular binary
+    """
+    binary = parse_pe("PE/test.delay.exe")
 
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
+    assert binary.has_delay_imports
+    assert len(binary.delay_imports) == 2
+    assert binary.get_delay_import("USER32.dll") is not None
+    assert binary.has_delay_import("USER32.dll")
 
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    root_logger.addHandler(ch)
+    # Check that took care of updating the abstract layer
+    assert len(binary.imported_functions) == 87
+    assert len(binary.libraries) == 3
 
-    unittest.main(verbosity=2)
+    # Now check the delay imports in depth
+    shlwapi = binary.delay_imports[0]
+    assert shlwapi.name == "SHLWAPI.dll"
+    assert shlwapi.attribute == 1
+    assert shlwapi.handle == 0x29DC8
+    assert shlwapi.iat == 0x25D30
+    assert shlwapi.names_table == 0x23F48
+    assert shlwapi.biat == 0x23F80
+    assert shlwapi.uiat == 0
+    assert shlwapi.timestamp == 0
+    assert len(shlwapi.entries) == 1
 
+    strstra = shlwapi.entries[0]
+
+    assert strstra.name == "StrStrA"
+    assert strstra.value == 0x00025D30
+    assert strstra.iat_value == 0x140001983
+    assert strstra.data == 0x23F68
+    assert strstra.hint == 0x14D
+
+    user32 = binary.delay_imports[1]
+    assert user32.name == "USER32.dll"
+    assert user32.attribute == 1
+    assert user32.handle == 0x29DD0
+    assert user32.iat == 0x25D40
+    assert user32.names_table == 0x23F58
+    assert user32.biat == 0x23F90
+    assert user32.uiat == 0
+    assert user32.timestamp == 0
+    assert len(user32.entries) == 1
+    assert user32.copy() == user32
+
+    messageboxa = user32.entries[0]
+    assert messageboxa.copy() == messageboxa
+    assert messageboxa.copy().copy() != user32
+
+    assert messageboxa.ordinal == 0x3F72
+    assert messageboxa.name == "MessageBoxA"
+    assert messageboxa.value == 0x25D40
+    assert messageboxa.iat_value == 0x140001A08
+    assert messageboxa.data == 0x23F72
+    assert messageboxa.hint == 0x285
+    lief.logging.info(messageboxa)
+
+    # Coverage: str()/hash() on DelayImport and DelayImportEntry
+    output = str(shlwapi)
+    assert "SHLWAPI" in output
+    assert hash(shlwapi) != 0
+    entry_str = str(strstra)
+    assert "StrStrA" in entry_str
+    assert hash(strstra) != 0
+    # Coverage: demangled_name (may be empty without extended LIEF)
+    _ = strstra.demangled_name
+
+
+def test_cmd():
+    """
+    Test on cmd.exe
+    """
+    binary = parse_pe("PE/PE64_x86-64_binary_cmd.exe")
+
+    assert binary.has_delay_imports
+    assert len(binary.delay_imports) == 4
+
+    assert len(binary.imported_functions) == 247
+    assert len(binary.libraries) == 8
+
+    shell32 = binary.get_delay_import("SHELL32.dll")
+    assert shell32 is not None
+    assert shell32.name == "SHELL32.dll"
+    assert shell32.attribute == 1
+    assert shell32.handle == 0x2E2E8
+    assert shell32.iat == 0x2E078
+    assert shell32.names_table == 0x2A5A0
+    assert shell32.biat == 0
+    assert shell32.uiat == 0
+    assert shell32.timestamp == 0
+    assert len(shell32.entries) == 2
+
+    SHChangeNotify = shell32.entries[0]
+
+    assert SHChangeNotify.name == "SHChangeNotify"
+    assert SHChangeNotify.value == 0x0002E078
+    assert SHChangeNotify.iat_value == 0x4AD27BC8
+    assert SHChangeNotify.data == 0x2A6EE
+    assert SHChangeNotify.hint == 0
+
+    ShellExecuteExW = shell32.entries[1]
+
+    assert ShellExecuteExW.name == "ShellExecuteExW"
+    assert ShellExecuteExW.value == 0x0002E080
+    assert ShellExecuteExW.iat_value == 0x4AD155A0
+    assert ShellExecuteExW.data == 0x2A700
+    assert ShellExecuteExW.hint == 0
+
+
+@pytest.mark.private
+def test_delay_import_names_corrupted():
+    sample = get_sample("private/PE/delay_import_names_corrupted.pe")
+
+    pe = lief.PE.parse(sample)
+    assert pe is not None
+    assert pe.has_delay_imports
+    assert len(pe.delay_imports) == 1
+
+    # Mirrors Parser::MAX_IMPORT_ENTRIES
+    MAX_IMPORT_ENTRIES = 0x10000
+    assert len(pe.delay_imports[0].entries) == MAX_IMPORT_ENTRIES

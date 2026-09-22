@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,18 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_MACHO_SUB_FRAMEWORK_H_
-#define LIEF_MACHO_SUB_FRAMEWORK_H_
+#ifndef LIEF_MACHO_SUB_FRAMEWORK_H
+#define LIEF_MACHO_SUB_FRAMEWORK_H
+#include <string_view>
+#include <memory>
+#include <ostream>
 #include <string>
-#include <iostream>
 
+#include "LIEF/compiler_attributes.hpp"
 #include "LIEF/visibility.h"
-#include "LIEF/types.hpp"
 
 #include "LIEF/MachO/LoadCommand.hpp"
 
-namespace LIEF {
-namespace MachO {
+
+namespace LIEF::MachO {
 
 class BinaryParser;
 
@@ -32,48 +34,54 @@ namespace details {
 struct sub_framework_command;
 }
 
-//! Class that represents the SubFramework command.
-//! Accodring to the Mach-O ``loader.h`` documentation:
-//!
-//!
-//! > A dynamically linked shared library may be a subframework of an umbrella
-//! > framework.  If so it will be linked with "-umbrella umbrella_name" where
-//! > Where "umbrella_name" is the name of the umbrella framework. A subframework
-//! > can only be linked against by its umbrella framework or other subframeworks
-//! > that are part of the same umbrella framework.  Otherwise the static link
-//! > editor produces an error and states to link against the umbrella framework.
-//! > The name of the umbrella framework for subframeworks is recorded in the
-//! > following structure.
+/// Class that represents the SubFramework command.
+/// According to the Mach-O ``loader.h`` documentation:
+///
+///
+/// > A dynamically linked shared library may be a subframework of an umbrella
+/// > framework.  If so it will be linked with "-umbrella umbrella_name" where
+/// > Where "umbrella_name" is the name of the umbrella framework. A subframework
+/// > can only be linked against by its umbrella framework or other subframeworks
+/// > that are part of the same umbrella framework.  Otherwise the static link
+/// > editor produces an error and states to link against the umbrella framework.
+/// > The name of the umbrella framework for subframeworks is recorded in the
+/// > following structure.
 class LIEF_API SubFramework : public LoadCommand {
   friend class BinaryParser;
+
   public:
-  SubFramework();
+  SubFramework() = default;
   SubFramework(const details::sub_framework_command& cmd);
 
-  SubFramework& operator=(const SubFramework& copy);
-  SubFramework(const SubFramework& copy);
+  SubFramework& operator=(const SubFramework& copy) = default;
+  SubFramework(const SubFramework& copy) = default;
 
-  SubFramework* clone() const override;
+  std::unique_ptr<LoadCommand> clone() const override {
+    return std::make_unique<SubFramework>(*this);
+  }
 
-  //! Name of the umbrella framework
-  const std::string& umbrella() const;
-  void umbrella(const std::string& u);
+  /// Name of the umbrella framework
+  std::string_view umbrella() const LIEF_LIFETIMEBOUND {
+    return umbrella_;
+  }
+  void umbrella(std::string u) {
+    umbrella_ = std::move(u);
+  }
 
-  virtual ~SubFramework();
-
-  bool operator==(const SubFramework& rhs) const;
-  bool operator!=(const SubFramework& rhs) const;
+  ~SubFramework() override = default;
 
   void accept(Visitor& visitor) const override;
 
   std::ostream& print(std::ostream& os) const override;
 
-  static bool classof(const LoadCommand* cmd);
+  static bool classof(const LoadCommand* cmd) {
+    return cmd->command() == LoadCommand::TYPE::SUB_FRAMEWORK;
+  }
 
   private:
   std::string umbrella_;
 };
 
 }
-}
+
 #endif

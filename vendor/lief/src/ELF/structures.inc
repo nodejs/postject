@@ -1,17 +1,18 @@
-typedef uint32_t Elf32_Addr;
-typedef uint32_t Elf32_Off;
-typedef uint16_t Elf32_Half;
-typedef uint32_t Elf32_Word;
-typedef int32_t  Elf32_Sword;
+// clang-format off
+using Elf32_Addr = uint32_t;
+using Elf32_Off = uint32_t;
+using Elf32_Half = uint16_t;
+using Elf32_Word = uint32_t;
+using Elf32_Sword = int32_t;
 
-typedef uint64_t Elf64_Addr;
-typedef uint64_t Elf64_Off;
-typedef uint16_t Elf64_Half;
-typedef uint32_t Elf64_Word;
-typedef int32_t  Elf64_Sword;
+using Elf64_Addr = uint64_t;
+using Elf64_Off = uint64_t;
+using Elf64_Half = uint16_t;
+using Elf64_Word = uint32_t;
+using Elf64_Sword = int32_t;
 
-typedef uint64_t Elf64_Xword;
-typedef int64_t  Elf64_Sxword;
+using Elf64_Xword = uint64_t;
+using Elf64_Sxword = int64_t;
 
 
 /** Object file magic string. */
@@ -194,7 +195,7 @@ struct Elf32_Verneed {
   Elf32_Word    vn_file;    /**< Offset of filename for this dependency */
   Elf32_Word    vn_aux;     /**< Offset in bytes to vernaux array */
   Elf32_Word    vn_next;    /**< Offset in bytes to next verneed */
-} ;
+};
 
 struct Elf64_Verneed {
   Elf64_Half    vn_version; /**< Version of structure */
@@ -268,41 +269,6 @@ struct Elf32_Verdaux
   Elf32_Word	vda_next;		/**< Offset in bytes to next verdaux entry */
 };
 
-/** Structure for note type NT_PRPSINFO */
-struct Elf64_Prpsinfo
-{
-  char     pr_state;       /**< Numeric process state */
-  char     pr_sname;       /**< Char for pr_state */
-  char     pr_zomb;        /**< Process is a zombie */
-  char     pr_nice;        /**< Nice value */
-  uint32_t pr_pad;
-  uint64_t pr_flag;        /**< Process flags */
-  uint32_t pr_uid;         /**< Process user ID */
-  uint32_t pr_gid;         /**< Process group ID */
-  int32_t  pr_pid;         /**< Process ID */
-  int32_t  pr_ppid;        /**< Process parent ID */
-  int32_t  pr_pgrp;        /**< Process group */
-  int32_t  pr_sid;         /**< Process session ID */
-  char     pr_fname[16];   /**< Filename of executable */
-  char     pr_psargs[80];  /**< Initial part of arg list */
-};
-
-struct Elf32_Prpsinfo
-{
-  char     pr_state;      /**< Numeric process state */
-  char     pr_sname;      /**< Char for pr_state */
-  char     pr_zomb;       /**< Process is a zombie */
-  char     pr_nice;       /**< Nice value */
-  uint32_t pr_flag;       /**< Process flags */
-  uint16_t pr_uid;        /**< Process user ID */
-  uint16_t pr_gid;        /**< Process group ID */
-  int32_t  pr_pid;        /**< Process ID */
-  int32_t  pr_ppid;       /**< Process parent ID */
-  int32_t  pr_pgrp;       /**< Process group */
-  int32_t  pr_sid;        /**< Process session ID */
-  char     pr_fname[16];  /**< Filename of executable */
-  char     pr_psargs[80]; /**< Initial part of arg list */
-};
 
 struct Elf_siginfo {
   int32_t si_signo;
@@ -375,4 +341,3 @@ struct Elf32_FileEntry
 };
 
 #pragma pack(pop)
-

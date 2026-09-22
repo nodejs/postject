@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,82 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <numeric>
-#include <iomanip>
-
-#include "LIEF/MachO/hash.hpp"
+#include "LIEF/Visitor.hpp"
+#include "spdlog/fmt/fmt.h"
 
 #include "LIEF/MachO/SegmentSplitInfo.hpp"
 #include "MachO/Structures.hpp"
 
-namespace LIEF {
-namespace MachO {
 
-SegmentSplitInfo::SegmentSplitInfo() = default;
-SegmentSplitInfo& SegmentSplitInfo::operator=(const SegmentSplitInfo&) = default;
-SegmentSplitInfo::SegmentSplitInfo(const SegmentSplitInfo&) = default;
-SegmentSplitInfo::~SegmentSplitInfo() = default;
+namespace LIEF::MachO {
 
 SegmentSplitInfo::SegmentSplitInfo(const details::linkedit_data_command& cmd) :
-  LoadCommand::LoadCommand{static_cast<LOAD_COMMAND_TYPES>(cmd.cmd), cmd.cmdsize},
+  LoadCommand::LoadCommand{LoadCommand::TYPE(cmd.cmd), cmd.cmdsize},
   data_offset_{cmd.dataoff},
-  data_size_{cmd.datasize}
-{}
+  data_size_{cmd.datasize} {}
 
-SegmentSplitInfo* SegmentSplitInfo::clone() const {
-  return new SegmentSplitInfo(*this);
-}
-
-uint32_t SegmentSplitInfo::data_offset() const {
-  return data_offset_;
-}
-
-uint32_t SegmentSplitInfo::data_size() const {
-  return data_size_;
-}
-
-void SegmentSplitInfo::data_offset(uint32_t offset) {
-  data_offset_ = offset;
-}
-
-void SegmentSplitInfo::data_size(uint32_t size) {
-  data_size_ = size;
-}
 void SegmentSplitInfo::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-
-bool SegmentSplitInfo::operator==(const SegmentSplitInfo& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool SegmentSplitInfo::operator!=(const SegmentSplitInfo& rhs) const {
-  return !(*this == rhs);
-}
-
-bool SegmentSplitInfo::classof(const LoadCommand* cmd) {
-  // This must be sync with BinaryParser.tcc
-  const LOAD_COMMAND_TYPES type = cmd->command();
-  return type == LOAD_COMMAND_TYPES::LC_SEGMENT_SPLIT_INFO;
-}
-
-
 std::ostream& SegmentSplitInfo::print(std::ostream& os) const {
-  LoadCommand::print(os);
-  os << std::left;
-  os << std::endl;
-  os << "Segment Split Info location:" << std::endl;
-  os << std::setw(8) << "Offset" << ": 0x" << data_offset() << std::endl;
-  os << std::setw(8) << "Size"   << ": 0x" << data_size()   << std::endl;
+  LoadCommand::print(os) << '\n';
+  os << fmt::format("offset={:#08x}, size={:#08x}", data_offset(), data_size());
   return os;
 }
 
 
-}
 }

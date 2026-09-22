@@ -1,20 +1,19 @@
-import logging
 import os
 import shlex
-import shutil
 import stat
 import subprocess
-import sys
-import tempfile
-import unittest
-from collections import namedtuple
+from pathlib import Path
+from typing import cast
 
 import lief
-from utils import get_compiler, is_linux, is_x86_64, is_aarch64
+import pytest
+from utils import check_layout, get_compiler, is_aarch64, is_linux, is_x86_64
 
-lief.logging.set_level(lief.logging.LOGGING_LEVEL.INFO)
+if not is_linux():
+    pytest.skip("requires Linux", allow_module_level=True)
 
-class CommandResult(object):
+
+class CommandResult:
     def __init__(self, output, error, retcode, process=None):
         self.output = output
         self.error = error
@@ -24,15 +23,13 @@ class CommandResult(object):
     def __bool__(self):
         return not self.retcode
 
-    def __str__(self):
+    def __str__(self):  # pragma: no cover
         if bool(self):
             return self.output
         return self.error
 
 
-
-
-LIBADD = """\
+LIBADD_C = """\
 #include <stdlib.h>
 #include <stdio.h>
 #define LOCAL __attribute__ ((visibility ("hidden")))
@@ -58,7 +55,7 @@ int main(int argc, char** argv) {
 """
 
 
-BINADD = """\
+BINADD_C = """\
 #include <stdio.h>
 #include <stdlib.h>
 extern int add_hidden(int a, int b);
@@ -77,255 +74,129 @@ int main(int argc, char **argv) {
 """
 
 
-class TestBin2Lib(unittest.TestCase):
-    LOGGER = logging.getLogger(__name__)
-
-    def setUp(self):
-        self._logger = logging.getLogger(__name__)
-
-    @staticmethod
-    def run_cmd(cmd):
-        TestBin2Lib.LOGGER.debug("Running: '{}'".format(cmd))
-        cmd = shlex.split(cmd)
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-        stdout, stderr = p.communicate()
+def run_cmd(cmd):
+    lief.logging.info(f"Running: '{cmd}'")
+    cmd = shlex.split(cmd)
+    with subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
+    ) as P:
+        stdout, stderr = P.communicate()
 
         if stdout:
-            TestBin2Lib.LOGGER.debug(stdout)
+            lief.logging.info(stdout)
 
         if stderr:
-            TestBin2Lib.LOGGER.error(stderr)
+            lief.logging.info(stderr)
 
-        return CommandResult(stdout, stderr, p.returncode)
-
-    @unittest.skipUnless(is_linux(), "requires Linux")
-    def test_libadd(self):
+    return CommandResult(stdout, stderr, P.returncode)
 
 
-        _, binaddc = tempfile.mkstemp(prefix="binadd_", suffix=".c")
-        _, libaddc = tempfile.mkstemp(prefix="libadd_", suffix=".c")
+def modif_1(libadd: lief.ELF.Binary, output: Path):
+    libadd_hidden = cast(lief.ELF.Symbol, libadd.get_symbol("add_hidden"))
+    libadd_hidden.binding = lief.ELF.Symbol.BINDING.GLOBAL
+    libadd_hidden.visibility = lief.ELF.Symbol.VISIBILITY.DEFAULT
+    libadd_hidden = libadd.add_dynamic_symbol(
+        libadd_hidden, lief.ELF.SymbolVersion.global_
+    )
 
-        self._logger.debug(binaddc)
-        self._logger.debug(libaddc)
+    if lief.ELF.DynamicEntry.TAG.FLAGS_1 in libadd:
+        flags_1 = cast(
+            lief.ELF.DynamicEntryFlags, libadd.get(lief.ELF.DynamicEntry.TAG.FLAGS_1)
+        )
+        if flags_1.has(lief.ELF.DynamicEntryFlags.FLAG.PIE):
+            flags_1.remove(lief.ELF.DynamicEntryFlags.FLAG.PIE)
 
-        fd, binadd  = tempfile.mkstemp(prefix="binadd_", suffix=".bin")
-        _, libadd  = tempfile.mkstemp(prefix="libadd_", suffix=".so")
-        _, libadd2 = tempfile.mkstemp(prefix="libadd2_", suffix=".so")
+    lief.logging.info(libadd_hidden)
 
-        self._logger.debug(binadd)
-        self._logger.debug(libadd)
-        self._logger.debug(libadd2)
-
-
-        with open(binaddc, 'w') as f:
-            f.write(BINADD)
-
-        with open(libaddc, 'w') as f:
-            f.write(LIBADD)
-
-        compiler = get_compiler()
-
-        fmt = ""
-        if is_x86_64():
-            fmt = "{compiler} -Wl,--export-dynamic -mcmodel=large -fPIE -pie -o {output} {input}"
-
-        if is_aarch64():
-            fmt = "{compiler} -Wl,--export-dynamic -fPIE -pie -o {output} {input}"
-
-        # Compile libadd
-        r = self.run_cmd(fmt.format(
-            compiler=compiler,
-            output=libadd,
-            input=libaddc))
-        self.assertTrue(r, msg="Unable to compile libadd")
-
-        libadd = lief.parse(libadd)
-
-        libadd_hidden            = libadd.get_symbol("add_hidden")
-        libadd_hidden.binding    = lief.ELF.SYMBOL_BINDINGS.GLOBAL
-        libadd_hidden.visibility = lief.ELF.SYMBOL_VISIBILITY.DEFAULT
-        libadd_hidden            = libadd.add_dynamic_symbol(libadd_hidden, lief.ELF.SymbolVersion.global_)
-        if lief.ELF.DYNAMIC_TAGS.FLAGS_1 in libadd and libadd[lief.ELF.DYNAMIC_TAGS.FLAGS_1].has(lief.ELF.DYNAMIC_FLAGS_1.PIE):
-            libadd[lief.ELF.DYNAMIC_TAGS.FLAGS_1].remove(lief.ELF.DYNAMIC_FLAGS_1.PIE)
-
-        self._logger.debug(libadd_hidden)
-
-        libadd.add(lief.ELF.DynamicSharedObject(os.path.basename(libadd2)))
-
-        libadd.write(libadd2)
-
-        lib_directory = os.path.dirname(libadd2)
-        libname = os.path.basename(libadd2)[3:-3] # libadd.so ---> add
-
-        fmt = ""
-        if is_x86_64():
-            fmt = "{compiler} -Wl,--export-dynamic -mcmodel=large -fPIE -pie -Wl,-rpath={libdir} -L{libdir} -o {output} {input} -l{libadd2}"
-
-        if is_aarch64():
-            fmt = "{compiler} -Wl,--export-dynamic -fPIE -pie -Wl,-rpath={libdir} -L{libdir} -o {output} {input} -l{libadd2}"
-
-        r = self.run_cmd(fmt.format(
-            compiler=compiler,
-            libdir=lib_directory,
-            libadd2=libname,
-            output=binadd,
-            input=binaddc))
-        self.assertTrue(r, msg="Unable to compile binadd")
-
-        os.close(fd)
-        st = os.stat(binadd)
-        os.chmod(binadd, st.st_mode | stat.S_IEXEC)
-
-        r = self.run_cmd(binadd + " 1 2")
-        self.assertTrue(r)
-        self.assertIn("From add_hidden@libadd.so a + b = 3", r.output)
+    libadd.add(lief.ELF.DynamicSharedObject(output.name))
+    libadd.write(output)
+    check_layout(output)
 
 
-    @unittest.skipUnless(is_linux() and is_x86_64(), "requires Linux")
-    def test_libadd_api(self):
-        _, binaddc = tempfile.mkstemp(prefix="binadd_", suffix=".c")
-        _, libaddc = tempfile.mkstemp(prefix="libadd_", suffix=".c")
+def modif_2(libadd: lief.ELF.Binary, output: Path):
+    libadd.export_symbol("add_hidden")
 
-        self._logger.debug(binaddc)
-        self._logger.debug(libaddc)
+    if lief.ELF.DynamicEntry.TAG.FLAGS_1 in libadd:
+        flags_1 = cast(
+            lief.ELF.DynamicEntryFlags, libadd.get(lief.ELF.DynamicEntry.TAG.FLAGS_1)
+        )
+        if flags_1.has(lief.ELF.DynamicEntryFlags.FLAG.PIE):
+            flags_1.remove(lief.ELF.DynamicEntryFlags.FLAG.PIE)
 
-        fd, binadd  = tempfile.mkstemp(prefix="binadd_", suffix=".bin")
-        _, libadd  = tempfile.mkstemp(prefix="libadd_", suffix=".so")
-        _, libadd2 = tempfile.mkstemp(prefix="libadd2_", suffix=".so")
-
-        self._logger.debug(binadd)
-        self._logger.debug(libadd)
-        self._logger.debug(libadd2)
+    libadd.write(output)
+    check_layout(output)
 
 
-        with open(binaddc, 'w') as f:
-            f.write(BINADD)
+def modif_3(libadd: lief.ELF.Binary, output: Path):
+    add_hidden_static = libadd.get_symtab_symbol("add_hidden")
+    assert add_hidden_static is not None
+    assert isinstance(add_hidden_static.name, str)
+    libadd.add_exported_function(add_hidden_static.value, add_hidden_static.name)
 
-        with open(libaddc, 'w') as f:
-            f.write(LIBADD)
+    if lief.ELF.DynamicEntry.TAG.FLAGS_1 in libadd:
+        flags_1 = cast(
+            lief.ELF.DynamicEntryFlags, libadd.get(lief.ELF.DynamicEntry.TAG.FLAGS_1)
+        )
+        if flags_1.has(lief.ELF.DynamicEntryFlags.FLAG.PIE):
+            flags_1.remove(lief.ELF.DynamicEntryFlags.FLAG.PIE)
 
-        compiler = get_compiler()
+    libadd.write(output)
+    check_layout(output)
 
-        # Compile libadd
-        fmt = ""
-        if is_x86_64():
-            fmt = "{compiler} -Wl,--export-dynamic -mcmodel=large -fPIE -pie -o {output} {input}"
 
-        if is_aarch64():
-            fmt = "{compiler} -Wl,--export-dynamic -fPIE -pie -o {output} {input}"
+@pytest.mark.parametrize("modifier", [modif_1, modif_2, modif_3])
+def test_libadd(tmp_path: Path, modifier):
+    libadd_src = tmp_path / "libadd.c"
+    binadd_src = tmp_path / "binadd.c"
 
-        r = self.run_cmd(fmt.format(
-            compiler=compiler,
-            output=libadd,
-            input=libaddc))
-        self.assertTrue(r, msg="Unable to compile libadd")
+    libadd_src.write_text(LIBADD_C)
+    binadd_src.write_text(BINADD_C)
 
-        libadd = lief.parse(libadd)
-        libadd.export_symbol("add_hidden")
+    binadd_bin = tmp_path / "binadd.bin"
+    libadd_so = tmp_path / "libadd.so"
+    libadd2_so = tmp_path / "libadd2.so"
 
-        if lief.ELF.DYNAMIC_TAGS.FLAGS_1 in libadd and libadd[lief.ELF.DYNAMIC_TAGS.FLAGS_1].has(lief.ELF.DYNAMIC_FLAGS_1.PIE):
-            libadd[lief.ELF.DYNAMIC_TAGS.FLAGS_1].remove(lief.ELF.DYNAMIC_FLAGS_1.PIE)
+    compiler = get_compiler()
 
-        libadd.write(libadd2)
+    fmt = ""
+    if is_x86_64():
+        fmt = "{compiler} -Wl,--export-dynamic -mcmodel=large -fPIE -pie -o {output} {input}"
 
-        lib_directory = os.path.dirname(libadd2)
-        libname = os.path.basename(libadd2)[3:-3] # libadd.so ---> add
+    if is_aarch64():
+        fmt = "{compiler} -Wl,--export-dynamic -fPIE -pie -o {output} {input}"
 
-        fmt = ""
-        if is_x86_64():
-            fmt = "{compiler} -Wl,--export-dynamic -mcmodel=large -fPIE -pie -Wl,-rpath={libdir} -L{libdir} -o {output} {input} -l{libadd2}"
+    # Compile libadd
+    r = run_cmd(fmt.format(compiler=compiler, output=libadd_so, input=libadd_src))
+    assert r
 
-        if is_aarch64():
-            fmt = "{compiler} -Wl,--export-dynamic -fPIE -pie -Wl,-rpath={libdir} -L{libdir} -o {output} {input} -l{libadd2}"
+    libadd = lief.ELF.parse(libadd_so)
+    modifier(libadd, libadd2_so)
 
-        r = self.run_cmd(fmt.format(
+    lib_directory = libadd2_so.parent
+    libname = libadd2_so.stem[3:]  # libadd.so ---> add
+
+    fmt = ""
+    if is_x86_64():
+        fmt = "{compiler} -Wl,--export-dynamic -mcmodel=large -fPIE -pie -Wl,-rpath={libdir} -L{libdir} -o {output} {input} -l{libadd2}"
+
+    if is_aarch64():
+        fmt = "{compiler} -Wl,--export-dynamic -fPIE -pie -Wl,-rpath={libdir} -L{libdir} -o {output} {input} -l{libadd2}"
+
+    r = run_cmd(
+        fmt.format(
             compiler=compiler,
             libdir=lib_directory,
             libadd2=libname,
-            output=binadd,
-            input=binaddc))
-        self.assertTrue(r, msg="Unable to compile binadd")
+            output=binadd_bin,
+            input=binadd_src,
+        )
+    )
 
-        os.close(fd)
-        st = os.stat(binadd)
-        os.chmod(binadd, st.st_mode | stat.S_IEXEC)
+    assert r
 
-        r = self.run_cmd(binadd + " 1 2")
-        self.assertTrue(r)
-        self.assertIn("From add_hidden@libadd.so a + b = 3", r.output)
+    st = os.stat(binadd_bin)
+    os.chmod(binadd_bin, st.st_mode | stat.S_IEXEC)
 
-
-    @unittest.skipUnless(is_linux() and is_x86_64(), "requires Linux")
-    def test_libadd_api2(self):
-        _, binaddc = tempfile.mkstemp(prefix="binadd_", suffix=".c")
-        _, libaddc = tempfile.mkstemp(prefix="libadd_", suffix=".c")
-
-        self._logger.debug(binaddc)
-        self._logger.debug(libaddc)
-
-        fd, binadd  = tempfile.mkstemp(prefix="binadd_", suffix=".bin")
-        _, libadd  = tempfile.mkstemp(prefix="libadd_", suffix=".so")
-        _, libadd2 = tempfile.mkstemp(prefix="libadd2_", suffix=".so")
-
-        self._logger.debug(binadd)
-        self._logger.debug(libadd)
-        self._logger.debug(libadd2)
-
-
-        with open(binaddc, 'w') as f:
-            f.write(BINADD)
-
-        with open(libaddc, 'w') as f:
-            f.write(LIBADD)
-
-        compiler = get_compiler()
-
-        fmt = ""
-        if is_x86_64():
-            fmt = "{compiler} -Wl,--export-dynamic -mcmodel=large -fPIE -pie -o {output} {input}"
-
-        if is_aarch64():
-            fmt = "{compiler} -Wl,--export-dynamic -fPIE -pie -o {output} {input}"
-
-
-        # Compile libadd
-        r = self.run_cmd(fmt.format(
-            compiler=compiler,
-            output=libadd,
-            input=libaddc))
-        self.assertTrue(r, msg="Unable to compile libadd")
-
-        libadd = lief.parse(libadd)
-        add_hidden_static = libadd.get_static_symbol("add_hidden")
-        libadd.add_exported_function(add_hidden_static.value, add_hidden_static.name)
-
-        if lief.ELF.DYNAMIC_TAGS.FLAGS_1 in libadd and libadd[lief.ELF.DYNAMIC_TAGS.FLAGS_1].has(lief.ELF.DYNAMIC_FLAGS_1.PIE):
-            libadd[lief.ELF.DYNAMIC_TAGS.FLAGS_1].remove(lief.ELF.DYNAMIC_FLAGS_1.PIE)
-        libadd.write(libadd2)
-
-        lib_directory = os.path.dirname(libadd2)
-        libname = os.path.basename(libadd2)[3:-3] # libadd.so ---> add
-
-        r = self.run_cmd("{compiler} -Wl,--export-dynamic -mcmodel=large -fPIE -pie -Wl,-rpath={libdir} -L{libdir} -o {output} {input} -l{libadd2}".format(
-            compiler=compiler,
-            libdir=lib_directory,
-            libadd2=libname,
-            output=binadd,
-            input=binaddc))
-        self.assertTrue(r, msg="Unable to compile binadd")
-
-        os.close(fd)
-        st = os.stat(binadd)
-        os.chmod(binadd, st.st_mode | stat.S_IEXEC)
-
-        r = self.run_cmd(binadd + " 1 2")
-        self.assertTrue(r)
-        self.assertIn("From add_hidden@libadd.so a + b = 3", r.output)
-
-
-if __name__ == "__main__":
-
-    root_logger = logging.getLogger()
-    root_logger.addHandler(logging.StreamHandler())
-
-    unittest.main(verbosity=2)
+    r = run_cmd(f"{binadd_bin} 1 2")
+    assert r
+    assert "From add_hidden@libadd.so a + b = 3" in r.output

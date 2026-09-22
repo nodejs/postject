@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,75 +13,119 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_SYMBOL_VERSION_H_
-#define LIEF_ELF_SYMBOL_VERSION_H_
-#include <iostream>
+#ifndef LIEF_ELF_SYMBOL_VERSION_H
+#define LIEF_ELF_SYMBOL_VERSION_H
+#include <cassert>
+#include <cstdint>
+#include <ostream>
 
 #include "LIEF/Object.hpp"
 #include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace ELF {
+
+namespace LIEF::ELF {
 class Parser;
 class SymbolVersionAux;
+class SymbolVersionAuxRequirement;
 
-//! Class which represents an entry defined in the ``DT_VERSYM``
-//! dynamic entry
+/// Class which represents an entry defined in the `DT_VERSYM`
+/// dynamic entry
 class LIEF_API SymbolVersion : public Object {
   friend class Parser;
 
   public:
-  SymbolVersion(uint16_t value);
-  SymbolVersion();
+  static constexpr auto LOCAL_VERSION = 0;
+  static constexpr auto GLOBAL_VERSION = 1;
 
-  //! Generate a *local* SymbolVersion
-  static SymbolVersion local();
+  SymbolVersion(uint16_t value) :
+    value_(value) {}
+  SymbolVersion() = default;
 
-  //! Generate a *global* SymbolVersion
-  static SymbolVersion global();
+  /// Generate a *local* SymbolVersion
+  static SymbolVersion local() {
+    return LOCAL_VERSION;
+  }
 
-  virtual ~SymbolVersion();
+  /// Generate a *global* SymbolVersion
+  static SymbolVersion global() {
+    return GLOBAL_VERSION;
+  }
 
-  SymbolVersion& operator=(const SymbolVersion&);
-  SymbolVersion(const SymbolVersion&);
+  ~SymbolVersion() override = default;
 
-  //! Value associated with the symbol
-  //!
-  //! If the given SymbolVersion hasn't Auxiliary version:
-  //!
-  //! * ``0`` means **Local**
-  //! * ``1`` means **Global**
-  uint16_t value() const;
+  SymbolVersion& operator=(const SymbolVersion&) = default;
+  SymbolVersion(const SymbolVersion&) = default;
 
-  //! Whether the current SymbolVersion has an auxiliary one
-  bool has_auxiliary_version() const;
+  /// Value associated with the symbol
+  ///
+  /// If the given SymbolVersion hasn't Auxiliary version:
+  ///
+  /// * ``0`` means **Local**
+  /// * ``1`` means **Global**
+  uint16_t value() const {
+    return value_;
+  }
 
-  //! SymbolVersionAux associated with the current Version if any,
-  //! or a nullptr
-  SymbolVersionAux*       symbol_version_auxiliary();
-  const SymbolVersionAux* symbol_version_auxiliary() const;
+  /// Whether the current SymbolVersion has an auxiliary one
+  bool has_auxiliary_version() const {
+    return symbol_version_auxiliary() != nullptr;
+  }
 
-  //! Set the version's auxiliary requirement
-  //! The given SymbolVersionAuxRequirement must be an existing
-  //! reference in the ELF::Binary.
-  //!
-  //! On can add a new SymbolVersionAuxRequirement by using
-  //! SymbolVersionRequirement::add_aux_requirement
+  /// SymbolVersionAux associated with the current Version if any,
+  /// or a nullptr
+  SymbolVersionAux* symbol_version_auxiliary() LIEF_LIFETIMEBOUND {
+    return symbol_aux_;
+  }
+
+  const SymbolVersionAux* symbol_version_auxiliary() const LIEF_LIFETIMEBOUND {
+    return symbol_aux_;
+  }
+
+  /// Set the version's auxiliary requirement
+  /// The given SymbolVersionAuxRequirement must be an existing
+  /// reference in the ELF::Binary.
+  ///
+  /// On can add a new SymbolVersionAuxRequirement by using
+  /// SymbolVersionRequirement::add_aux_requirement
   void symbol_version_auxiliary(SymbolVersionAuxRequirement& svauxr);
 
-  void value(uint16_t v);
+  /// Drop the versioning requirement and replace the value (local/global)
+  void drop_version(uint16_t value) {
+    if (symbol_aux_ == nullptr) {
+      return;
+    }
+    assert(value == LOCAL_VERSION || value == GLOBAL_VERSION);
+    value_ = value;
+    symbol_aux_ = nullptr;
+  }
+
+  /// Redefine this version as global by dropping its auxiliary version
+  ///
+  /// @see as_local() drop_version()
+  void as_global() {
+    return drop_version(GLOBAL_VERSION);
+  }
+
+  /// Redefine this version as local by dropping its auxiliary version
+  ///
+  /// @see as_global() drop_version()
+  void as_local() {
+    return drop_version(LOCAL_VERSION);
+  }
+
+  void value(uint16_t v) {
+    value_ = v;
+  }
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const SymbolVersion& rhs) const;
-  bool operator!=(const SymbolVersion& rhs) const;
-
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const SymbolVersion& symv);
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const SymbolVersion& symv);
 
   private:
-  uint16_t          value_ = 0;
+  uint16_t value_ = 0;
   SymbolVersionAux* symbol_aux_ = nullptr;
 };
 }
-}
+
 #endif

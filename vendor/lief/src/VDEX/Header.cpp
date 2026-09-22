@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,18 +18,17 @@
 
 #include "VDEX/Structures.hpp"
 
-#include <numeric>
-#include <sstream>
 #include <iomanip>
+#include <sstream>
 
-#define PRINT_FIELD_X(name,attr) \
-  os << std::setw(WIDTH) << std::setfill(' ') << name << std::hex << attr << std::endl
+#define PRINT_FIELD_X(name, attr)                                                 \
+  os << std::setw(WIDTH) << std::setfill(' ') << name << std::hex << attr << '\n'
 
-#define PRINT_FIELD_D(name,attr) \
-  os << std::setw(WIDTH) << std::setfill(' ') << name << std::dec << attr << std::endl
+#define PRINT_FIELD_D(name, attr)                                                 \
+  os << std::setw(WIDTH) << std::setfill(' ') << name << std::dec << attr << '\n'
 
-namespace LIEF {
-namespace VDEX {
+
+namespace LIEF::VDEX {
 
 Header::Header(const Header&) = default;
 Header& Header::operator=(const Header&) = default;
@@ -40,11 +39,9 @@ Header::Header() :
   nb_dex_files_{0},
   dex_size_{0},
   verifier_deps_size_{0},
-  quickening_info_size_{0}
-{
+  quickening_info_size_{0} {
   std::copy(std::begin(details::magic), std::end(details::magic),
-            std::begin(magic_)
-  );
+            std::begin(magic_));
 }
 
 Header::magic_t Header::magic() const {
@@ -75,18 +72,6 @@ void Header::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool Header::operator==(const Header& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool Header::operator!=(const Header& rhs) const {
-  return !(*this == rhs);
-}
 
 std::ostream& operator<<(std::ostream& os, const Header& header) {
   static constexpr size_t WIDTH = 24;
@@ -94,21 +79,21 @@ std::ostream& operator<<(std::ostream& os, const Header& header) {
   std::string magic_str;
   for (uint8_t c : header.magic()) {
     if (::isprint(c) != 0) {
-      magic_str.push_back(static_cast<char>(c));
+      magic_str.push_back(char(c));
     } else {
       std::stringstream ss;
-      ss << std::dec << "'\\" << static_cast<uint32_t>(c) << "'";
+      ss << std::dec << "'\\" << uint32_t{c} << "'";
       magic_str += ss.str();
     }
   }
 
   os << std::hex << std::left << std::showbase;
 
-  PRINT_FIELD_X("Magic:",                magic_str);
-  PRINT_FIELD_D("Version:",              header.version());
-  PRINT_FIELD_D("Number of dex files:",  header.nb_dex_files());
-  PRINT_FIELD_X("Dex Size:",             header.dex_size());
-  PRINT_FIELD_X("Verifier Deps Size:",   header.verifier_deps_size());
+  PRINT_FIELD_X("Magic:", magic_str);
+  PRINT_FIELD_D("Version:", header.version());
+  PRINT_FIELD_D("Number of dex files:", header.nb_dex_files());
+  PRINT_FIELD_X("Dex Size:", header.dex_size());
+  PRINT_FIELD_X("Verifier Deps Size:", header.verifier_deps_size());
   PRINT_FIELD_X("Quickening Info Size:", header.quickening_info_size());
 
   return os;
@@ -116,6 +101,4 @@ std::ostream& operator<<(std::ostream& os, const Header& header) {
 
 Header::~Header() = default;
 
-} // Namespace VDEX
-} // Namespace LIEF
-
+}

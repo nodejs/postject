@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
  */
 #include <utility>
 
-#include "LIEF/Abstract.hpp"
-#include "LIEF/Abstract/EnumToString.hpp"
 
 #include "visitors/json.hpp"
 
@@ -25,11 +23,9 @@ namespace LIEF {
 JsonVisitor::JsonVisitor() = default;
 
 JsonVisitor::JsonVisitor(json node) :
-  node_{std::move(node)}
-{}
+  node_{std::move(node)} {}
 
-JsonVisitor::JsonVisitor(const JsonVisitor&)            = default;
+JsonVisitor::JsonVisitor(const JsonVisitor&) = default;
 JsonVisitor& JsonVisitor::operator=(const JsonVisitor&) = default;
 
 }
-

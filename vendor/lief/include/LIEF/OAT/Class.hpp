@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_OAT_CLASS_H_
-#define LIEF_OAT_CLASS_H_
+#ifndef LIEF_OAT_CLASS_H
+#define LIEF_OAT_CLASS_H
 
-#include "LIEF/iterators.hpp"
-#include "LIEF/OAT/enums.hpp"
 #include "LIEF/DEX/deopt.hpp"
+#include "LIEF/OAT/enums.hpp"
+#include "LIEF/iterators.hpp"
+#include <string_view>
 
-#include "LIEF/visibility.h"
 #include "LIEF/Object.hpp"
+#include "LIEF/visibility.h"
 
 
 namespace LIEF {
@@ -43,8 +44,8 @@ class LIEF_API Class : public Object {
   public:
   Class();
 
-  Class(OAT_CLASS_STATUS status, OAT_CLASS_TYPES type,
-        DEX::Class* dex_class, std::vector<uint32_t> bitmap = {});
+  Class(OAT_CLASS_STATUS status, OAT_CLASS_TYPES type, DEX::Class* dex_class,
+        std::vector<uint32_t> bitmap = {});
 
   Class(const Class&);
   Class& operator=(const Class&);
@@ -56,7 +57,7 @@ class LIEF_API Class : public Object {
   OAT_CLASS_STATUS status() const;
   OAT_CLASS_TYPES type() const;
 
-  const std::string& fullname() const;
+  std::string_view fullname() const;
   size_t index() const;
 
   it_methods methods();
@@ -77,23 +78,19 @@ class LIEF_API Class : public Object {
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const Class& rhs) const;
-  bool operator!=(const Class& rhs) const;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Class& cls);
 
-  virtual ~Class();
+  ~Class() override;
 
   private:
-
   DEX::Class* dex_class_ = nullptr;
 
   OAT_CLASS_STATUS status_ = OAT_CLASS_STATUS::STATUS_NOTREADY;
-  OAT_CLASS_TYPES  type_   = OAT_CLASS_TYPES::OAT_CLASS_NONE_COMPILED;
+  OAT_CLASS_TYPES type_ = OAT_CLASS_TYPES::OAT_CLASS_NONE_COMPILED;
 
   std::vector<uint32_t> method_bitmap_;
   methods_t methods_;
-
 };
 
 } // Namespace OAT

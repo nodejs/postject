@@ -1,18 +1,16 @@
-#!/usr/bin/env python
-import lief
 import os
-import pathlib
 import stat
 import subprocess
-import sys
-import pytest
-
+from pathlib import Path
 from subprocess import Popen
-from utils import is_linux, glibc_version
 
-SAMPLE_DIR = pathlib.Path(os.getenv("LIEF_SAMPLES_DIR", ""))
+import lief
+import pytest
+from utils import glibc_version, is_linux, lief_samples_dir, parse_elf
 
-OUTPUT = """
+BATCH_DIR = lief_samples_dir() / "ELF/batch-x86-64"
+
+_OUTPUT = """
 In ctor
 In ctor2
 sum: 3
@@ -25,139 +23,127 @@ LOOKUP_RW[1]: 11111111
 """
 
 
-version = glibc_version()
-glibc_too_old = False
-
-if version < (2, 32):
-    glibc_too_old = True
-    print(f"glibc version is too old: {version}")
-
-def normalize(instr: str) -> str:
+def _normalize(instr: str) -> str:
     instr = instr.replace("\n", "").replace(" ", "").strip()
     return instr
 
-def build_run_check(obj: pathlib.Path, new_object: pathlib.Path):
+
+def build_run_check(obj: Path, new_object: Path):
+    if not is_linux() or glibc_version() < (2, 32):
+        return
     out_bin = new_object.parent / f"{new_object.name}.bin"
-    print(f"Executable: {out_bin}")
+    lief.logging.info(f"Executable: {out_bin}")
     CXX = os.getenv("CXX", "g++")
 
     extra_flags = []
     if ".nopie." in obj.name:
         extra_flags.append("-no-pie")
-    cmd = [CXX, new_object.as_posix(), "-o", out_bin.as_posix()] + extra_flags + ["-lpthread"]
-    with Popen(cmd, universal_newlines=True,
-               stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
-
+    cmd = (
+        [CXX, new_object.as_posix(), "-o", out_bin.as_posix()]
+        + extra_flags
+        + ["-lpthread"]
+    )
+    with Popen(
+        cmd, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    ) as proc:
+        assert proc.stdout is not None
         stdout = proc.stdout.read()
 
         out_bin.chmod(out_bin.stat().st_mode | stat.S_IEXEC)
-        with Popen(out_bin.as_posix(), universal_newlines=True,
-                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
+        with Popen(
+            out_bin.as_posix(),
+            universal_newlines=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        ) as proc:
+            assert proc.stdout is not None
             stdout = proc.stdout.read()
-            assert normalize(OUTPUT) == normalize(stdout)
+            assert _normalize(_OUTPUT) == _normalize(stdout)
 
-@pytest.mark.skipif(not is_linux() or glibc_too_old, reason="not linux or glibc too old")
-def test_force_relocate(tmp_path):
-    BINS = SAMPLE_DIR / "ELF" / "batch-x86-64"
-    tmp = pathlib.Path(tmp_path)
-    for file in BINS.rglob("*.o"):
-        print(f"Dealing with {file}")
-        if not file.exists():
-            print(f"{file} does not exist. Skipping ...", file=sys.stderr)
-            continue
-        elf: lief.ELF.Binary = lief.parse(file.as_posix())
 
-        builder = lief.ELF.Builder(elf)
-        builder.config.force_relocate = True
-        builder.build()
+@pytest.mark.slow
+def test_force_relocate(tmp_path: Path):
+    for file in BATCH_DIR.rglob("*.o"):
+        lief.logging.info(f"Dealing with {file}")
+        elf = parse_elf(file)
 
-        out_path = tmp / file.name
+        config = lief.ELF.Builder.config_t()
+        config.force_relocate = True
 
-        print(f"File written in {out_path}")
-        builder.write(out_path.as_posix())
+        out_path = tmp_path / file.name
+
+        lief.logging.info(f"File written in {out_path}")
+        elf.write(out_path, config)
         build_run_check(file, out_path)
 
 
-@pytest.mark.skipif(not is_linux() or glibc_too_old, reason="not linux or glibc too old")
-def test_object_files_section(tmp_path):
-    BINS = SAMPLE_DIR / "ELF" / "batch-x86-64"
-    tmp = pathlib.Path(tmp_path)
-    for file in BINS.rglob("*.o"):
-        print(f"Dealing with {file}")
-        if not file.exists():
-            print(f"{file} does not exist. Skipping ...", file=sys.stderr)
-            continue
-        elf: lief.ELF.Binary = lief.parse(file.as_posix())
+def test_object_files_section(tmp_path: Path):
+    for file in BATCH_DIR.rglob("*.o"):
+        lief.logging.info(f"Dealing with {file}")
+        elf = parse_elf(file)
 
-        elf.get_section(".symtab").name = ".foooooootab"
+        symtab = elf.get_section(".symtab")
+        assert symtab is not None
+        symtab.name = ".foooooootab"
 
-        builder = lief.ELF.Builder(elf)
-        builder.build()
+        out_path = tmp_path / file.name
 
-        out_path = tmp / file.name
-
-        print(f"File written in {out_path}")
-        builder.write(out_path.as_posix())
+        lief.logging.info(f"File written in {out_path}")
+        elf.write(out_path)
         build_run_check(file, out_path)
 
-@pytest.mark.skipif(not is_linux() or glibc_too_old, reason="not linux or glibc too old")
-def test_object_files_symbols(tmp_path):
-    BINS = SAMPLE_DIR / "ELF" / "batch-x86-64"
-    tmp = pathlib.Path(tmp_path)
-    for file in BINS.rglob("*.o"):
-        print(f"Dealing with {file}")
-        if not file.exists():
-            print(f"{file} does not exist. Skipping ...", file=sys.stderr)
-            continue
-        elf: lief.ELF.Binary = lief.parse(file.as_posix())
+
+def test_object_files_symbols(tmp_path: Path):
+    for file in BATCH_DIR.rglob("*.o"):
+        lief.logging.info(f"Dealing with {file}")
+        elf = parse_elf(file)
 
         sym = lief.ELF.Symbol()
-        sym.name       = "LIEF_CUSTOM_SYMBOL"
-        sym.type       = lief.ELF.SYMBOL_TYPES.NOTYPE
-        sym.visibility = lief.ELF.SYMBOL_VISIBILITY.DEFAULT
-        sym.binding    = lief.ELF.SYMBOL_BINDINGS.GLOBAL # TODO(romain): it fails if the symbol is "local"
-                                                         # cf. binutils-2.35.1/bfd/elflink.c:4602
-        sym.value = 0xdeadc0de
-        elf.add_static_symbol(sym)
+        sym.name = "LIEF_CUSTOM_SYMBOL"
+        sym.type = lief.ELF.Symbol.TYPE.NOTYPE
+        sym.visibility = lief.ELF.Symbol.VISIBILITY.DEFAULT
+
+        # TODO(romain): it fails if the symbol is "local"
+        # cf. binutils-2.35.1/bfd/elflink.c:4602
+        sym.binding = lief.ELF.Symbol.BINDING.GLOBAL
+
+        sym.value = 0xDEADC0DE
+        elf.add_symtab_symbol(sym)
 
         # Modify an existing one
-        file_sym = elf.get_static_symbol("test.cpp")
+        file_sym = elf.get_symtab_symbol("test.cpp")
+        assert file_sym is not None
         file_sym.name = "/tmp/foobar.cpp"
 
-        builder = lief.ELF.Builder(elf)
-        builder.build()
+        out_path = tmp_path / file.name
 
-        out_path = tmp / file.name
-
-        print(f"File written in {out_path}")
-        builder.write(out_path.as_posix())
+        lief.logging.info(f"File written in {out_path}")
+        elf.write(out_path)
         build_run_check(file, out_path)
 
 
-@pytest.mark.skipif(not is_linux() or glibc_too_old, reason="not linux or glibc too old")
-def test_relocations(tmp_path):
-    BINS = SAMPLE_DIR / "ELF" / "batch-x86-64"
-    tmp = pathlib.Path(tmp_path)
-    for file in BINS.rglob("*.o"):
-        print(f"Dealing with {file}")
-        if not file.exists():
-            print(f"{file} does not exist. Skipping ...", file=sys.stderr)
-            continue
-        elf: lief.ELF.Binary = lief.parse(file.as_posix())
+def test_relocations(tmp_path: Path):
+    for file in BATCH_DIR.rglob("*.o"):
+        lief.logging.info(f"Dealing with {file}")
+        elf = parse_elf(file)
 
         # Add a relocation that do "nothing"
-        rel = lief.ELF.Relocation(lief.ELF.ARCH.x86_64)
-        rel.addend  = 123
+        rel = lief.ELF.Relocation(lief.ELF.ARCH.X86_64)
+        rel.addend = 123
         rel.address = 0x123
-        rel.type    = lief.ELF.RELOCATION_X86_64.NONE
-        rel.purpose = lief.ELF.RELOCATION_PURPOSES.OBJECT
-        elf.add_object_relocation(rel, elf.get_section(".text"))
+        rel.type = lief.ELF.Relocation.TYPE.X86_64_NONE
+        rel.purpose = lief.ELF.Relocation.PURPOSE.OBJECT
+        text_section = elf.get_section(".text")
+        assert text_section is not None
+        elf.add_object_relocation(rel, text_section)
 
-        builder = lief.ELF.Builder(elf)
-        builder.build()
+        out_path = tmp_path / file.name
 
-        out_path = tmp / file.name
-
-        print(f"File written in {out_path}")
-        builder.write(out_path.as_posix())
+        lief.logging.info(f"File written in {out_path}")
+        elf.write(out_path)
         build_run_check(file, out_path)
+
+
+def test_relocation_resolve():
+    elf = parse_elf("ELF/issue_975_aarch64.o")
+    assert elf.relocations[0].resolve() == 0xFFFFFFE4

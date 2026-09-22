@@ -1,5 +1,5 @@
 /* Copyright 2017 - 2021 J.Rieck (based on R. Thomas's work)
- * Copyright 2017 - 2022 Quarkslab
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,70 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <numeric>
-#include <iomanip>
-
-#include "LIEF/MachO/hash.hpp"
+#include "LIEF/Visitor.hpp"
+#include "LIEF/utils.hpp"
 
 #include "LIEF/MachO/RPathCommand.hpp"
 #include "MachO/Structures.hpp"
 
-namespace LIEF {
-namespace MachO {
 
-RPathCommand::RPathCommand() = default;
-RPathCommand& RPathCommand::operator=(const RPathCommand&) = default;
-RPathCommand::RPathCommand(const RPathCommand&) = default;
-RPathCommand::~RPathCommand() = default;
+namespace LIEF::MachO {
+
+RPathCommand::RPathCommand(std::string path) :
+  LoadCommand::LoadCommand(LoadCommand::TYPE::RPATH, 0),
+  path_(std::move(path)) {
+  size_ =
+      align(sizeof(details::rpath_command) + path_.size() + 1, sizeof(uint64_t));
+  original_data_.resize(size_);
+}
 
 RPathCommand::RPathCommand(const details::rpath_command& rpath) :
-  LoadCommand::LoadCommand{static_cast<LOAD_COMMAND_TYPES>(rpath.cmd), rpath.cmdsize}
-{}
-
-RPathCommand* RPathCommand::clone() const {
-  return new RPathCommand(*this);
-}
-
-const std::string& RPathCommand::path() const {
-  return path_;
-}
-
-void RPathCommand::path(const std::string& path) {
-  path_ = path;
-}
-
+  LoadCommand::LoadCommand{LoadCommand::TYPE(rpath.cmd), rpath.cmdsize},
+  path_offset_(rpath.path) {}
 
 void RPathCommand::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-
-bool RPathCommand::operator==(const RPathCommand& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool RPathCommand::operator!=(const RPathCommand& rhs) const {
-  return !(*this == rhs);
-}
-
-bool RPathCommand::classof(const LoadCommand* cmd) {
-  // This must be sync with BinaryParser.tcc
-  const LOAD_COMMAND_TYPES type = cmd->command();
-  return type == LOAD_COMMAND_TYPES::LC_RPATH;
-}
-
 std::ostream& RPathCommand::print(std::ostream& os) const {
-  LoadCommand::print(os);
-  os << std::left
-     << std::setw(10) << "Path: " << path();
+  LoadCommand::print(os) << '\n';
+  os << path();
   return os;
 }
 
 
-}
 }

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2021 R. Thomas
- * Copyright 2017 - 2021 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,36 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "internal_utils.hpp"
 #include "logging.hpp"
 
 #include "LIEF/BinaryStream/FileStream.hpp"
 namespace LIEF {
 
-FileStream::FileStream(FileStream&& other) = default;
-FileStream& FileStream::operator=(FileStream&& other) = default;
-FileStream::~FileStream() = default;
-
-result<FileStream> FileStream::from_file(const std::string& file) {
-  std::ifstream ifs(file, std::ios::in | std::ios::binary);
+result<FileStream> FileStream::from_file(std::string_view file) {
+  std::ifstream ifs(std::string(file), std::ios::in | std::ios::binary);
   if (!ifs) {
-    LIEF_ERR("Can't open '{}'", file);
+    LIEF_ERR("Failed to open '{}'", file);
     return make_error_code(lief_errors::read_error);
   }
 
   ifs.unsetf(std::ios::skipws);
-  ifs.seekg(0, std::ios::end);
-  const auto size = static_cast<uint64_t>(ifs.tellg());
-  ifs.seekg(0, std::ios::beg);
-  return FileStream{std::move(ifs), size};
+  auto size = istream_size(ifs);
+  if (!size) {
+    LIEF_ERR("Failed to determine the size of '{}'", file);
+    return make_error_code(size.error());
+  }
+
+  return {tl::in_place, std::move(ifs), *size};
 }
 
-
-FileStream::FileStream(std::ifstream fs, uint64_t size) :
-  ifs_{std::move(fs)},
-  size_{size}
-{
-  stype_ = STREAM_TYPE::FILE;
-}
 
 std::vector<uint8_t> FileStream::content() const {
   std::vector<uint8_t> data(size_, 0);
@@ -54,8 +47,4 @@ std::vector<uint8_t> FileStream::content() const {
   return data;
 }
 
-bool FileStream::classof(const BinaryStream& stream) {
-  return stream.type() == STREAM_TYPE::FILE;
 }
-}
-

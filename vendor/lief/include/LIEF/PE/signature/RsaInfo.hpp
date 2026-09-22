@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_PE_SIGNATURE_RSA_INFO_H_
-#define LIEF_PE_SIGNATURE_RSA_INFO_H_
-#include <vector>
+#ifndef LIEF_PE_SIGNATURE_RSA_INFO_H
+#define LIEF_PE_SIGNATURE_RSA_INFO_H
+#include <cstdint>
 #include <ostream>
+#include <vector>
 
-#include "LIEF/types.hpp"
 #include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace PE {
+
+namespace LIEF::PE {
 class x509;
 
-//! Object that wraps a RSA key
+/// Object that wraps a RSA key
 class LIEF_API RsaInfo {
   friend class x509;
 
@@ -38,28 +38,28 @@ class LIEF_API RsaInfo {
   RsaInfo(RsaInfo&& other);
   RsaInfo& operator=(RsaInfo other);
 
-  //! True if it embeds a public key
+  /// True if it embeds a public key
   bool has_public_key() const;
 
-  //! True if it embeds a private key
+  /// True if it embeds a private key
   bool has_private_key() const;
 
-  //! RSA public modulus
+  /// RSA public modulus
   bignum_wrapper_t N() const;
 
-  //! RSA public exponent
+  /// RSA public exponent
   bignum_wrapper_t E() const;
 
-  //! RSA private exponent
+  /// RSA private exponent
   bignum_wrapper_t D() const;
 
-  //! First prime factor
+  /// First prime factor
   bignum_wrapper_t P() const;
 
-  //! Second prime factor
+  /// Second prime factor
   bignum_wrapper_t Q() const;
 
-  //! Size of the public modulus (in bits)
+  /// Size of the public modulus (in bits)
   size_t key_size() const;
 
   void swap(RsaInfo& other);
@@ -72,9 +72,9 @@ class LIEF_API RsaInfo {
   private:
   RsaInfo();
   RsaInfo(const rsa_ctx_handle ctx);
-  rsa_ctx_handle ctx_;
+  rsa_ctx_handle ctx_ = nullptr;
 };
 
 }
-}
+
 #endif

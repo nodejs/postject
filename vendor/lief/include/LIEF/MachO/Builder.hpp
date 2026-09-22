@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,26 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_MACHO_BUIDLER_H_
-#define LIEF_MACHO_BUIDLER_H_
+#ifndef LIEF_MACHO_BUIDLER_H
+#define LIEF_MACHO_BUIDLER_H
 
-#include <algorithm>
 #include <vector>
-#include <vector>
-#include <memory>
-#include <functional>
-#include <unordered_map>
 
 #include "LIEF/errors.hpp"
 #include "LIEF/visibility.h"
-#include "LIEF/exception.hpp"
+
 #include "LIEF/iostream.hpp"
 
-struct Profiler;
 
-namespace LIEF {
-namespace MachO {
+namespace LIEF::MachO {
 
+class AtomInfo;
 class Binary;
 class BuildVersion;
 class CodeSignature;
@@ -45,148 +39,201 @@ class DyldInfo;
 class DylibCommand;
 class DylinkerCommand;
 class DynamicSymbolCommand;
+class EncryptionInfo;
 class FatBinary;
 class FunctionStarts;
+class FunctionVariants;
+class FunctionVariantFixups;
+class LazyLoadDylibInfo;
 class LinkerOptHint;
+class LoadCommand;
 class MainCommand;
+class NoteCommand;
+class RPathCommand;
+class Routine;
 class SegmentSplitInfo;
 class SourceVersion;
+class SubClient;
 class SubFramework;
 class SymbolCommand;
 class ThreadCommand;
 class TwoLevelHints;
 class VersionMin;
 
-//! Class used to rebuild a Mach-O file
+/// Class used to rebuild a Mach-O file
 class LIEF_API Builder {
   public:
-  friend struct ::Profiler;
-
-  //! Options to tweak the building process
+  /// Options to tweak the building process
   struct config_t {
     bool linkedit = true;
   };
 
+  Builder() = delete;
+
   static ok_error_t write(Binary& binary, const std::string& filename);
-  static ok_error_t write(Binary& binary, const std::string& filename, config_t config);
+  static ok_error_t write(Binary& binary, const std::string& filename,
+                          config_t config);
 
   static ok_error_t write(Binary& binary, std::vector<uint8_t>& out);
-  static ok_error_t write(Binary& binary, std::vector<uint8_t>& out, config_t config);
+  static ok_error_t write(Binary& binary, std::vector<uint8_t>& out,
+                          config_t config);
 
   static ok_error_t write(Binary& binary, std::ostream& out);
   static ok_error_t write(Binary& binary, std::ostream& out, config_t config);
 
   static ok_error_t write(FatBinary& fat, const std::string& filename);
-  static ok_error_t write(FatBinary& fat, const std::string& filename, config_t config);
+  static ok_error_t write(FatBinary& fat, const std::string& filename,
+                          config_t config);
 
   static ok_error_t write(FatBinary& fat, std::vector<uint8_t>& out);
-  static ok_error_t write(FatBinary& fat, std::vector<uint8_t>& out, config_t config);
+  static ok_error_t write(FatBinary& fat, std::vector<uint8_t>& out,
+                          config_t config);
 
   static ok_error_t write(FatBinary& fat, std::ostream& out);
   static ok_error_t write(FatBinary& fat, std::ostream& out, config_t config);
-  
+
   ~Builder();
+
   private:
-  ok_error_t build();
+  LIEF_LOCAL ok_error_t build();
 
-  const std::vector<uint8_t>& get_build();
-  ok_error_t write(const std::string& filename) const;
-  ok_error_t write(std::ostream& os) const;
-  
-  Builder(Binary& binary, config_t config);
-  Builder(std::vector<Binary*> binaries, config_t config);
+  LIEF_LOCAL bool should_swap() const;
 
-  Builder() = delete;
+  template<class T>
+  LIEF_LOCAL void swap_endian_if_needed(T& s) const {
+    if (should_swap()) {
+      LIEF::swap_endian(&s);
+    }
+  }
 
-  static std::vector<uint8_t> build_raw(Binary& binary, config_t config);
-  static std::vector<uint8_t> build_raw(FatBinary& binary, config_t config);
+  LIEF_LOCAL const std::vector<uint8_t>& get_build();
+  LIEF_LOCAL ok_error_t write(const std::string& filename) const;
+  LIEF_LOCAL ok_error_t write(std::ostream& os) const;
+
+  LIEF_LOCAL Builder(Binary& binary, config_t config);
+  LIEF_LOCAL Builder(std::vector<Binary*> binaries, config_t config);
+
+  LIEF_LOCAL static std::vector<uint8_t> build_raw(Binary& binary,
+                                                   config_t config);
+  LIEF_LOCAL static std::vector<uint8_t> build_raw(FatBinary& binary,
+                                                   config_t config);
+
+  template<class T>
+  LIEF_LOCAL static size_t get_cmd_size(const LoadCommand& cmd);
 
   template<typename T>
-  ok_error_t build();
+  LIEF_LOCAL ok_error_t build();
 
-  ok_error_t build_fat();
-  ok_error_t build_fat_header();
-  ok_error_t build_header();
-  ok_error_t build_load_commands();
-
-  template<typename T>
-  ok_error_t build_linkedit();
+  LIEF_LOCAL ok_error_t build_fat();
+  LIEF_LOCAL ok_error_t build_fat_header();
+  LIEF_LOCAL ok_error_t build_load_commands();
 
   template<typename T>
-  ok_error_t build(DylibCommand& library);
+  LIEF_LOCAL ok_error_t build_header();
 
   template<typename T>
-  ok_error_t build(DylinkerCommand& linker);
+  LIEF_LOCAL ok_error_t build_linkedit();
+
+  template<typename T>
+  LIEF_LOCAL ok_error_t build(DylibCommand& library);
+
+  template<typename T>
+  LIEF_LOCAL ok_error_t build(DylinkerCommand& linker);
 
   template<class T>
-  ok_error_t build(VersionMin& version_min);
+  LIEF_LOCAL ok_error_t build(VersionMin& version_min);
 
   template<class T>
-  ok_error_t build(SourceVersion& source_version);
+  LIEF_LOCAL ok_error_t build(SourceVersion& source_version);
 
   template<class T>
-  ok_error_t build(FunctionStarts& function_starts);
+  LIEF_LOCAL ok_error_t build(FunctionStarts& function_starts);
 
   template<class T>
-  ok_error_t build(MainCommand& main_cmd);
+  LIEF_LOCAL ok_error_t build(MainCommand& main_cmd);
 
   template<class T>
-  ok_error_t build(DyldInfo& dyld_info);
+  LIEF_LOCAL ok_error_t build(NoteCommand& main_cmd);
 
   template<class T>
-  ok_error_t build(SymbolCommand& symbol_command);
+  LIEF_LOCAL ok_error_t build(Routine& routine);
 
   template<class T>
-  ok_error_t build(DynamicSymbolCommand& symbol_command);
+  LIEF_LOCAL ok_error_t build(RPathCommand& rpath_cmd);
 
   template<class T>
-  ok_error_t build(DataInCode& datacode);
+  LIEF_LOCAL ok_error_t build(DyldInfo& dyld_info);
 
   template<class T>
-  ok_error_t build(CodeSignature& code_signature);
+  LIEF_LOCAL ok_error_t build(SymbolCommand& symbol_command);
 
   template<class T>
-  ok_error_t build(SegmentSplitInfo& ssi);
+  LIEF_LOCAL ok_error_t build(DynamicSymbolCommand& symbol_command);
 
   template<class T>
-  ok_error_t build(SubFramework& sf);
+  LIEF_LOCAL ok_error_t build(DataInCode& datacode);
 
   template<class T>
-  ok_error_t build(DyldEnvironment& de);
+  LIEF_LOCAL ok_error_t build(CodeSignature& code_signature);
 
   template<class T>
-  ok_error_t build(ThreadCommand& tc);
+  LIEF_LOCAL ok_error_t build(SegmentSplitInfo& ssi);
 
   template<class T>
-  ok_error_t build(DyldChainedFixups& fixups);
+  LIEF_LOCAL ok_error_t build(SubFramework& sf);
 
   template<class T>
-  ok_error_t build(DyldExportsTrie& exports);
+  LIEF_LOCAL ok_error_t build(SubClient& sf);
 
   template<class T>
-  ok_error_t build(TwoLevelHints& two);
+  LIEF_LOCAL ok_error_t build(DyldEnvironment& de);
 
   template<class T>
-  ok_error_t build(LinkerOptHint& opt);
+  LIEF_LOCAL ok_error_t build(ThreadCommand& tc);
 
   template<class T>
-  ok_error_t build(CodeSignatureDir& sig);
-
-  template <typename T>
-  ok_error_t build_segments();
+  LIEF_LOCAL ok_error_t build(DyldChainedFixups& fixups);
 
   template<class T>
-  ok_error_t build(BuildVersion& bv);
+  LIEF_LOCAL ok_error_t build(DyldExportsTrie& exports);
 
-  template <typename T>
-  ok_error_t build_symbols();
+  template<class T>
+  LIEF_LOCAL ok_error_t build(TwoLevelHints& two);
 
-  ok_error_t build_uuid();
+  template<class T>
+  LIEF_LOCAL ok_error_t build(LinkerOptHint& opt);
 
-  template <typename T>
-  ok_error_t update_fixups(DyldChainedFixups& fixups);
+  template<class T>
+  LIEF_LOCAL ok_error_t build(AtomInfo& opt);
 
+  template<class T>
+  LIEF_LOCAL ok_error_t build(CodeSignatureDir& sig);
 
+  template<class T>
+  LIEF_LOCAL ok_error_t build(EncryptionInfo& tc);
+
+  template<class T>
+  LIEF_LOCAL ok_error_t build(FunctionVariants& func);
+
+  template<class T>
+  LIEF_LOCAL ok_error_t build(FunctionVariantFixups& func);
+
+  template<class T>
+  LIEF_LOCAL ok_error_t build(LazyLoadDylibInfo& cmd);
+
+  template<typename T>
+  LIEF_LOCAL ok_error_t build_segments();
+
+  template<class T>
+  LIEF_LOCAL ok_error_t build(BuildVersion& bv);
+
+  template<typename T>
+  LIEF_LOCAL ok_error_t build_symbols();
+
+  LIEF_LOCAL ok_error_t build_uuid();
+
+  template<typename T>
+  LIEF_LOCAL ok_error_t update_fixups(DyldChainedFixups& fixups);
 
   std::vector<Binary*> binaries_;
   Binary* binary_ = nullptr;
@@ -196,6 +243,6 @@ class LIEF_API Builder {
   config_t config_;
 };
 
-} // namespace MachO
-} // namespace LIEF
+}
+
 #endif

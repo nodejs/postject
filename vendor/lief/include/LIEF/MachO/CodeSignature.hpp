@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,17 +15,18 @@
  */
 #ifndef LIEF_MACHO_CODE_SIGNATURE_COMMAND_H
 #define LIEF_MACHO_CODE_SIGNATURE_COMMAND_H
-#include <vector>
-#include <iostream>
+#include <cstdint>
+#include <memory>
+#include <ostream>
 
+#include "LIEF/compiler_attributes.hpp"
 #include "LIEF/span.hpp"
 #include "LIEF/visibility.h"
-#include "LIEF/types.hpp"
 
 #include "LIEF/MachO/LoadCommand.hpp"
 
-namespace LIEF {
-namespace MachO {
+
+namespace LIEF::MachO {
 
 class BinaryParser;
 class Builder;
@@ -41,49 +42,57 @@ class LIEF_API CodeSignature : public LoadCommand {
   friend class LinkEdit;
 
   public:
-  CodeSignature();
+  CodeSignature() = default;
   CodeSignature(const details::linkedit_data_command& cmd);
 
-  CodeSignature& operator=(const CodeSignature& copy);
-  CodeSignature(const CodeSignature& copy);
+  CodeSignature& operator=(const CodeSignature& copy) = default;
+  CodeSignature(const CodeSignature& copy) = default;
 
-  CodeSignature* clone() const override;
+  std::unique_ptr<LoadCommand> clone() const override {
+    return std::make_unique<CodeSignature>(*this);
+  }
 
-  //! Offset in the binary where the signature starts
-  uint32_t data_offset() const;
+  /// Offset in the binary where the signature starts
+  uint32_t data_offset() const {
+    return data_offset_;
+  }
 
-  //! Size of the raw signature
-  uint32_t data_size() const;
+  /// Size of the raw signature
+  uint32_t data_size() const {
+    return data_size_;
+  }
 
-  void data_offset(uint32_t offset);
-  void data_size(uint32_t size);
+  void data_offset(uint32_t offset) {
+    data_offset_ = offset;
+  }
+  void data_size(uint32_t size) {
+    data_size_ = size;
+  }
 
-  inline span<uint8_t> content() {
+  span<uint8_t> content() LIEF_LIFETIMEBOUND {
     return content_;
   }
 
-  inline span<const uint8_t> content() const {
+  span<const uint8_t> content() const LIEF_LIFETIMEBOUND {
     return content_;
   }
 
-  ~CodeSignature() override;
-
-  bool operator==(const CodeSignature& rhs) const;
-  bool operator!=(const CodeSignature& rhs) const;
+  ~CodeSignature() override = default;
 
   void accept(Visitor& visitor) const override;
 
   std::ostream& print(std::ostream& os) const override;
 
-  static bool classof(const LoadCommand* cmd);
+  static bool classof(const LoadCommand* cmd) {
+    return cmd->command() == LoadCommand::TYPE::CODE_SIGNATURE;
+  }
 
   private:
   uint32_t data_offset_ = 0;
   uint32_t data_size_ = 0;
   span<uint8_t> content_;
-
 };
 
 }
-}
+
 #endif

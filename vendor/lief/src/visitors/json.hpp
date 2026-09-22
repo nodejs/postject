@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,18 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_VISITOR_JSONS_H_
-#define LIEF_VISITOR_JSONS_H_
+#ifndef LIEF_VISITOR_JSONS_H
+#define LIEF_VISITOR_JSONS_H
 
-#include "LIEF/config.h"
-
-#include "LIEF/visibility.h"
 #include "LIEF/Visitor.hpp"
 
+#if defined(__clang__)
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wunknown-warning-option"
+  #pragma clang diagnostic ignored "-Wlifetime-safety"
+#endif
 #ifndef LIEF_NLOHMANN_JSON_EXTERNAL
-#include "internal/nlohmann/json.hpp"
+  #include "internal/nlohmann/json.hpp"
 #else
-#include <nlohmann/json.hpp>
+  #include <nlohmann/json.hpp>
+#endif
+#if defined(__clang__)
+  #pragma clang diagnostic pop
 #endif
 
 using json = nlohmann::json;
@@ -38,7 +43,7 @@ class JsonVisitor : public Visitor {
   JsonVisitor(const JsonVisitor&);
   JsonVisitor& operator=(const JsonVisitor&);
 
-  inline json get() const {
+  json get() const {
     return node_;
   }
 

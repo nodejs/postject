@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 #include <LIEF/LIEF.hpp>
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   std::cout << "Abstract Reader" << '\n';
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " <binary>" << '\n';
@@ -28,8 +28,15 @@ int main(int argc, char **argv) {
   std::cout << "Parsing with DEBUG level" << '\n';
   std::cout << "========================" << '\n';
 
-  LIEF::logging::set_level(LIEF::logging::LOGGING_LEVEL::LOG_DEBUG);
+  LIEF::logging::set_level(LIEF::logging::Level::Debug);
   std::unique_ptr<const LIEF::Binary> binary_global = LIEF::Parser::parse(argv[1]);
+
+  // Log a message with LIEF's logger
+  LIEF::logging::log(LIEF::logging::Level::Debug, "Hi!");
+
+  // Log a formatted message with LIEF's logger
+  LIEF::logging::log(LIEF::logging::Level::Debug, "Hi: {} here is your number: {}",
+                     argv[0], std::to_string(argc));
 
   // Disable logger
   LIEF::logging::disable();

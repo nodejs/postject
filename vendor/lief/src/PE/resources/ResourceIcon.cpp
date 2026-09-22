@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,25 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iomanip>
 #include <fstream>
-#include <iterator>
 
-#include "LIEF/exception.hpp"
-
-#include "LIEF/PE/hash.hpp"
+#include "LIEF/BinaryStream/SpanStream.hpp"
+#include "LIEF/hash.hpp"
+#include "LIEF/iostream.hpp"
 
 #include "LIEF/PE/resources/ResourceIcon.hpp"
 #include "PE/Structures.hpp"
 
-namespace LIEF {
-namespace PE {
+#include "logging.hpp"
+#include <spdlog/fmt/fmt.h>
 
-ResourceIcon::ResourceIcon(const ResourceIcon&) = default;
-ResourceIcon& ResourceIcon::operator=(const ResourceIcon&) = default;
-ResourceIcon::~ResourceIcon() = default;
 
-ResourceIcon::ResourceIcon() = default;
+namespace LIEF::PE {
 
 ResourceIcon::ResourceIcon(const details::pe_resource_icon_group& header) :
   width_{header.width},
@@ -40,8 +35,7 @@ ResourceIcon::ResourceIcon(const details::pe_resource_icon_group& header) :
   reserved_{header.reserved},
   planes_{header.planes},
   bit_count_{header.bit_count},
-  id_{header.ID}
-{}
+  id_{header.ID} {}
 
 
 ResourceIcon::ResourceIcon(const details::pe_icon_header& header) :
@@ -50,169 +44,109 @@ ResourceIcon::ResourceIcon(const details::pe_icon_header& header) :
   color_count_{header.color_count},
   reserved_{header.reserved},
   planes_{header.planes},
-  bit_count_{header.bit_count},
-  id_{static_cast<uint32_t>(-1)}
-{}
+  bit_count_{header.bit_count} {}
 
+result<ResourceIcon> ResourceIcon::from_serialization(const uint8_t* buffer,
+                                                      size_t size) {
+  const uint32_t minsz =
+      sizeof(details::pe_resource_icon_dir) + sizeof(details::pe_icon_header);
+  if (size < minsz) {
+    return make_error_code(lief_errors::read_error);
+  }
 
-uint32_t ResourceIcon::id() const {
-  return id_;
+  SpanStream stream(buffer, size);
+  stream.skip<uint16_t>(); // reserved
+  auto type = stream.read<uint16_t>().value_or(0);
+  if (type != 1) {
+    return make_error_code(lief_errors::corrupted);
+  }
+
+  auto count = stream.read<uint16_t>().value_or(0);
+  if (count != 1) {
+    return make_error_code(lief_errors::corrupted);
+  }
+
+  ResourceIcon icon;
+
+  icon.width(stream.read<uint8_t>().value_or(0));
+  icon.height(stream.read<uint8_t>().value_or(0));
+  icon.color_count(stream.read<uint8_t>().value_or(0));
+  icon.reserved(stream.read<uint8_t>().value_or(0));
+  icon.planes(stream.read<uint16_t>().value_or(0));
+  icon.bit_count(stream.read<uint16_t>().value_or(0));
+
+  auto pixel_size = stream.read<uint32_t>().value_or(0);
+  if (pixel_size == 0) {
+    return make_error_code(lief_errors::corrupted);
+  }
+
+  auto offset = stream.read<uint32_t>().value_or(0);
+  if (offset == 0 || (offset + pixel_size) > size) {
+    return make_error_code(lief_errors::corrupted);
+  }
+  std::vector<uint8_t> pixels;
+  stream.read_data(pixels, pixel_size);
+  icon.pixels(std::move(pixels));
+  return icon;
 }
 
-RESOURCE_LANGS ResourceIcon::lang() const {
-  return lang_;
-}
+std::vector<uint8_t> ResourceIcon::serialize() const {
+  if (pixels_.empty()) {
+    return {};
+  }
 
-RESOURCE_SUBLANGS ResourceIcon::sublang() const {
-  return sublang_;
-}
+  vector_iostream ios;
+  ios.reserve(sizeof(details::pe_resource_icon_dir) +
+              sizeof(details::pe_icon_header) + pixels_.size());
 
-uint8_t ResourceIcon::width() const {
-  return width_;
+  ios
+      // pe_resource_icon_dir header
+      .write<uint16_t>(/*reserved*/ 0)
+      .write<uint16_t>(/*type=icon*/ 1)
+      .write<uint16_t>(/*count*/ 1)
+      // pe_icon_header header
+      .write<uint8_t>(width())
+      .write<uint8_t>(height())
+      .write<uint8_t>(color_count())
+      .write<uint8_t>(reserved())
+      .write<uint16_t>(planes())
+      .write<uint16_t>(bit_count())
+      .write<uint32_t>(size())
+      .write<uint32_t>((uint32_t)ios.tellp() + sizeof(uint32_t))
+      // Raw pixels
+      .write(pixels());
+  return ios.raw();
 }
-
-uint8_t ResourceIcon::height() const {
-  return height_;
-}
-
-uint8_t ResourceIcon::color_count() const {
-  return color_count_;
-}
-
-uint8_t ResourceIcon::reserved() const {
-  return reserved_;
-}
-
-uint16_t ResourceIcon::planes() const {
-  return planes_;
-}
-
-uint16_t ResourceIcon::bit_count() const {
-  return bit_count_;
-}
-
-uint32_t ResourceIcon::size() const {
-  return pixels_.size();
-}
-
-const std::vector<uint8_t>& ResourceIcon::pixels() const {
-  return pixels_;
-}
-
-void ResourceIcon::id(uint32_t id) {
-  id_ = id;
-}
-
-void ResourceIcon::lang(RESOURCE_LANGS lang) {
-  lang_ = lang;
-}
-
-void ResourceIcon::sublang(RESOURCE_SUBLANGS sublang) {
-  sublang_ = sublang;
-}
-
-void ResourceIcon::width(uint8_t width) {
-  width_ = width;
-}
-
-void ResourceIcon::height(uint8_t height) {
-  height_ = height;
-}
-
-void ResourceIcon::color_count(uint8_t color_count) {
-  color_count_ = color_count;
-}
-
-void ResourceIcon::reserved(uint8_t reserved) {
-  reserved_ = reserved;
-}
-
-void ResourceIcon::planes(uint16_t planes) {
-  planes_ = planes;
-}
-
-void ResourceIcon::bit_count(uint16_t bit_count) {
-  bit_count_ = bit_count;
-}
-
-void ResourceIcon::pixels(const std::vector<uint8_t>& pixels) {
-  pixels_ = pixels;
-}
-
 
 void ResourceIcon::save(const std::string& filename) const {
-  std::vector<uint8_t> icon(sizeof(details::pe_resource_icon_dir) + sizeof(details::pe_icon_header) + pixels_.size(), 0);
-  details::pe_resource_icon_dir dir_header;
-  dir_header.reserved = 0;
-  dir_header.type     = 1;
-  dir_header.count    = 1;
-
-  details::pe_icon_header icon_header;
-  icon_header.width       = static_cast<uint8_t>(width());
-  icon_header.height      = static_cast<uint8_t>(height());
-  icon_header.color_count = static_cast<uint8_t>(color_count());
-  icon_header.reserved    = static_cast<uint8_t>(reserved());
-  icon_header.planes      = static_cast<uint16_t>(planes());
-  icon_header.bit_count   = static_cast<uint16_t>(bit_count());
-  icon_header.size        = static_cast<uint32_t>(size());
-  icon_header.offset      = sizeof(details::pe_resource_icon_dir) + sizeof(details::pe_icon_header);
-
-  const std::vector<uint8_t>& pixels = this->pixels();
-
-  std::copy(
-      reinterpret_cast<const uint8_t*>(&dir_header),
-      reinterpret_cast<const uint8_t*>(&dir_header) + sizeof(details::pe_resource_icon_dir),
-      icon.data());
-
-  std::copy(
-      reinterpret_cast<const uint8_t*>(&icon_header),
-      reinterpret_cast<const uint8_t*>(&icon_header) + sizeof(details::pe_icon_header),
-      icon.data() + sizeof(details::pe_resource_icon_dir));
-
-  std::copy(
-      std::begin(pixels),
-      std::end(pixels),
-      icon.data() + sizeof(details::pe_resource_icon_dir) + sizeof(details::pe_icon_header));
-
-
-  std::ofstream output_file{filename, std::ios::out | std::ios::binary | std::ios::trunc};
-  if (output_file) {
-    std::copy(std::begin(icon), std::end(icon),
-              std::ostreambuf_iterator<char>(output_file));
+  std::ofstream output_file(filename,
+                            std::ios::out | std::ios::binary | std::ios::trunc);
+  if (!output_file) {
+    LIEF_ERR("Failed to open {} for writing", filename);
+    return;
   }
+  std::vector<uint8_t> raw = serialize();
+  output_file.write(reinterpret_cast<const char*>(raw.data()), raw.size());
 }
 
 void ResourceIcon::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool ResourceIcon::operator==(const ResourceIcon& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool ResourceIcon::operator!=(const ResourceIcon& rhs) const {
-  return !(*this == rhs);
-}
-
-
 std::ostream& operator<<(std::ostream& os, const ResourceIcon& icon) {
-  os << std::setw(33) << std::left << std::setfill(' ') << "ID: "          << std::hex << icon.id()                                                                                       << std::endl;
-  os << std::setw(33) << std::left << std::setfill(' ') << "Size: "        << std::dec << static_cast<uint32_t>(icon.width()) << "x" << static_cast<uint32_t>(icon.height()) << " pixels" << std::endl;
-  os << std::setw(33) << std::left << std::setfill(' ') << "Color count: " << std::hex << static_cast<uint32_t>(icon.color_count())                                                       << std::endl;
-  os << std::setw(33) << std::left << std::setfill(' ') << "Reserved: "    << std::hex << static_cast<uint32_t>(icon.reserved())                                                          << std::endl;
-  os << std::setw(33) << std::left << std::setfill(' ') << "Planes: "      << std::hex << static_cast<uint32_t>(icon.planes())                                                            << std::endl;
-  os << std::setw(33) << std::left << std::setfill(' ') << "Bit count: "   << std::hex << static_cast<uint32_t>(icon.bit_count())                                                         << std::endl;
-  os << std::setw(33) << std::left << std::setfill(' ') << "Hash: "        << std::hex << Hash::hash(icon.pixels())                                                                       << std::endl;
+  static constexpr auto DEFAULT_ALIGN = 13;
+  os << fmt::format("Icon id={:#06x}\n", icon.id());
+  os << fmt::format("  {:{}}: {}x{}\n", "size", DEFAULT_ALIGN, icon.width(),
+                    icon.height());
+  os << fmt::format("  {:{}}: {}\n", "color count", DEFAULT_ALIGN,
+                    icon.color_count());
+  os << fmt::format("  {:{}}: {}\n", "reserved", DEFAULT_ALIGN, icon.reserved());
+  os << fmt::format("  {:{}}: {}\n", "planes", DEFAULT_ALIGN, icon.planes());
+  os << fmt::format("  {:{}}: {}\n", "bit count", DEFAULT_ALIGN, icon.bit_count());
+  os << fmt::format("  {:{}}: {:#010x}\n", "pixel (hash)", DEFAULT_ALIGN,
+                    Hash::hash(icon.pixels()));
   return os;
 }
 
 
-
 }
-}
-

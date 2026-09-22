@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,25 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_PLATFORMS_ANDROID_VERSIONS_H_
-#define LIEF_PLATFORMS_ANDROID_VERSIONS_H_
+#ifndef LIEF_PLATFORMS_ANDROID_VERSIONS_H
+#define LIEF_PLATFORMS_ANDROID_VERSIONS_H
 #include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace Android {
+
+namespace LIEF::Android {
 
 enum class ANDROID_VERSIONS {
   VERSION_UNKNOWN = 0,
-  VERSION_601     = 1,
+  VERSION_601 = 1,
 
-  VERSION_700     = 2,
-  VERSION_710     = 3,
-  VERSION_712     = 4,
+  VERSION_700 = 2,
+  VERSION_710 = 3,
+  VERSION_712 = 4,
 
-  VERSION_800     = 5,
-  VERSION_810     = 6,
+  VERSION_800 = 5,
+  VERSION_810 = 6,
 
-  VERSION_900     = 7,
+  VERSION_900 = 7,
 };
 
 LIEF_API const char* code_name(ANDROID_VERSIONS version);
@@ -40,5 +40,5 @@ LIEF_API const char* to_string(ANDROID_VERSIONS version);
 
 
 }
-}
+
 #endif

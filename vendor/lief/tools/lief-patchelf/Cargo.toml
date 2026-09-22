@@ -1,0 +1,21 @@
+[package]
+name          = "lief-patchelf"
+description   = "A robust, modern reimplementation of patchelf based on the LIEF"
+documentation = "https://lief.re/doc/latest/tools/lief-patchelf/index.html"
+edition.workspace      = true
+version.workspace      = true
+authors.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+homepage.workspace     = true
+repository.workspace   = true
+
+[dependencies]
+common        = { workspace = true }
+lief          = { workspace = true }
+anyhow        = { workspace = true }
+clap          = { workspace = true }
+clap_complete = { workspace = true }
+clap_mangen   = { workspace = true }
+thiserror     = { workspace = true }
+indoc         = { workspace = true }

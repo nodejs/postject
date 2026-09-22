@@ -1,0 +1,79 @@
+/* Copyright 2024 - 2026 R. Thomas
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#pragma once
+#include "LIEF/ELF/SymbolVersionRequirement.hpp"
+#include "LIEF/rust/ELF/SymbolVersionAuxRequirement.hpp"
+#include "LIEF/rust/Iterator.hpp"
+#include "LIEF/rust/helpers.hpp"
+#include <memory>
+
+class ELF_SymbolVersionRequirement
+  : private Mirror<LIEF::ELF::SymbolVersionRequirement> {
+  public:
+  using lief_t = LIEF::ELF::SymbolVersionRequirement;
+  using Mirror::Mirror;
+
+  class it_auxiliary_symbols
+    : public Iterator<
+          ELF_SymbolVersionAuxRequirement,
+          LIEF::ELF::SymbolVersionRequirement::it_const_aux_requirement
+      > {
+    public:
+    it_auxiliary_symbols(const ELF_SymbolVersionRequirement::lief_t& src) :
+      Iterator(src.auxiliary_symbols()) {}
+    auto next() {
+      return Iterator::next();
+    }
+    auto size() const {
+      return Iterator::size();
+    }
+  };
+
+  auto version() const {
+    return get().version();
+  }
+  uint32_t cnt() const {
+    return get().cnt();
+  }
+  auto name() const {
+    return to_unique_string(get().name());
+  }
+
+  auto auxiliary_symbols() const {
+    return std::make_unique<it_auxiliary_symbols>(get());
+  }
+
+  auto set_version(uint16_t version) {
+    get().version(version);
+  }
+
+  auto set_name(const std::string& name) {
+    get().name(name);
+  }
+
+  auto find_aux(const std::string& name) const {
+    return details::try_unique<ELF_SymbolVersionAuxRequirement>(
+        get().find_aux(name)
+    );
+  }
+
+  auto remove_aux_requirement_by_name(const std::string& name) {
+    return get().remove_aux_requirement(name);
+  }
+};
+
+using ELF_SymbolVersionRequirement_it_auxiliary_symbols =
+    ELF_SymbolVersionRequirement::it_auxiliary_symbols;

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_DEX_TYPEDEF_H_
-#define LIEF_DEX_TYPEDEF_H_
+#ifndef LIEF_DEX_TYPEDEF_H
+#define LIEF_DEX_TYPEDEF_H
 #include <cstdint>
 
-namespace LIEF {
-namespace DEX {
+
+namespace LIEF::DEX {
 
 using dex_version_t = uint32_t;
 
 }
-}
+
 
 #endif

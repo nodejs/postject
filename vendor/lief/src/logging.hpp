@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,108 +13,228 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_PRIVATE_LOGGING_H_
-#define LIEF_PRIVATE_LOGGING_H_
+#ifndef LIEF_PRIVATE_LOGGING_H
+#define LIEF_PRIVATE_LOGGING_H
 #include <memory>
-#include <chrono>
-#include "LIEF/logging.hpp" // Public interface
-#include "LIEF/visibility.h"
-#include "LIEF/types.hpp"
+#include <sstream>
+
 #include "LIEF/config.h"
+#include "LIEF/logging.hpp" // Public interface
 
-#include <spdlog/spdlog.h>
-#include <spdlog/stopwatch.h>
-#include <spdlog/fmt/ostr.h>
+#include "messages.hpp"
+
 #include <spdlog/fmt/fmt.h>
-#include <spdlog/fmt/chrono.h>
+#include <spdlog/fmt/ranges.h>
+#include <spdlog/spdlog.h>
 
-#define LIEF_TRACE(...) LIEF::logging::Logger::trace(__VA_ARGS__)
-#define LIEF_DEBUG(...) LIEF::logging::Logger::debug(__VA_ARGS__)
-#define LIEF_INFO(...)  LIEF::logging::Logger::info(__VA_ARGS__)
-#define LIEF_WARN(...)  LIEF::logging::Logger::warn(__VA_ARGS__)
-#define LIEF_ERR(...)   LIEF::logging::Logger::err(__VA_ARGS__)
+#define LIEF_TRACE(...) LIEF::logging::Logger::instance().trace(__VA_ARGS__)
+#define LIEF_DEBUG(...) LIEF::logging::Logger::instance().debug(__VA_ARGS__)
+#define LIEF_INFO(...)  LIEF::logging::Logger::instance().info(__VA_ARGS__)
+#define LIEF_WARN(...)  LIEF::logging::Logger::instance().warn(__VA_ARGS__)
+#define LIEF_ERR(...)   LIEF::logging::Logger::instance().err(__VA_ARGS__)
 
-#define LIEF_SW_START(X) spdlog::stopwatch X;
-#define LIEF_SW_END(...) LIEF_INFO(__VA_ARGS__);
-
-#define CHECK(X, ...)        \
-  do {                       \
-    if (!(X)) {              \
-      LIEF_ERR(__VA_ARGS__); \
-    }                        \
+#define CHECK(X, ...)                                                             \
+  do {                                                                            \
+    if (!(X)) {                                                                   \
+      LIEF_ERR(__VA_ARGS__);                                                      \
+    }                                                                             \
   } while (false)
 
 
-using std::chrono::duration_cast;
-using std::chrono::milliseconds;
+#define CHECK_FATAL(X, ...)                                                       \
+  do {                                                                            \
+    if ((X)) {                                                                    \
+      LIEF_ERR(__VA_ARGS__);                                                      \
+      std::abort();                                                               \
+    }                                                                             \
+  } while (false)
 
-namespace LIEF {
-namespace logging {
+#if defined(LIEF_LOGGING_DEBUG)
+  #define LIEF_LOG_LOCATION()                                                     \
+    do {                                                                          \
+      LIEF_DEBUG("{}:{}", __FUNCTION__, __LINE__);                                \
+    } while (false)
+#else
+  #define LIEF_LOG_LOCATION()
+#endif
 
-// TODO(romain): Update when moving to C++17
+
+namespace LIEF::logging {
+
 class Logger {
   public:
+  static constexpr auto DEFAULT_NAME = "LIEF";
+  using instances_t = std::unordered_map<std::string, std::unique_ptr<Logger>>;
   Logger(const Logger&) = delete;
   Logger& operator=(const Logger&) = delete;
 
-  static Logger& instance();
+  static Logger& instance(const char* name);
+  static Logger& instance() {
+    return Logger::instance(DEFAULT_NAME);
+  }
 
-  //! @brief Disable the logging module
-  static void disable();
-
-  //! @brief Enable the logging module
-  static void enable();
-
-  //! @brief Change the logging level (**hierarchical**)
-  static void set_level(LOGGING_LEVEL level);
-
-  template <typename... Args>
-  static void trace(const char *fmt, const Args &... args) {
-    if /* constexpr */ (lief_logging_support && lief_logging_debug) {
-      Logger::instance().sink_->trace(fmt, args...);
+  void disable() {
+    if constexpr (lief_logging_support) {
+      sink_->set_level(spdlog::level::off);
     }
   }
 
-  template <typename... Args>
-  static void debug(const char *fmt, const Args &... args) {
-    if /* constexpr */ (lief_logging_support && lief_logging_debug) {
-      Logger::instance().sink_->debug(fmt, args...);
+  void enable() {
+    if constexpr (lief_logging_support) {
+      sink_->set_level(spdlog::level::warn);
     }
   }
 
-  template <typename... Args>
-  static void info(const char *fmt, const Args &... args) {
-    if /* constexpr */ (lief_logging_support) {
-      Logger::instance().sink_->info(fmt, args...);
+  void set_level(Level level);
+
+  Level get_level();
+
+  Logger& set_log_path(const std::string& path);
+
+  void reset();
+
+  template<typename... Args>
+  void trace(const char* fmt, const Args&... args) {
+    if constexpr (lief_logging_support && lief_logging_debug) {
+      sink_->trace(fmt::runtime(fmt), args...);
     }
   }
 
-  template <typename... Args>
-  static void err(const char *fmt, const Args &... args) {
-    if /* constexpr */ (lief_logging_support) {
-      Logger::instance().sink_->error(fmt, args...);
+  template<typename... Args>
+  void debug(const char* fmt, const Args&... args) {
+    if constexpr (lief_logging_support && lief_logging_debug) {
+      sink_->debug(fmt::runtime(fmt), args...);
     }
   }
 
-  template <typename... Args>
-  static void warn(const char *fmt, const Args &... args) {
-    if /* constexpr */ (lief_logging_support) {
-      Logger::instance().sink_->warn(fmt, args...);
+  template<typename... Args>
+  void info(const char* fmt, const Args&... args) {
+    if constexpr (lief_logging_support) {
+      sink_->info(fmt::runtime(fmt), args...);
     }
   }
 
-  ~Logger();
+  template<typename... Args>
+  void err(const char* fmt, const Args&... args) {
+    if constexpr (lief_logging_support) {
+      sink_->error(fmt::runtime(fmt), args...);
+    }
+  }
+
+  template<typename... Args>
+  void warn(const char* fmt, const Args&... args) {
+    if constexpr (lief_logging_support) {
+      sink_->warn(fmt::runtime(fmt), args...);
+    }
+  }
+
+  template<typename... Args>
+  void critial(const char* fmt, const Args&... args) {
+    if constexpr (lief_logging_support) {
+      sink_->critical(fmt::runtime(fmt), args...);
+    }
+  }
+
+  void set_logger(std::shared_ptr<spdlog::logger> logger);
+
+  spdlog::logger& sink() {
+    assert(sink_ != nullptr);
+    return *sink_;
+  }
+
+  ~Logger() = default;
+  Logger() = delete;
+
   private:
-  Logger();
-  Logger(Logger&&);
-  Logger& operator=(Logger&&);
+  Logger(std::shared_ptr<spdlog::logger> sink) :
+    sink_(std::move(sink)) {}
+  Logger(Logger&&) noexcept = default;
+  Logger& operator=(Logger&&) noexcept = default;
 
-  static void destroy();
-  /* inline */ static Logger* instance_;
   std::shared_ptr<spdlog::logger> sink_;
 };
 
+
+inline void critial(const char* msg) {
+  LIEF::logging::log(LIEF::logging::Level::Critical, msg);
 }
+
+template<typename... Args>
+void critial(const char* fmt, const Args&... args) {
+  LIEF::logging::log(LIEF::logging::Level::Critical,
+                     fmt::format(fmt::runtime(fmt), args...));
 }
+
+[[noreturn]] inline void terminate() {
+  std::abort();
+}
+
+[[noreturn]] inline void fatal_error(const char* msg) {
+  critial(msg);
+  terminate();
+}
+
+template<typename... Args>
+[[noreturn]] void fatal_error(const char* fmt, const Args&... args) {
+  critial(fmt, args...);
+  terminate();
+}
+
+inline void needs_lief_extended() {
+  if constexpr (!lief_extended) {
+    Logger::instance().warn(NEEDS_EXTENDED_MSG);
+  }
+}
+
+class Stream : public std::stringbuf {
+  public:
+  Stream(Level lvl) :
+    lvl_(lvl) {}
+
+  protected:
+  int sync() override {
+    switch (lvl_) {
+      case Level::Off: break;
+
+      case Level::Trace:
+      case Level::Debug:
+      {
+        LIEF_DEBUG("{}", str());
+        break;
+      }
+
+      case Level::Info:
+      {
+        LIEF_INFO("{}", str());
+        break;
+      }
+
+      case Level::Warn:
+      {
+        LIEF_WARN("{}", str());
+        break;
+      }
+      case Level::Err:
+      {
+        LIEF_ERR("{}", str());
+        break;
+      }
+
+      case Level::Critical:
+      {
+        critical("{}", str());
+        break;
+      }
+    }
+    str("");
+    return 0;
+  }
+
+  protected:
+  Level lvl_ = Level::Off;
+};
+
+}
+
 
 #endif

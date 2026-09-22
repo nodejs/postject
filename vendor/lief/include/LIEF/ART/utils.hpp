@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,38 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ART_UTILS_H_
-#define LIEF_ART_UTILS_H_
+#ifndef LIEF_ART_UTILS_H
+#define LIEF_ART_UTILS_H
 
-#include <string>
+#include <string_view>
 #include <vector>
 
 #include "LIEF/ART/types.hpp"
 
 #include "LIEF/platforms/android.hpp"
 
-#include "LIEF/types.hpp"
 #include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace ART {
 
-//! @brief Check if the given file is an ART one.
-LIEF_API bool is_art(const std::string& file);
+namespace LIEF::ART {
 
-//! @brief Check if the given raw data is an ART one.
+/// Check if the given file is an ART one.
+LIEF_API bool is_art(std::string_view file);
+
+/// Check if the given raw data is an ART one.
 LIEF_API bool is_art(const std::vector<uint8_t>& raw);
 
-//! @brief Return the ART version of the given file
-LIEF_API art_version_t version(const std::string& file);
+/// Return the ART version of the given file
+LIEF_API art_version_t version(std::string_view file);
 
-//! @brief Return the ART version of the raw data
+/// Return the ART version of the raw data
 LIEF_API art_version_t version(const std::vector<uint8_t>& raw);
 
-//! @brief Return the ANDROID_VERSIONS associated with the given ART version
+/// Return the ANDROID_VERSIONS associated with the given ART version
 LIEF_API LIEF::Android::ANDROID_VERSIONS android_version(art_version_t version);
 
-}
 }
 
 

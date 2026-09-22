@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,23 @@
 
 #include <utility>
 
+#include "LIEF/DEX/Method.hpp"
+#include "LIEF/OAT/Class.hpp"
 #include "LIEF/OAT/Method.hpp"
 #include "LIEF/OAT/hash.hpp"
 
-namespace LIEF {
-namespace OAT {
+
+namespace LIEF::OAT {
 
 Method::Method() = default;
 Method::Method(const Method&) = default;
 Method& Method::operator=(const Method&) = default;
 
-Method::Method(DEX::Method* method, Class* oat_class, std::vector<uint8_t>  quick_code) :
+Method::Method(DEX::Method* method, Class* oat_class,
+               std::vector<uint8_t> quick_code) :
   dex_method_{method},
   class_{oat_class},
-  quick_code_{std::move(quick_code)}
-{}
+  quick_code_{std::move(quick_code)} {}
 
 const Class* Method::oat_class() const {
   return class_;
@@ -67,7 +69,7 @@ std::string Method::name() const {
     return "";
   }
 
-  return dex_method_->name();
+  return std::string(dex_method_->name());
 }
 
 const DEX::dex2dex_method_info_t& Method::dex2dex_info() const {
@@ -87,21 +89,9 @@ void Method::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool Method::operator==(const Method& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool Method::operator!=(const Method& rhs) const {
-  return !(*this == rhs);
-}
 
 std::ostream& operator<<(std::ostream& os, const Method& meth) {
-  std::string pretty_name = meth.oat_class()->fullname();
+  std::string pretty_name{meth.oat_class()->fullname()};
   pretty_name = pretty_name.substr(1, pretty_name.size() - 2);
 
   os << pretty_name << "." << meth.name();
@@ -119,6 +109,4 @@ std::ostream& operator<<(std::ostream& os, const Method& meth) {
 Method::~Method() = default;
 
 
-
-}
 }

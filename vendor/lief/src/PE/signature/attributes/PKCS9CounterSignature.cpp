@@ -1,5 +1,5 @@
-/* Copyright 2021 - 2022 R. Thomas
- * Copyright 2021 - 2022 Quarkslab
+/* Copyright 2021 - 2026 R. Thomas
+ * Copyright 2021 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,25 +14,11 @@
  * limitations under the License.
  */
 #include "LIEF/PE/signature/attributes/PKCS9CounterSignature.hpp"
+#include "LIEF/Visitor.hpp"
+
 #include <sstream>
-namespace LIEF {
-namespace PE {
 
-PKCS9CounterSignature::PKCS9CounterSignature() :
-  Attribute(SIG_ATTRIBUTE_TYPES::PKCS9_COUNTER_SIGNATURE)
-{}
-
-PKCS9CounterSignature::PKCS9CounterSignature(const PKCS9CounterSignature&) = default;
-PKCS9CounterSignature& PKCS9CounterSignature::operator=(const PKCS9CounterSignature&) = default;
-
-PKCS9CounterSignature::PKCS9CounterSignature(SignerInfo signer) :
-  Attribute(SIG_ATTRIBUTE_TYPES::PKCS9_COUNTER_SIGNATURE),
-  signer_{std::move(signer)}
-{}
-
-std::unique_ptr<Attribute> PKCS9CounterSignature::clone() const {
-  return std::unique_ptr<Attribute>(new PKCS9CounterSignature{*this});
-}
+namespace LIEF::PE {
 
 void PKCS9CounterSignature::accept(Visitor& visitor) const {
   visitor.visit(*this);
@@ -45,7 +31,4 @@ std::string PKCS9CounterSignature::print() const {
 }
 
 
-PKCS9CounterSignature::~PKCS9CounterSignature() = default;
-
-}
 }

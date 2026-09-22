@@ -1,41 +1,65 @@
-#!/usr/bin/env python
-import lief
 import subprocess
-from utils import get_sample, is_apple_m1, sign, chmod_exe
+from pathlib import Path
+from typing import cast
+
+import lief
+import pytest
+from utils import chmod_exe, is_apple_m1, parse_macho, sign
+
 
 def process(target: lief.MachO.Binary):
-    assert target.has(lief.MachO.LOAD_COMMAND_TYPES.DYLD_EXPORTS_TRIE)
+    assert target.has(lief.MachO.LoadCommand.TYPE.DYLD_EXPORTS_TRIE)
 
-    exports = target.get(lief.MachO.LOAD_COMMAND_TYPES.DYLD_EXPORTS_TRIE)
+    exports = cast(
+        lief.MachO.DyldExportsTrie,
+        target.get(lief.MachO.LoadCommand.TYPE.DYLD_EXPORTS_TRIE),
+    )
     assert exports.data_offset == 0x70278
 
     entries = list(exports.exports)
-    entries = sorted(entries, key=lambda e: e.symbol.name)
+    entries = sorted(
+        entries, key=lambda e: e.symbol.name if e.symbol is not None else ""
+    )
 
     assert len(entries) == 885
 
+    assert entries[1].symbol is not None
     assert entries[1].symbol.name == "_main"
-    assert entries[1].address ==     0x4550
+    assert entries[1].address == 0x4550
 
+    assert entries[843].symbol is not None
     assert entries[843].symbol.name == "_psa_its_remove"
-    assert entries[843].address ==     0x3DACC
+    assert entries[843].address == 0x3DACC
+
 
 def test_basic():
-    fat = lief.MachO.parse(get_sample('MachO/9edfb04c55289c6c682a25211a4b30b927a86fe50b014610d04d6055bd4ac23d_crypt_and_hash.macho'))
-    target = fat.take(lief.MachO.CPU_TYPES.ARM64)
+    fat = parse_macho(
+        "MachO/9edfb04c55289c6c682a25211a4b30b927a86fe50b014610d04d6055bd4ac23d_crypt_and_hash.macho"
+    )
+    target = fat.take(lief.MachO.Header.CPU_TYPE.ARM64)
+    assert target is not None
 
     process(target)
-    assert target.get(lief.MachO.LOAD_COMMAND_TYPES.DYLD_EXPORTS_TRIE).data_size == 0x4158
+    cmd = target.get(lief.MachO.LoadCommand.TYPE.DYLD_EXPORTS_TRIE)
+    assert isinstance(cmd, lief.MachO.DyldExportsTrie)
+    assert cmd.data_size == 0x4158
 
-def test_write(tmp_path):
+
+def test_write(tmp_path: Path):
     binary_name = "crypt_and_hash"
-    fat = lief.MachO.parse(get_sample('MachO/9edfb04c55289c6c682a25211a4b30b927a86fe50b014610d04d6055bd4ac23d_crypt_and_hash.macho'))
-    target = fat.take(lief.MachO.CPU_TYPES.ARM64)
+    fat = parse_macho(
+        "MachO/9edfb04c55289c6c682a25211a4b30b927a86fe50b014610d04d6055bd4ac23d_crypt_and_hash.macho"
+    )
+    target = fat.take(lief.MachO.Header.CPU_TYPE.ARM64)
+    assert target is not None
 
     output = f"{tmp_path}/{binary_name}.built"
 
     target.write(output)
-    target = lief.parse(output)
+    fat_parsed = lief.MachO.parse(output)
+    assert fat_parsed is not None
+    target = fat_parsed.at(0)
+    assert target is not None
 
     process(target)
 
@@ -45,10 +69,40 @@ def test_write(tmp_path):
     if is_apple_m1():
         chmod_exe(output)
         sign(output)
-        with subprocess.Popen([output], universal_newlines=True,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
+        with subprocess.Popen(
+            [output],
+            universal_newlines=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        ) as proc:
+            assert proc.stdout is not None
             stdout = proc.stdout.read()
             assert "CAMELLIA-256-CCM*-NO-TAG" in stdout
             assert "AES-128-CCM*-NO-TAG" in stdout
 
 
+@pytest.mark.private
+@pytest.mark.slow
+def test_issue_1262():
+    macho = parse_macho("private/MachO/issue-1262.macho").at(0)
+    assert macho is not None
+
+    dyld_trie = macho.dyld_exports_trie
+    assert dyld_trie is not None
+    assert len(dyld_trie.exports) == 312478
+
+
+@pytest.mark.private
+def test_show_export_trie_cycle():
+    cyclic_trie = parse_macho("private/MachO/issue_cyclic_trie.macho").at(0)
+    assert cyclic_trie is not None
+    ptrie = cast(
+        lief.MachO.DyldExportsTrie,
+        cyclic_trie.get(lief.MachO.LoadCommand.TYPE.DYLD_EXPORTS_TRIE),
+    )
+    assert ptrie is not None
+
+    output = ptrie.show_export_trie()
+    assert isinstance(output, str)
+    assert output.count("@off.") <= 4
+    assert "A@off." in output

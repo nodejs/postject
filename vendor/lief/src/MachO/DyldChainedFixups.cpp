@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,84 +13,53 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "spdlog/fmt/fmt.h"
 #include "LIEF/MachO/DyldChainedFixups.hpp"
 #include "LIEF/MachO/ChainedBindingInfo.hpp"
-#include "LIEF/MachO/hash.hpp"
-#include "LIEF/MachO/EnumToString.hpp"
-#include "LIEF/MachO/SegmentCommand.hpp"
 #include "LIEF/MachO/DylibCommand.hpp"
 #include "LIEF/MachO/RelocationFixup.hpp"
+#include "LIEF/MachO/SegmentCommand.hpp"
 #include "LIEF/MachO/Symbol.hpp"
+#include "LIEF/MachO/hash.hpp"
+#include "spdlog/fmt/fmt.h"
 
-#include "MachO/Structures.hpp"
+#include "MachO/ChainedBindingInfoList.hpp" // IWYU pragma: keep
 #include "MachO/ChainedFixup.hpp"
-namespace LIEF {
-namespace MachO {
+#include "MachO/Structures.hpp"
+
+
+namespace LIEF::MachO {
 DyldChainedFixups::~DyldChainedFixups() = default;
 DyldChainedFixups::DyldChainedFixups() = default;
 
 DyldChainedFixups& DyldChainedFixups::operator=(const DyldChainedFixups& other) {
   if (&other != this) {
     data_offset_ = other.data_offset_;
-    data_offset_ = other.data_offset_;
+    data_size_ = other.data_size_;
   }
   return *this;
 }
 
 DyldChainedFixups::DyldChainedFixups(const DyldChainedFixups& other) :
+  LoadCommand::LoadCommand(other),
   data_offset_{other.data_offset_},
-  data_size_{other.data_size_}
-{}
+  data_size_{other.data_size_} {}
 
 DyldChainedFixups::DyldChainedFixups(const details::linkedit_data_command& cmd) :
-  LoadCommand::LoadCommand{static_cast<LOAD_COMMAND_TYPES>(cmd.cmd), cmd.cmdsize},
+  LoadCommand::LoadCommand{LoadCommand::TYPE(cmd.cmd), cmd.cmdsize},
   data_offset_{cmd.dataoff},
-  data_size_{cmd.datasize}
-{}
+  data_size_{cmd.datasize} {}
 
 
-void DyldChainedFixups::update_with(const details::dyld_chained_fixups_header& header) {
-  fixups_version_  = header.fixups_version;
-  starts_offset_   = header.starts_offset;
-  imports_offset_  = header.imports_offset;
-  symbols_offset_  = header.symbols_offset;
-  imports_count_   = header.imports_count;
-  symbols_format_  = header.symbols_format;
-  imports_format_  = static_cast<DYLD_CHAINED_FORMAT>(header.imports_format);
-}
-
-uint32_t DyldChainedFixups::data_offset() const {
-  return data_offset_;
-}
-uint32_t DyldChainedFixups::data_size() const {
-  return data_size_;
-}
-
-void DyldChainedFixups::data_offset(uint32_t offset) {
-  data_offset_ = offset;
-}
-
-void DyldChainedFixups::data_size(uint32_t size) {
-  data_size_ = size;
-}
-
-DyldChainedFixups* DyldChainedFixups::clone() const {
-  return new DyldChainedFixups(*this);
-}
-
-
-bool DyldChainedFixups::operator==(const DyldChainedFixups& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool DyldChainedFixups::operator!=(const DyldChainedFixups& rhs) const {
-  return !(*this == rhs);
+void DyldChainedFixups::update_with(
+    const details::dyld_chained_fixups_header& header
+) {
+  fixups_version_ = header.fixups_version;
+  starts_offset_ = header.starts_offset;
+  imports_offset_ = header.imports_offset;
+  symbols_offset_ = header.symbols_offset;
+  imports_count_ = header.imports_count;
+  symbols_format_ = header.symbols_format;
+  imports_format_ = static_cast<DYLD_CHAINED_FORMAT>(header.imports_format);
 }
 
 void DyldChainedFixups::accept(Visitor& visitor) const {
@@ -114,7 +83,8 @@ std::ostream& DyldChainedFixups::print(std::ostream& os) const {
   for (size_t i = 0; i < segments.size(); ++i) {
     const chained_starts_in_segment& info = segments[i];
     static constexpr char PREFIX[] = "  ";
-    os << fmt::format("{}seg_offset[{}] = {:03d} ({})\n", PREFIX, i,  info.offset, info.segment.name());
+    os << fmt::format("{}seg_offset[{}] = {:03d} ({})\n", PREFIX, i, info.offset,
+                      info.segment.name());
   }
 
   for (size_t i = 0; i < segments.size(); ++i) {
@@ -122,15 +92,15 @@ std::ostream& DyldChainedFixups::print(std::ostream& os) const {
     if (info.offset == 0) {
       continue;
     }
-    os << fmt::format("chained starts in segment {} ({})\n", i, info.segment.name());
+    os << fmt::format("chained starts in segment {} ({})\n", i,
+                      info.segment.name());
     os << info << "\n";
 
     for (const Relocation& reloc : info.segment.relocations()) {
-      if (!RelocationFixup::classof(reloc)) {
-        continue;
+      if (const auto* r = reloc.cast<RelocationFixup>()) {
+        os << fmt::format("[RELOC] {:#010x}: {:#010x}\n", r->address(),
+                          r->target());
       }
-      const auto& r = static_cast<const RelocationFixup&>(reloc);
-      os << fmt::format("[RELOC] 0x{:08x}: 0x{:08x}\n", r.address(), r.target());
     }
     os << "\n";
   }
@@ -147,7 +117,7 @@ std::ostream& DyldChainedFixups::print(std::ostream& os) const {
 
     if (const auto* lib = bind.library()) {
       libname = lib->name();
-      auto pos = libname.rfind("/");
+      auto pos = libname.rfind('/');
       if (pos != std::string::npos) {
         libname = libname.substr(pos + 1);
       }
@@ -157,45 +127,34 @@ std::ostream& DyldChainedFixups::print(std::ostream& os) const {
       symbol = sym->name();
     }
 
-    os << fmt::format("{}0x{:08x}: {} ({}) addend: 0x{:x}\n",
-                      segment_name, bind.address(), symbol, libname, bind.sign_extended_addend());
-
-
+    os << fmt::format("{}{:#010x}: {} ({}) addend: {:#x}\n", segment_name,
+                      bind.address(), symbol, libname,
+                      bind.sign_extended_addend());
   }
   return os;
 }
 
-bool DyldChainedFixups::classof(const LoadCommand* cmd) {
-  // This must be sync with BinaryParser.tcc
-  const LOAD_COMMAND_TYPES type = cmd->command();
-  return type == LOAD_COMMAND_TYPES::LC_DYLD_CHAINED_FIXUPS;
-}
-
-
-DyldChainedFixups::chained_starts_in_segment::chained_starts_in_segment(uint32_t offset, const details::dyld_chained_starts_in_segment& info,
-                                                                        SegmentCommand& segment) :
+DyldChainedFixups::chained_starts_in_segment::chained_starts_in_segment(
+    uint32_t offset, const details::dyld_chained_starts_in_segment& info,
+    SegmentCommand& segment
+) :
   offset{offset},
   size{info.size},
   page_size{info.page_size},
   segment_offset{info.segment_offset},
   max_valid_pointer{info.max_valid_pointer},
   pointer_format{static_cast<DYLD_CHAINED_PTR_FORMAT>(info.pointer_format)},
-  segment{segment}
-{}
+  segment{segment} {}
 
-DyldChainedFixups::chained_starts_in_segment::chained_starts_in_segment(uint32_t offset, SegmentCommand& segment) :
-  offset{offset},
-  segment{segment}
-{}
-
-
-std::ostream& operator<<(std::ostream& os, const DyldChainedFixups::chained_starts_in_segment& info) {
-  os << fmt::format("size              = {}\n",     info.size);
-  os << fmt::format("page_size         = 0x{:x}\n", info.page_size);
-  os << fmt::format("pointer_format    = {}\n",     to_string(info.pointer_format));
-  os << fmt::format("segment_offset    = 0x{:x}\n", info.segment_offset);
-  os << fmt::format("max_valid_pointer = 0x{:x}\n", info.max_valid_pointer);
-  os << fmt::format("page_count        = {}\n",     info.page_count());
+std::ostream&
+    operator<<(std::ostream& os,
+               const DyldChainedFixups::chained_starts_in_segment& info) {
+  os << fmt::format("size              = {}\n", info.size);
+  os << fmt::format("page_size         = {:#x}\n", info.page_size);
+  os << fmt::format("pointer_format    = {}\n", to_string(info.pointer_format));
+  os << fmt::format("segment_offset    = {:#x}\n", info.segment_offset);
+  os << fmt::format("max_valid_pointer = {:#x}\n", info.max_valid_pointer);
+  os << fmt::format("page_count        = {}\n", info.page_count());
 
   for (size_t i = 0; i < info.page_count(); ++i) {
     os << fmt::format("  page_start[{}] = {}\n", i, info.page_start[i]);
@@ -203,5 +162,4 @@ std::ostream& operator<<(std::ostream& os, const DyldChainedFixups::chained_star
   return os;
 }
 
-}
 }

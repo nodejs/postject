@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,47 +13,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <numeric>
-#include <iomanip>
+#include <set>
 #include <utility>
 
-#include "LIEF/MachO/FatBinary.hpp"
-#include "LIEF/MachO/Builder.hpp"
 #include "LIEF/MachO/Binary.hpp"
+#include "LIEF/MachO/Builder.hpp"
+#include "LIEF/MachO/FatBinary.hpp"
 
-namespace LIEF {
-namespace MachO {
+#include "logging.hpp"
+
+
+namespace LIEF::MachO {
 
 FatBinary::~FatBinary() = default;
 FatBinary::FatBinary() = default;
 
 FatBinary::FatBinary(binaries_t binaries) :
-  binaries_{std::move(binaries)}
-{}
+  binaries_{std::move(binaries)} {}
 
-
-size_t FatBinary::size() const {
-  return binaries_.size();
+std::unique_ptr<FatBinary> FatBinary::create(binaries_t binaries) {
+  std::set<uint64_t> seen;
+  for (const std::unique_ptr<Binary>& bin : binaries) {
+    if (bin == nullptr) {
+      continue;
+    }
+    const Header& hdr = bin->header();
+    uint64_t arch = (uint64_t(hdr.cpu_type()) << 32) | uint64_t(hdr.cpu_subtype());
+    if (!seen.insert(arch).second) {
+      LIEF_ERR("Duplicate architecture: {} (subtype: {:#x})",
+               to_string(hdr.cpu_type()), hdr.cpu_subtype());
+      return nullptr;
+    }
+  }
+  return std::unique_ptr<FatBinary>(new FatBinary(std::move(binaries)));
 }
-
-
-FatBinary::it_binaries FatBinary::begin() {
-  return binaries_;
-}
-
-FatBinary::it_const_binaries FatBinary::begin() const {
-  return binaries_;
-}
-
-
-FatBinary::it_binaries FatBinary::end() {
-  return it_binaries{binaries_}.end();
-}
-
-FatBinary::it_const_binaries FatBinary::end() const {
-  return it_const_binaries{binaries_}.end();
-}
-
 
 std::unique_ptr<Binary> FatBinary::pop_back() {
   if (binaries_.empty()) {
@@ -64,66 +57,31 @@ std::unique_ptr<Binary> FatBinary::pop_back() {
   return last;
 }
 
-Binary* FatBinary::at(size_t index) {
-  return const_cast<Binary*>(static_cast<const FatBinary*>(this)->at(index));
-}
+std::unique_ptr<Binary> FatBinary::take(Header::CPU_TYPE cpu) {
+  auto it = std::find_if(binaries_.begin(), binaries_.end(),
+                         [cpu](const std::unique_ptr<Binary>& bin) {
+                           return bin->header().cpu_type() == cpu;
+                         });
 
-const Binary* FatBinary::at(size_t index) const {
-  if (index >= size()) {
-    return nullptr;
-  }
-  return binaries_[index].get();
-}
-
-
-Binary* FatBinary::back() {
-  return const_cast<Binary*>(static_cast<const FatBinary*>(this)->back());
-}
-
-const Binary* FatBinary::back() const {
-  if (binaries_.empty()) {
-    return nullptr;
-  }
-  return binaries_.back().get();
-}
-
-Binary* FatBinary::front() {
-  return const_cast<Binary*>(static_cast<const FatBinary*>(this)->front());
-}
-
-const Binary* FatBinary::front() const {
-  if (binaries_.empty()) {
-    return nullptr;
-  }
-  return binaries_.front().get();
-}
-
-
-Binary* FatBinary::operator[](size_t index) {
-  return const_cast<Binary*>(static_cast<const FatBinary*>(this)->operator[](index));
-}
-
-const Binary* FatBinary::operator[](size_t index) const {
-  return at(index);
-}
-
-bool FatBinary::empty() const {
-  return binaries_.empty();
-}
-
-std::unique_ptr<Binary> FatBinary::take(CPU_TYPES cpu) {
-  auto it = std::find_if(std::begin(binaries_), std::end(binaries_),
-      [cpu] (const std::unique_ptr<Binary>& bin) {
-        return bin->header().cpu_type() == cpu;
-      });
-
-  if (it == std::end(binaries_)) {
+  if (it == binaries_.end()) {
     return nullptr;
   }
 
   std::unique_ptr<Binary> ret = std::move(*it);
   binaries_.erase(it);
   return ret;
+}
+
+
+const Binary* FatBinary::get(Header::CPU_TYPE cpu) const {
+  auto it = std::find_if(binaries_.begin(), binaries_.end(),
+                         [cpu](const std::unique_ptr<Binary>& bin) {
+                           return bin->header().cpu_type() == cpu;
+                         });
+  if (it == binaries_.end()) {
+    return nullptr;
+  }
+  return it->get();
 }
 
 std::unique_ptr<Binary> FatBinary::take(size_t index) {
@@ -147,22 +105,12 @@ std::vector<uint8_t> FatBinary::raw() {
   return buffer;
 }
 
-void FatBinary::release_all_binaries() {
-  for (auto& bin : binaries_) {
-    bin.release();
-  }
-}
-
 std::ostream& operator<<(std::ostream& os, const FatBinary& fatbinary) {
   for (const Binary& binary : fatbinary) {
-    os << binary;
-    os << std::endl << std::endl;
+    os << binary << "\n\n";
   }
 
   return os;
 }
 
-
-
-}
 }

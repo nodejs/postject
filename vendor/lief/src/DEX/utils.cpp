@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <fstream>
 #include <algorithm>
 
 #include "LIEF/BinaryStream/FileStream.hpp"
 #include "LIEF/BinaryStream/SpanStream.hpp"
 
-#include "LIEF/DEX/utils.hpp"
 #include "DEX/Structures.hpp"
+#include "LIEF/DEX/utils.hpp"
 
-namespace LIEF {
-namespace DEX {
+#include "internal_utils.hpp"
+
+
+namespace LIEF::DEX {
 
 inline bool is_dex(BinaryStream& stream) {
   using magic_t = std::array<char, sizeof(details::magic)>;
@@ -35,7 +36,7 @@ inline bool is_dex(BinaryStream& stream) {
   return false;
 }
 
-inline dex_version_t version(BinaryStream& stream) {
+dex_version_t version(BinaryStream& stream) {
   using version_t = std::array<char, 4>;
   stream.setpos(0);
   if (!is_dex(stream)) {
@@ -44,18 +45,12 @@ inline dex_version_t version(BinaryStream& stream) {
   stream.increment_pos(sizeof(details::magic));
   if (auto ver_res = stream.peek<version_t>()) {
     const auto version = *ver_res;
-    const bool are_digits = std::all_of(std::begin(version), std::end(version),
-        [] (char c) { return c == 0 || ::isdigit(c); });
-    if (!are_digits) {
-      return 0;
-    }
-    return static_cast<dex_version_t>(std::stoul(version.data()));
+    return dex_version_t{parse_android_version(version.data(), version.size())};
   }
   return 0;
-
 }
 
-bool is_dex(const std::string& file) {
+bool is_dex(std::string_view file) {
   if (auto stream = FileStream::from_file(file)) {
     return is_dex(*stream);
   }
@@ -69,7 +64,7 @@ bool is_dex(const std::vector<uint8_t>& raw) {
   return false;
 }
 
-dex_version_t version(const std::string& file) {
+dex_version_t version(std::string_view file) {
   if (auto stream = FileStream::from_file(file)) {
     return version(*stream);
   }
@@ -84,5 +79,4 @@ dex_version_t version(const std::vector<uint8_t>& raw) {
 }
 
 
-}
 }

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ART_H_
-#define LIEF_ART_H_
+#ifndef LIEF_ART_H
+#define LIEF_ART_H
 
+// IWYU pragma: begin_exports
 #include "LIEF/config.h"
 
 #if defined(LIEF_ART_SUPPORT)
-#include "LIEF/ART/Parser.hpp"
-#include "LIEF/ART/utils.hpp"
-#include "LIEF/ART/File.hpp"
-#include "LIEF/ART/EnumToString.hpp"
+  #include "LIEF/ART/EnumToString.hpp"
+  #include "LIEF/ART/File.hpp"
+  #include "LIEF/ART/Parser.hpp"
+  #include "LIEF/ART/utils.hpp"
 #endif
+// IWYU pragma: end_exports
 
 #endif

@@ -1,0 +1,41 @@
+[lief.build]
+type             = "Release"
+cache            = true
+ninja            = true
+parallel-jobs    = 0
+stable-abi       = true
+cxx-compiler     = "clang++"
+c-compiler       = "clang"
+lief-install-dir = "{ci_project_dir}/lief-install/x86_64/static"
+extra-cmake-opt  = [
+  "--toolchain /cmake/linux/linux-x86_64-glibc-2.28.cmake",
+  "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON",
+  "-DPython_VERSION={python_version}",
+  "-DCMAKE_COLOR_DIAGNOSTICS=ON",
+  "-DCMAKE_CXX_COMPILER=clang++",
+  "-DCMAKE_C_COMPILER=clang",
+  "-DCMAKE_MODULE_PATH=/cmake/linux/",
+]
+
+[lief.formats]
+elf     = true
+pe      = true
+macho   = true
+android = true
+art     = true
+vdex    = true
+oat     = true
+dex     = true
+
+[lief.features]
+json    = true
+frozen  = true
+
+[lief.logging]
+enabled = true
+debug   = false
+
+[lief.cross-compilation]
+platform  = "manylinux_2_28_x86_64"
+pyversion = "cp{python_version_alt}"
+abi       = "abi3"

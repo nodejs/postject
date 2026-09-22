@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,25 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_DEX_CLASS_H_
-#define LIEF_DEX_CLASS_H_
+#ifndef LIEF_DEX_CLASS_H
+#define LIEF_DEX_CLASS_H
 
+#include <string_view>
 #include <climits>
+#include <string>
 
-#include "LIEF/visibility.h"
 #include "LIEF/Object.hpp"
 #include "LIEF/iterators.hpp"
+#include "LIEF/visibility.h"
 
-#include "LIEF/DEX/enums.hpp"
 #include "LIEF/DEX/deopt.hpp"
+#include "LIEF/DEX/enums.hpp"
 
-namespace LIEF {
-namespace DEX {
+
+namespace LIEF::DEX {
 class Parser;
 class Field;
 class Method;
 
-//! Class which represents a DEX Class (i.e. a Java/Kotlin class)
+/// Class which represents a DEX Class (i.e. a Java/Kotlin class)
 class LIEF_API Class : public Object {
   friend class Parser;
 
@@ -55,7 +57,8 @@ class LIEF_API Class : public Object {
   public:
   static std::string package_normalized(const std::string& pkg_name);
   static std::string fullname_normalized(const std::string& pkg_cls);
-  static std::string fullname_normalized(const std::string& pkg, const std::string& cls_name);
+  static std::string fullname_normalized(const std::string& pkg,
+                                         const std::string& cls_name);
 
   Class();
   Class(const Class&) = delete;
@@ -64,60 +67,58 @@ class LIEF_API Class : public Object {
   Class(std::string fullname, uint32_t access_flags = ACCESS_FLAGS::ACC_UNKNOWN,
         Class* parent = nullptr, std::string source_filename = "");
 
-  //! Mangled class name (e.g. ``Lcom/example/android/MyActivity;``)
-  const std::string& fullname() const;
+  /// Mangled class name (e.g. ``Lcom/example/android/MyActivity;``)
+  std::string_view fullname() const;
 
-  //! Package Name
+  /// Package Name
   std::string package_name() const;
 
-  //! Class name
+  /// Class name
   std::string name() const;
 
-  //! Demangled class name
+  /// Demangled class name
   std::string pretty_name() const;
 
-  //! Check if the class has the given access flag
+  /// Check if the class has the given access flag
   bool has(ACCESS_FLAGS f) const;
 
-  //! Access flags used by this class
+  /// Access flags used by this class
   access_flags_list_t access_flags() const;
 
-  //! Filename associated with this class (if any)
-  const std::string& source_filename() const;
+  /// Filename associated with this class (if any)
+  std::string_view source_filename() const;
 
-  //! True if the current class extends another one
+  /// True if the current class extends another one
   bool has_parent() const;
 
-  //! Parent class
+  /// Parent class
   const Class* parent() const;
   Class* parent();
 
-  //! Methods implemented in this class
+  /// Methods implemented in this class
   it_const_methods methods() const;
   it_methods methods();
 
-  //! Return Methods having the given name
+  /// Return Methods having the given name
   it_named_methods methods(const std::string& name);
   it_const_named_methods methods(const std::string& name) const;
 
-  //! Fields implemented in this class
+  /// Fields implemented in this class
   it_const_fields fields() const;
   it_fields fields();
 
-  //! Return Fields having the given name
+  /// Return Fields having the given name
   it_named_fields fields(const std::string& name);
   it_const_named_fields fields(const std::string& name) const;
 
-  //! De-optimize information
+  /// De-optimize information
   dex2dex_class_info_t dex2dex_info() const;
 
-  //! Original index in the DEX class pool
+  /// Original index in the DEX class pool
   size_t index() const;
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const Class& rhs) const;
-  bool operator!=(const Class& rhs) const;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Class& cls);
 
@@ -125,15 +126,15 @@ class LIEF_API Class : public Object {
 
   private:
   std::string fullname_;
-  uint32_t    access_flags_ = ACCESS_FLAGS::ACC_UNKNOWN;
-  Class*      parent_ = nullptr;
-  methods_t   methods_;
-  fields_t    fields_;
+  uint32_t access_flags_ = ACCESS_FLAGS::ACC_UNKNOWN;
+  Class* parent_ = nullptr;
+  methods_t methods_;
+  fields_t fields_;
   std::string source_filename_;
 
   uint32_t original_index_ = UINT_MAX;
 };
 
 } // Namespace DEX
-} // Namespace LIEF
+// Namespace LIEF
 #endif

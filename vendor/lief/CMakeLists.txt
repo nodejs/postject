@@ -1,47 +1,45 @@
-cmake_minimum_required(VERSION 3.5)
-
-# Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
-if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
-  cmake_policy(SET CMP0135 NEW)
-endif()
+cmake_minimum_required(VERSION 3.24)
+project(LIEF LANGUAGES C CXX)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
-set(IS_WIN_CROSS_COMPILE 0)
-if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_CROSSCOMPILING)
-  set(IS_WIN_CROSS_COMPILE 1)
-endif()
-
-
-if(WIN32 OR ${IS_WIN_CROSS_COMPILE})
-  include(ChooseMSVCCRT)
-endif()
 include(CheckCXXCompilerFlag)
 include(CheckCCompilerFlag)
-include(ExternalProject)
 include(CMakePackageConfigHelpers)
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git"
-   AND IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.git")
-  find_package(Git REQUIRED)
-
-  # Information from git
-  # ====================
+find_package(Git)
+if (DEFINED ENV{LIEF_VERSION_ENV})
+  string(REGEX MATCHALL "([0-9]+)" VERSION_STRING "$ENV{LIEF_VERSION_ENV}")
+  if (NOT VERSION_STRING)
+    message(FATAL_ERROR "Invalid version")
+  endif()
+  list(GET VERSION_STRING 0 LIEF_VERSION_MAJOR)
+  list(GET VERSION_STRING 1 LIEF_VERSION_MINOR)
+  list(GET VERSION_STRING 2 LIEF_VERSION_PATCH)
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git"
+       AND IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.git" AND Git_FOUND)
   include(LIEFGit)
 else()
-  set(LIEF_VERSION_MAJOR "0")
-  set(LIEF_VERSION_MINOR "13")
-  set(LIEF_VERSION_PATCH "0")
+  set(LIEF_VERSION_MAJOR 2)
+  set(LIEF_VERSION_MINOR 0)
+  set(LIEF_VERSION_PATCH 0)
+endif()
+
+if (DEFINED ENV{LIEF_COMMIT})
+  set(LIEF_COMMIT_HASH "$ENV{LIEF_COMMIT}")
+endif()
+
+if (DEFINED ENV{LIEF_BRANCH})
+  set(LIEF_GIT_BRANCH "$ENV{LIEF_BRANCH}")
 endif()
 
 # LIEF Project
 # ============
-project(
-  LIEF
-  VERSION ${LIEF_VERSION_MAJOR}.${LIEF_VERSION_MINOR}.${LIEF_VERSION_PATCH})
+project(LIEF VERSION
+        ${LIEF_VERSION_MAJOR}.${LIEF_VERSION_MINOR}.${LIEF_VERSION_PATCH})
 message(STATUS "${PROJECT_NAME} ${PROJECT_VERSION}")
 
 # LIEF options
@@ -57,8 +55,8 @@ message(STATUS "Caching: ${LIEF_USE_CCACHE}")
 if(LIEF_USE_CCACHE)
   find_program(CCACHE_FOUND ccache)
   if(CCACHE_FOUND)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_FOUND})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_FOUND})
     message(STATUS "Found ccache: ${CCACHE_FOUND}")
   else()
     find_program(SCCACHE_FOUND sccache)
@@ -86,7 +84,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "")
 endif()
 
+set(LIEF_EXTRA_FLAGS)
+
+message(STATUS "LIEF_EXTRA_FLAGS:                  ${LIEF_EXTRA_FLAGS}")
 message(STATUS "CMAKE_CXX_FLAGS_RELEASE:           ${CMAKE_CXX_FLAGS_RELEASE}")
+message(STATUS "CMAKE_CXX_FLAGS_RELWITHDEBINFO:    ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+message(STATUS "CMAKE_CXX_FLAGS_DEBUG:             ${CMAKE_CXX_FLAGS_DEBUG}")
 message(STATUS "CMAKE_CXX_FLAGS:                   ${CMAKE_CXX_FLAGS}")
 message(STATUS "CMAKE_CXX_LINK_EXECUTABLE:         ${CMAKE_CXX_LINK_EXECUTABLE}")
 message(STATUS "CMAKE_CXX_LINK_FLAGS:              ${CMAKE_CXX_LINK_FLAGS}")
@@ -99,133 +102,77 @@ message(STATUS "CMAKE_LINK_LIBRARY_FILE_FLAG:      ${CMAKE_LINK_LIBRARY_FILE_FLA
 message(STATUS "CMAKE_LINK_INTERFACE_LIBRARIES:    ${CMAKE_LINK_INTERFACE_LIBRARIES}")
 message(STATUS "CMAKE_CXX_IMPLICIT_LINK_LIBRARIES: ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES}")
 message(STATUS "CMAKE_SYSTEM_PROCESSOR:            ${CMAKE_SYSTEM_PROCESSOR}")
+message(STATUS "CMAKE_MSVC_RUNTIME_LIBRARY:        ${CMAKE_MSVC_RUNTIME_LIBRARY}")
+
+include(GNUInstallDirs)
 
 # LIEF Source definition
 # ======================
+add_library(LIB_LIEF src/Object.cpp)
+add_subdirectory(src)
 
-set(LIEF_PRIVATE_INCLUDE_DIR)
-set(LIEF_PUBLIC_INCLUDE_DIR)
-
-set(LIEF_PUBLIC_INCLUDE_FILES)
-set(LIEF_PRIVATE_INCLUDE_FILES)
-
-set(LIBLIEF_SOURCE_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/errors.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/hash_stream.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/logging.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/exception.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/iostream.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/utils.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/internal_utils.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/Object.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/Object.tcc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/Visitor.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/BinaryStream/BinaryStream.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/BinaryStream/VectorStream.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/BinaryStream/FileStream.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/BinaryStream/MemoryStream.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/BinaryStream/SpanStream.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/BinaryStream/Convert.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/visitors/hash.cpp")
-
-# Grouping basic headers together
-# ===============================
-set(LIEF_INC_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/errors.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/span.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/ELF.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/Abstract.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/exception.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/iostream.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/iterators.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/LIEF.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/logging.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/MachO.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/PE.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/types.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/utils.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/visibility.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/Object.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/Visitor.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/visitor_macros.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/BinaryStream/BinaryStream.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/BinaryStream/VectorStream.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/BinaryStream/FileStream.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/BinaryStream/MemoryStream.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/BinaryStream/SpanStream.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/BinaryStream/Convert.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/internal_utils.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/hash_stream.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/frozen.hpp"
-)
-
-set(LIEF_VISITOR_INCLUDE_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/hash.hpp")
-
-set(LIEF_INCLUDE_FILES ${LIEF_INC_FILES} ${LIEF_VISITOR_INCLUDE_FILES})
-
-set(LIEF_JSON_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/visitors/json.cpp")
-set(LIEF_JSON_HDR "${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/json.hpp")
-
-list(APPEND LIEF_INC_FILES       "${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/json.hpp")
-list(APPEND LIBLIEF_SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/json_api.cpp")
-
-if(LIEF_ENABLE_JSON)
-  list(APPEND LIBLIEF_SOURCE_FILES "${LIEF_JSON_SRC}")
-  list(APPEND LIEF_INC_FILES       "${LIEF_JSON_HDR}")
+if (LIEF_EXTRA_FLAGS)
+  target_compile_options(LIB_LIEF PRIVATE ${LIEF_EXTRA_FLAGS})
 endif()
 
-source_group("Header Files" FILES ${LIEF_INC_FILES})
-source_group("Source Files" FILES ${LIBLIEF_SOURCE_FILES})
+if(LIEF_PRECOMPILED)
+  find_package(lief-extended QUIET)
+  if (NOT lief-extended_FOUND)
+    find_package(LIEF REQUIRED)
+  endif()
+else()
+  add_library(LIEF::LIEF ALIAS LIB_LIEF)
+endif()
 
-source_group("Header Files\\visitors" FILES ${LIEF_VISITOR_INCLUDE_FILES})
-
-add_library(LIB_LIEF ${LIBLIEF_SOURCE_FILES} ${LIEF_INCLUDE_FILES})
-add_library(LIEF::LIEF ALIAS LIB_LIEF)
 
 if(NOT LIEF_OPT_MBEDTLS_EXTERNAL)
-  set_source_files_properties(${mbedtls_src_crypto} PROPERTIES GENERATED TRUE)
-  set_source_files_properties(${mbedtls_src_x509} PROPERTIES GENERATED TRUE)
-  set_source_files_properties(${mbedtls_src_tls} PROPERTIES GENERATED TRUE)
-  target_sources(LIB_LIEF PRIVATE
-                 "${mbedtls_src_crypto}"
-                 "${mbedtls_src_x509}"
-                 "${mbedtls_src_tls}")
+  target_sources(LIB_LIEF PRIVATE ${mbedtls_src_files})
 
-  source_group("mbedtls\\crypto" FILES ${mbedtls_src_crypto})
-  source_group("mbedtls\\x509" FILES ${mbedtls_src_x509})
-  source_group("mbedtls\\tls" FILES ${mbedtls_src_tls})
-
-  target_include_directories(
-    LIB_LIEF SYSTEM PRIVATE
-      "${MBEDTLS_INCLUDE_DIRS}"
-      "${MBEDTLS_SOURCE_DIR}/library"
+  target_include_directories(LIB_LIEF SYSTEM PRIVATE
+                             ${MBEDTLS_INCLUDE_DIRS}
+                            "${MBEDTLS_SOURCE_DIR}/library"
   )
+  if (LIEF_PYTHON_FREE_THREADED)
+    target_compile_definitions(LIB_LIEF PRIVATE
+      # these must be set at LIB_LIEF compile time to be forwarded to MbedTLS
+      -DMBEDTLS_THREADING_C
+      -DMBEDTLS_THREADING_ALT
+    )
+  endif()
 
-  add_dependencies(LIB_LIEF lief_mbed_tls)
+  target_compile_definitions(LIB_LIEF PRIVATE
+    -DTF_PSA_CRYPTO_USER_CONFIG_FILE="${CMAKE_CURRENT_SOURCE_DIR}/config/mbedtls/psa_config.h"
+  )
 else()
-  find_package(MbedTLS REQUIRED)
+  find_package(MbedTLS 4.0.0 EXACT REQUIRED)
   target_link_libraries(LIB_LIEF PRIVATE
-                        MbedTLS::mbedcrypto
-                        MbedTLS::mbedx509)
+                        MbedTLS::tfpsacrypto MbedTLS::mbedx509)
+  if (LIEF_PYTHON_FREE_THREADED)
+    message(WARNING "Python free-threading requires the external MbedTLS to have \
+      been built with threading support. LIEF cannot enforce this.")
+  endif()
 endif()
 
-if(WINDOWS AND BUILD_SHARED_LIBS)
-  target_link_libraries(LIB_LIEF ws2_32)
+target_compile_definitions(LIB_LIEF PRIVATE
+  -DMBEDTLS_CONFIG_FILE="${CMAKE_CURRENT_SOURCE_DIR}/config/mbedtls/config.h"
+  -DMBEDTLS_X509_USE_C
+  -DMBEDTLS_PK_PARSE_C
+)
+
+if (WIN32)
+  target_link_libraries(LIB_LIEF PRIVATE bcrypt)
 endif()
 
-if(MSVC OR ${IS_WIN_CROSS_COMPILE})
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /bigobj")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
+if(WIN32 AND BUILD_SHARED_LIBS)
+  target_link_libraries(LIB_LIEF PRIVATE ws2_32)
+  if (LIEF_IMPORT_SUFFIX)
+    set_target_properties(LIB_LIEF PROPERTIES IMPORT_SUFFIX "${LIEF_IMPORT_SUFFIX}")
+  endif()
 endif()
 
-if(CMAKE_BUILD_TYPE MATCHES Debug AND WINDOWS)
-  add_definitions(-D_ITERATOR_DEBUG_LEVEL=0 -D_SECURE_SCL=0
-                  -D_HAS_ITERATOR_DEBUGGING=0)
-endif()
-
-if(CMAKE_BUILD_TYPE MATCHES Debug AND UNIX)
-  target_compile_options(LIB_LIEF PRIVATE -g -O0)
+if(MSVC)
+  target_compile_options(LIB_LIEF PRIVATE /bigobj)
+  target_compile_options(LIB_LIEF PUBLIC /Zc:__cplusplus)
 endif()
 
 if(BUILD_SHARED_LIBS OR LIEF_FORCE_API_EXPORTS)
@@ -233,94 +180,30 @@ if(BUILD_SHARED_LIBS OR LIEF_FORCE_API_EXPORTS)
 else()
   target_compile_definitions(LIB_LIEF PRIVATE -DLIEF_STATIC)
 endif()
-if(LIEF_SUPPORT_CXX14)
-  target_compile_features(LIB_LIEF PRIVATE cxx_std_14)
-endif()
 
-# Abstract part
-include("${CMAKE_CURRENT_SOURCE_DIR}/src/Abstract/CMakeLists.txt")
 
-# ELF Part
-# ========
-include("${CMAKE_CURRENT_SOURCE_DIR}/src/ELF/CMakeLists.txt")
-if(LIEF_ELF)
-  set(ENABLE_ELF_SUPPORT 1)
-else()
-  set(ENABLE_ELF_SUPPORT 0)
-endif()
-
-# PE Part
-# =======
-include("${CMAKE_CURRENT_SOURCE_DIR}/src/PE/CMakeLists.txt")
-if(LIEF_PE)
-  set(ENABLE_PE_SUPPORT 1)
-else()
-  set(ENABLE_PE_SUPPORT 0)
-endif()
-
-# MachO part
-# ==========
-include("${CMAKE_CURRENT_SOURCE_DIR}/src/MachO/CMakeLists.txt")
-if(LIEF_MACHO)
-  set(ENABLE_MACHO_SUPPORT 1)
-else()
-  set(ENABLE_MACHO_SUPPORT 0)
+if(LIEF_ENABLE_JSON)
+  # Make nlohmann/json is only using C++11 API.
+  # Especially, MSVC[14.37.32822] is buggy with (no)rtti & std::any
+  # Ref:
+  # - https://github.com/nlohmann/json/issues/3900
+  # - https://github.com/microsoft/STL/issues/4349#issuecomment-1920093172
+  target_compile_definitions(LIB_LIEF PRIVATE JSON_HAS_CPP_11)
 endif()
 
 # Logging Configuration
 # =====================
-
 target_compile_definitions(LIB_LIEF PRIVATE SPDLOG_DISABLE_DEFAULT_LOGGER
+                                            SPDLOG_NO_EXCEPTIONS
                                             SPDLOG_FUNCTION=)
 
+if (MSVC AND NOT CLANG_CL AND NOT LIEF_EXTERNAL_SPDLOG)
+  target_compile_definitions(LIB_LIEF PRIVATE FMT_UNICODE=0)
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-  target_compile_definitions(LIB_LIEF PRIVATE SPDLOG_NO_EXCEPTIONS SPDLOG_NO_THREAD_ID)
+  target_compile_definitions(LIB_LIEF PRIVATE SPDLOG_NO_THREAD_ID)
 endif()
-
-# Frozen Configuration
-# ====================
-if(LIEF_FROZEN_ENABLED)
-endif()
-
-# OAT part
-# ========
-if(LIEF_OAT)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/src/OAT/CMakeLists.txt)
-  set(ENABLE_OAT_SUPPORT 1)
-else()
-  set(ENABLE_OAT_SUPPORT 0)
-endif()
-
-# DEX part
-# ========
-if(LIEF_DEX)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/src/DEX/CMakeLists.txt)
-  set(ENABLE_DEX_SUPPORT 1)
-else()
-  set(ENABLE_DEX_SUPPORT 0)
-endif()
-
-# VDEX part
-# =========
-if(LIEF_VDEX)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/src/VDEX/CMakeLists.txt)
-  set(ENABLE_VDEX_SUPPORT 1)
-else()
-  set(ENABLE_VDEX_SUPPORT 0)
-endif()
-
-# ART part
-# ========
-if(LIEF_ART)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/src/ART/CMakeLists.txt)
-  set(ENABLE_ART_SUPPORT 1)
-else()
-  set(ENABLE_ART_SUPPORT 0)
-endif()
-
-# Platforms
-# =========
-include(${CMAKE_CURRENT_SOURCE_DIR}/src/platforms/CMakeLists.txt)
 
 # LIEF includes
 # =============
@@ -330,40 +213,39 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/version.h.in"
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/LIEF/config.h.in"
                "${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/config.h" @ONLY)
 
-list(APPEND LIEF_PUBLIC_INCLUDE_DIR
-     "${CMAKE_CURRENT_SOURCE_DIR}/include/"
-     "${CMAKE_CURRENT_SOURCE_DIR}/api/c/include/"
-     "${CMAKE_CURRENT_BINARY_DIR}/include/")
+set(LIEF_PUBLIC_INCLUDE_DIR
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    ${CMAKE_CURRENT_BINARY_DIR}/include/)
 
-list(APPEND LIEF_PRIVATE_INCLUDE_DIR "${LIEF_PUBLIC_INCLUDE_DIR}"
-     "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_BINARY_DIR}")
+set(LIEF_PRIVATE_INCLUDE_DIR
+    ${LIEF_PUBLIC_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_BINARY_DIR})
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/LIEF.pc.in ${CMAKE_CURRENT_BINARY_DIR}/LIEF.pc
-               @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/LIEF.pc.in
+               ${CMAKE_CURRENT_BINARY_DIR}/LIEF.pc @ONLY)
 
 target_include_directories(LIB_LIEF
   PUBLIC  "$<BUILD_INTERFACE:${LIEF_PUBLIC_INCLUDE_DIR}>"
   PRIVATE "${LIEF_PRIVATE_INCLUDE_DIR}")
+
+target_precompile_headers(LIB_LIEF PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/lief-pch.hpp
+)
 
 if(LIEF_ENABLE_JSON)
   if(LIEF_OPT_NLOHMANN_JSON_EXTERNAL)
     find_package(nlohmann_json REQUIRED)
     target_link_libraries(LIB_LIEF PRIVATE nlohmann_json::nlohmann_json)
   else()
-    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/internal/nlohmann/json.hpp
-      COMMAND
-        ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/internal/nlohmann
-      COMMAND
-        ${CMAKE_COMMAND} -E copy_directory ${LIBJSON_SOURCE_DIR}/
-                                           ${CMAKE_CURRENT_BINARY_DIR}/internal/nlohmann/
-      DEPENDS lief_libjson)
-
-    target_sources(LIB_LIEF PRIVATE
-                   ${CMAKE_CURRENT_BINARY_DIR}/internal/nlohmann/json.hpp)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/internal/nlohmann)
+    file(COPY ${LIBJSON_SOURCE_DIR}/
+         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/internal/nlohmann/)
 
     target_include_directories(LIB_LIEF PRIVATE
                                ${CMAKE_CURRENT_BINARY_DIR}/)
   endif()
+  target_compile_definitions(LIB_LIEF PRIVATE JSON_NOEXCEPTION)
 endif()
 
 if(LIEF_FROZEN_ENABLED)
@@ -371,53 +253,36 @@ if(LIEF_FROZEN_ENABLED)
     find_package(frozen REQUIRED)
     target_link_libraries(LIB_LIEF PRIVATE frozen::frozen)
   else()
-    add_dependencies(LIB_LIEF lief_frozen)
     target_include_directories(LIB_LIEF
       PRIVATE "${FROZEN_INCLUDE_DIR}")
   endif()
 endif()
 
-# =======================================
-# Leaf
-# =======================================
-if(LIEF_EXTERNAL_LEAF)
-  message(STATUS "Using external LEAF version")
-  if(LIEF_EXTERNAL_LEAF_DIR)
-    message(STATUS "External LEAF include dir: ${LIEF_EXTERNAL_LEAF_DIR}")
-    target_include_directories(LIB_LIEF SYSTEM PUBLIC
-                               "$<BUILD_INTERFACE:${LIEF_EXTERNAL_LEAF_DIR}>")
-  endif()
-else()
-  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/leaf.hpp
-    COMMAND
-      ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/
-    COMMAND
-      ${CMAKE_COMMAND} -E copy_directory ${LEAF_SRC_DIR}/
-      ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/
-    DEPENDS lief_leaf)
 
-  target_sources(LIB_LIEF PRIVATE
-    ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/leaf.hpp)
+# =======================================
+# Expected
+# =======================================
+if(LIEF_EXTERNAL_EXPECTED)
+  message(STATUS "Using external Expected version")
+  find_package(tl-expected REQUIRED)
+  target_link_libraries(LIB_LIEF PUBLIC tl::expected)
+else()
+  file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/)
+  file(COPY ${EXPECTED_SRC_DIR}/include/tl/
+       DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/)
 endif()
+
 
 # =======================================
 # utfcpp
 # =======================================
-
 if(LIEF_OPT_UTFCPP_EXTERNAL)
   find_package(utf8cpp REQUIRED)
-  target_link_libraries(LIB_LIEF PRIVATE utf8cpp)
+  target_link_libraries(LIB_LIEF PRIVATE utf8cpp::utf8cpp)
 else()
-  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/internal/utfcpp/utf8.h
-    COMMAND
-      ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/internal/
-    COMMAND
-      ${CMAKE_COMMAND} -E copy_directory ${UTFCPP_INCLUDE_DIR}/
-      ${CMAKE_CURRENT_BINARY_DIR}/internal/utfcpp
-    DEPENDS lief_utfcpp)
-
-  target_sources(LIB_LIEF PRIVATE
-    ${CMAKE_CURRENT_BINARY_DIR}/internal/utfcpp/utf8.h)
+  file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/internal/)
+  file(COPY ${UTFCPP_INCLUDE_DIR}/
+       DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/internal/utfcpp)
 endif()
 
 # =======================================
@@ -431,40 +296,52 @@ if(LIEF_EXTERNAL_SPAN)
                                "$<BUILD_INTERFACE:${LIEF_EXTERNAL_SPAN_DIR}>")
   endif()
 else()
-  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/span.hpp
-    COMMAND
-      ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/
-    COMMAND
-      ${CMAKE_COMMAND} -E copy_directory ${TCB_SPAN_SRC_DIR}/
-      ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/
-    DEPENDS lief_span)
-
-  target_sources(LIB_LIEF PRIVATE
-    ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/span.hpp)
+  file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/)
+  file(COPY ${TCB_SPAN_SRC_DIR}/
+       DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/LIEF/third-party/internal/)
 endif()
-
-
 
 target_link_libraries(LIB_LIEF PRIVATE lief_spdlog)
 
+if(ANDROID AND LIEF_LOGGING)
+  target_link_libraries(LIB_LIEF PUBLIC log)
+endif()
+
 # Flags definition
 # ----------------
-
-# cmake-format: off
-set_target_properties(
-  LIB_LIEF
+set_target_properties(LIB_LIEF
   PROPERTIES POSITION_INDEPENDENT_CODE ON
-             CXX_STANDARD              11
+             CXX_STANDARD              17
              CXX_STANDARD_REQUIRED     ON
+             VISIBILITY_INLINES_HIDDEN ON
              CXX_VISIBILITY_PRESET     hidden
              C_VISIBILITY_PRESET       hidden)
-# cmake-format: on
+
+if (LIEF_CLANG_TIDY)
+  find_program(CLANG_TIDY_EXE NAMES "clang-tidy" REQUIRED)
+  cmake_path(GET CLANG_TIDY_EXE PARENT_PATH CLANG_TIDY_DIR)
+
+  set(CLANG_TIDY_COMMAND
+    "${CLANG_TIDY_EXE}"
+    "--use-color"
+    "--load=${CLANG_TIDY_DIR}/clang-taidy.so"
+    "--config-file=${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy-core.yaml"
+  )
+  if (LIEF_CLANG_TIDY_WARN_ERR)
+    list(APPEND CLANG_TIDY_COMMAND "--warnings-as-errors=*")
+  endif()
+
+  set_target_properties(LIB_LIEF PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}")
+
+  if (TARGET LIB_LIEF_RUNTIME)
+    set_target_properties(LIB_LIEF_RUNTIME
+      PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}")
+  endif()
+endif()
+
 
 if(UNIX AND NOT APPLE)
-  set_property(
-    TARGET LIB_LIEF
-    APPEND
-    PROPERTY LINK_FLAGS "-Wl,--gc-sections -Wl,--exclude-libs,ALL")
+  target_link_options(LIB_LIEF PRIVATE -Wl,--gc-sections -Wl,--exclude-libs,ALL)
 endif()
 
 target_compile_definitions(LIB_LIEF PUBLIC -D_GLIBCXX_USE_CXX11_ABI=1)
@@ -474,19 +351,20 @@ target_compile_definitions(LIB_LIEF PUBLIC -D_GLIBCXX_USE_CXX11_ABI=1)
 set(SANITIZER_FLAGS -fno-omit-frame-pointer -g -O1)
 if(LIEF_ASAN)
   message(STATUS "Address sanitizer enabled")
-  list(APPEND SANITIZER_FLAGS -fsanitize=address)
+  list(APPEND SANITIZER_FLAGS
+    -fsanitize=address
+    -fsanitize-address-use-after-scope
+    -fsanitize-address-use-after-return=runtime
+  )
 
-  set_property(TARGET LIB_LIEF
-               APPEND PROPERTY LINK_FLAGS -fsanitize=address)
-  target_link_libraries(LIB_LIEF INTERFACE asan)
+  target_link_options(LIB_LIEF PUBLIC -fsanitize=address)
 endif()
 
 if(LIEF_LSAN)
   message(STATUS "Leak sanitizer enabled")
   list(APPEND SANITIZER_FLAGS -fsanitize=leak)
 
-  set_property(TARGET LIB_LIEF
-               APPEND PROPERTY LINK_FLAGS -fsanitize=leak)
+  target_link_options(LIB_LIEF PUBLIC -fsanitize=leak)
 
   target_link_libraries(LIB_LIEF INTERFACE lsan)
 endif()
@@ -495,21 +373,16 @@ if(LIEF_TSAN)
   message(STATUS "Thread sanitizer enabled")
   list(APPEND SANITIZER_FLAGS -fsanitize=thread)
 
-  set_property(TARGET LIB_LIEF
-               APPEND PROPERTY LINK_FLAGS -fsanitize=thread)
-
-  target_link_libraries(LIB_LIEF INTERFACE tsan)
+  target_link_options(LIB_LIEF PUBLIC -fsanitize=thread)
 endif()
 
 if(LIEF_USAN)
   message(STATUS "Undefined sanitizer enabled")
   list(APPEND SANITIZER_FLAGS -fsanitize=undefined,null,alignment)
 
-  set_property(TARGET LIB_LIEF
-               APPEND PROPERTY LINK_FLAGS -fsanitize=undefined,null,alignment)
   target_link_options(LIB_LIEF PUBLIC -fsanitize=undefined,null,alignment)
 
-  target_link_libraries(LIB_LIEF PUBLIC ubsan -fsanitize=undefined,null,alignment)
+  target_link_libraries(LIB_LIEF PUBLIC ubsan)
 endif()
 
 set(LIEF_SANITIZER OFF)
@@ -520,54 +393,37 @@ endif()
 if(LIEF_SANITIZER)
   message("LIEF Sanitizer enabled: ${SANITIZER_FLAGS}")
   target_compile_options(LIB_LIEF PUBLIC ${SANITIZER_FLAGS})
-  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/tests/sanitizer")
+  add_subdirectory(tests/sanitizer)
 endif()
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Fuzzing options
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 if(LIEF_FUZZING)
-  set(FUZZING_FLAGS -fno-omit-frame-pointer -g -O2 -fsanitize=address,fuzzer-no-link)
-  set(FUZZING_LINKER_FLAGS -fsanitize=address,fuzzer-no-link)
-  set_property(TARGET LIB_LIEF
-               APPEND PROPERTY LINK_FLAGS ${FUZZING_LINKER_FLAGS})
+  set(FUZZING_FLAGS -fno-omit-frame-pointer -g -O2 -fsanitize=fuzzer-no-link)
+  target_link_options(LIB_LIEF PUBLIC -fsanitize=fuzzer-no-link)
 
   target_compile_options(LIB_LIEF PRIVATE ${FUZZING_FLAGS})
-  target_link_libraries(LIB_LIEF PUBLIC asan pthread)
-  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/fuzzing")
+  target_link_libraries(LIB_LIEF PUBLIC pthread)
+  add_subdirectory(fuzzing)
 endif()
 
-# Compile Flags
-# =============
 include(LIEFCompilerFlags)
 
-# Profiling flags
-# ---------------
 if(LIEF_PROFILING)
-  set(PROFILING_FLAGS
-      -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc
-      -fno-builtin-free -fno-omit-frame-pointer -g)
-  target_compile_options(LIB_LIEF PUBLIC ${PROFILING_FLAGS})
-
-  add_executable(elf_profiler profiling/elf_profiler.cpp)
-  target_compile_options(elf_profiler PUBLIC ${PROFILING_FLAGS})
-  target_link_libraries(elf_profiler PRIVATE LIB_LIEF)
-
-  add_executable(macho_profiler profiling/macho_profiler.cpp)
-  target_compile_options(macho_profiler PUBLIC ${PROFILING_FLAGS})
-  target_link_libraries(macho_profiler PRIVATE LIB_LIEF)
+  add_subdirectory(profiling)
 endif()
 
-# Coverage flags
-# --------------
-if(LIEF_COVERAGE)
-  target_compile_options(LIB_LIEF PRIVATE -g -O0 --coverage -fprofile-arcs
-                                          -ftest-coverage)
-  target_link_libraries(LIB_LIEF gcov)
+set_target_properties(LIB_LIEF PROPERTIES
+                      OUTPUT_NAME LIEF
+                      EXPORT_NAME LIEF
+                      CLEAN_DIRECT_OUTPUT 1)
+
+if (LIEF_SO_VERSION)
+  set_target_properties(LIB_LIEF PROPERTIES
+    VERSION "${LIEF_VERSION_MAJOR}.${LIEF_VERSION_MINOR}.${LIEF_VERSION_PATCH}"
+    SOVERSION "${LIEF_VERSION_MAJOR}"
+  )
 endif()
-
-set_target_properties(LIB_LIEF PROPERTIES OUTPUT_NAME LIEF EXPORT_NAME LIEF CLEAN_DIRECT_OUTPUT 1)
-
 
 # Set a default build type if none was specified
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -587,41 +443,20 @@ if(APPLE)
   set_target_properties(LIB_LIEF PROPERTIES MACOSX_RPATH ON)
 endif()
 
-# API
-# ======================
-include(LIEFApi)
+add_subdirectory(api)
 
-# Examples
-# ======================
 if(LIEF_EXAMPLES)
-  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples")
+  add_subdirectory(examples)
 endif()
-
-# Tests
-# ======================
 
 if(LIEF_TESTS)
   enable_testing()
-  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/tests")
+  add_subdirectory(tests)
 endif()
 
-# Documentation
-# ======================
-if(LIEF_DOC)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/doc)
+if(LIEF_COMPILE_DOC_EXAMPLES)
+  add_subdirectory(doc/code/cpp)
 endif()
-
-# Find Package Config
-# ======================
-configure_file(
-  LIEFConfig.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/LIEFConfig.cmake
-  @ONLY)
-
-write_basic_package_version_file(
-  ${CMAKE_CURRENT_BINARY_DIR}/LIEFConfigVersion.cmake
-  VERSION ${PROJECT_VERSION}
-  COMPATIBILITY AnyNewerVersion)
 
 # Post-build operations
 # ======================
@@ -645,84 +480,78 @@ if(BUILD_SHARED_LIBS AND CMAKE_BUILD_TYPE MATCHES "Release")
   endif()
 endif()
 
-# Install Prefix
-# ======================
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT AND UNIX)
-  if(UNIX AND NOT APPLE)
-    set(CMAKE_INSTALL_PREFIX
-        "/usr"
-        CACHE PATH "Install path prefix prepended on to install directories."
-              FORCE)
-  elseif(APPLE)
-    set(CMAKE_INSTALL_PREFIX
-        "/usr/local"
-        CACHE PATH "" FORCE)
-  endif()
-endif()
+# Generate install target and package
+# =======================================
+if(LIEF_INSTALL)
 
-# Installation
-# ======================
+  # Find Package Config
+  # ======================
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/LIEFConfig.cmake.in
+                 ${CMAKE_CURRENT_BINARY_DIR}/LIEFConfig.cmake @ONLY)
 
-if(UNIX)
-  include(GNUInstallDirs)
-  set(CMAKE_INSTALL_LIBDIR "lib")
-else()
-  if(WIN32)
-      set(CMAKE_INSTALL_LIBDIR      "lib")
-      set(CMAKE_INSTALL_DATADIR     "share")
-      set(CMAKE_INSTALL_INCLUDEDIR  "include")
-      set(CMAKE_INSTALL_BINDIR      "bin")
-      set(CMAKE_INSTALL_DATAROOTDIR "share")
-      message(STATUS "Setting installation destination on Windows to: ${CMAKE_INSTALL_PREFIX}")
-    else()
-      message(FATAL_ERROR "System not UNIX nor WIN32 - not implemented yet")
+  write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/LIEFConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion)
+
+  # Install Prefix
+  # ======================
+  if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT AND UNIX)
+    if(UNIX AND NOT APPLE)
+      set(CMAKE_INSTALL_PREFIX
+          "/usr"
+          CACHE PATH "Install path prefix prepended on to install directories."
+                FORCE)
+    elseif(APPLE)
+      set(CMAKE_INSTALL_PREFIX
+          "/usr/local"
+          CACHE PATH "" FORCE)
     endif()
+  endif()
+
+  install(
+    TARGETS LIB_LIEF lief_spdlog
+    EXPORT LIEFExport
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+  install(
+    DIRECTORY ${LIEF_PUBLIC_INCLUDE_DIR}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    COMPONENT headers
+    FILES_MATCHING
+    REGEX "(.*).(hpp|h|def|inc)$")
+
+  install(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/LIEFConfig.cmake
+          ${CMAKE_CURRENT_BINARY_DIR}/LIEFConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/LIEF
+    COMPONENT config)
+
+  install(
+    FILES       ${CMAKE_CURRENT_BINARY_DIR}/LIEF.pc
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+    COMPONENT   libraries)
+
+  if(BUILD_SHARED_LIBS)
+    set(lib_type shared)
+  else()
+    set(lib_type static)
+  endif()
+
+  install(
+    EXPORT LIEFExport
+    NAMESPACE LIEF::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/LIEF
+    FILE LIEFExport-${lib_type}.cmake
+    COMPONENT config)
+
+  export(
+    EXPORT LIEFExport
+    NAMESPACE LIEF::
+    FILE LIEFExport-${lib_type}.cmake)
+
+  add_subdirectory(package)
 endif()
-
-install(
-  TARGETS LIB_LIEF lief_spdlog
-  EXPORT LIEFExport
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries
-  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
-install(
-  DIRECTORY ${LIEF_PUBLIC_INCLUDE_DIR}
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-  COMPONENT headers
-  FILES_MATCHING
-  REGEX "(.*).(hpp|h|def|inc)$")
-
-install(
-  FILES ${CMAKE_CURRENT_BINARY_DIR}/LIEFConfig.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/LIEFConfigVersion.cmake
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/LIEF/cmake
-  COMPONENT config)
-
-install(
-  FILES       ${CMAKE_CURRENT_BINARY_DIR}/LIEF.pc
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
-  COMPONENT   libraries)
-
-if(BUILD_SHARED_LIBS)
-  set(lib_type shared)
-else()
-  set(lib_type static)
-endif()
-
-install(
-  EXPORT LIEFExport
-  NAMESPACE LIEF::
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/LIEF/cmake
-  FILE LIEFExport-${lib_type}.cmake
-  COMPONENT config)
-
-export(
-  EXPORT LIEFExport
-  NAMESPACE LIEF::
-  FILE LIEFExport-${lib_type}.cmake)
-
-# Package
-# ======================
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/package")

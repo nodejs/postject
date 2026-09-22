@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,97 +13,56 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <numeric>
-#include <iomanip>
-#include <sstream>
+#include <spdlog/fmt/fmt.h>
 
-#include "LIEF/PE/hash.hpp"
-
-#include "LIEF/PE/EnumToString.hpp"
+#include "LIEF/BinaryStream/BinaryStream.hpp"
 #include "LIEF/PE/CodeIntegrity.hpp"
-#include "PE/Structures.hpp"
-
-namespace LIEF {
-namespace PE {
-
-CodeIntegrity::~CodeIntegrity() = default;
-CodeIntegrity& CodeIntegrity::operator=(const CodeIntegrity&) = default;
-CodeIntegrity::CodeIntegrity(const CodeIntegrity&) = default;
-
-CodeIntegrity::CodeIntegrity() :
-  flags_{0},
-  catalog_{0},
-  catalog_offset_{0},
-  reserved_{0}
-{}
+#include "LIEF/Visitor.hpp"
 
 
-CodeIntegrity::CodeIntegrity(const details::pe_code_integrity& header) :
-  flags_{header.Flags},
-  catalog_{header.Catalog},
-  catalog_offset_{header.CatalogOffset},
-  reserved_{header.Reserved}
-{}
+namespace LIEF::PE {
 
+result<CodeIntegrity> CodeIntegrity::parse(Parser&, BinaryStream& stream) {
+  auto flags = stream.read<uint16_t>();
+  if (!flags) {
+    return make_error_code(flags.error());
+  }
 
-uint16_t CodeIntegrity::flags() const {
-  return flags_;
-}
-uint16_t CodeIntegrity::catalog() const {
-  return catalog_;
-}
+  auto catalog = stream.read<uint16_t>();
+  if (!catalog) {
+    return make_error_code(catalog.error());
+  }
 
-uint32_t CodeIntegrity::catalog_offset() const {
-  return catalog_offset_;
-}
+  auto catalog_offset = stream.read<uint32_t>();
+  if (!catalog_offset) {
+    return make_error_code(catalog_offset.error());
+  }
 
-uint32_t CodeIntegrity::reserved() const {
-  return reserved_;
-}
+  auto reserved = stream.read<uint32_t>();
+  if (!reserved) {
+    return make_error_code(reserved.error());
+  }
 
+  CodeIntegrity code_integrity;
 
-void CodeIntegrity::flags(uint16_t flags) {
-  flags_ = flags;
-}
+  code_integrity.flags(*flags)
+      .catalog(*catalog)
+      .catalog_offset(*catalog_offset)
+      .reserved(*reserved);
 
-void CodeIntegrity::catalog(uint16_t catalog) {
-  catalog_ = catalog;
-}
-
-void CodeIntegrity::catalog_offset(uint32_t catalog_offset) {
-  catalog_offset_ = catalog_offset;
-}
-
-void CodeIntegrity::reserved(uint32_t reserved) {
-  reserved_ = reserved;
+  return code_integrity;
 }
 
 void CodeIntegrity::accept(LIEF::Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool CodeIntegrity::operator==(const CodeIntegrity& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool CodeIntegrity::operator!=(const CodeIntegrity& rhs) const {
-  return !(*this == rhs);
-}
-
 std::ostream& operator<<(std::ostream& os, const CodeIntegrity& entry) {
-  os << std::hex << std::left << std::showbase;
-  os << std::setw(CodeIntegrity::PRINT_WIDTH) << std::setfill(' ') << "Flags:"          << std::hex << entry.flags()          << std::endl;
-  os << std::setw(CodeIntegrity::PRINT_WIDTH) << std::setfill(' ') << "Catalog:"        << std::hex << entry.catalog()        << std::endl;
-  os << std::setw(CodeIntegrity::PRINT_WIDTH) << std::setfill(' ') << "Catalog offset:" << std::hex << entry.catalog_offset() << std::endl;
-  os << std::setw(CodeIntegrity::PRINT_WIDTH) << std::setfill(' ') << "Reserved:"       << std::hex << entry.reserved()       << std::endl;
+  os << fmt::format("Flags          {:#x}\n", entry.flags())
+     << fmt::format("Catalog        {:#x}\n", entry.catalog())
+     << fmt::format("Catalog offset {:#x}\n", entry.catalog_offset())
+     << fmt::format("Reserved       {:#x}\n", entry.reserved());
   return os;
-
 }
 
-}
 }

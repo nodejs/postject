@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,128 +14,122 @@
  * limitations under the License.
  */
 
-#include <iomanip>
-#include <sstream>
-
-#include "LIEF/ELF/hash.hpp"
-#include "LIEF/ELF/EnumToString.hpp"
-
-#include "LIEF/ELF/Note.hpp"
-#include "LIEF/ELF/Binary.hpp"
+#include "LIEF/ELF/NoteDetails/core/CoreFile.hpp"
 #include "ELF/Structures.hpp"
+#include "LIEF/BinaryStream/SpanStream.hpp"
+#include "LIEF/ELF/hash.hpp"
+#include "LIEF/iostream.hpp"
+#include "logging.hpp"
 
-#include "CoreFile.tcc"
 
-namespace LIEF {
-namespace ELF {
+namespace LIEF::ELF {
 
-CoreFile::CoreFile(Note& note):
-  NoteDetails::NoteDetails{note}
-{}
+template<class ELF_T>
+void CoreFile::read_files() {
+  static constexpr auto MAX_ENTRIES = 6000;
+  using Elf_Addr = typename ELF_T::Elf_Addr;
+  using Elf_FileEntry = typename ELF_T::Elf_FileEntry;
 
-CoreFile CoreFile::make(Note& note) {
-  CoreFile file(note);
-  file.parse();
-  return file;
+  auto stream = SpanStream::from_vector(description_);
+  if (!stream) {
+    return;
+  }
+
+  auto count = stream->read<Elf_Addr>();
+  if (!count) {
+    return;
+  }
+
+  if (*count > MAX_ENTRIES) {
+    LIEF_ERR("Too many entries ({}, limit {})", *count, MAX_ENTRIES);
+    return;
+  }
+
+  auto page_size = stream->read<Elf_Addr>();
+  if (!page_size) {
+    return;
+  }
+
+  page_size_ = *page_size;
+  files_.resize(*count);
+  for (entry_t& file : files_) {
+    auto entry = stream->read<Elf_FileEntry>();
+    if (!entry) {
+      break;
+    }
+    file = {entry->start, entry->end, entry->file_ofs, ""};
+  }
+
+  for (entry_t& file : files_) {
+    auto path = stream->read_string();
+    if (!path) {
+      break;
+    }
+    file.path = std::move(*path);
+  }
 }
 
-CoreFile* CoreFile::clone() const {
-  return new CoreFile(*this);
+template<class ELF_T>
+void CoreFile::write_files() {
+  using Elf_Addr = typename ELF_T::Elf_Addr;
+  using Elf_FileEntry = typename ELF_T::Elf_FileEntry;
+
+  vector_iostream ios;
+  ios.write(static_cast<Elf_Addr>(files_.size()));
+  ios.write(static_cast<Elf_Addr>(page_size_));
+  for (const entry_t& entry : files_) {
+    Elf_FileEntry raw_entry;
+    std::memset(&raw_entry, 0, sizeof(Elf_FileEntry));
+
+    raw_entry.start = static_cast<Elf_Addr>(entry.start);
+    raw_entry.end = static_cast<Elf_Addr>(entry.end);
+    raw_entry.file_ofs = static_cast<Elf_Addr>(entry.file_ofs);
+    ios.write(raw_entry);
+  }
+
+  for (const entry_t& entry : files_) {
+    ios.write(entry.path);
+  }
+  ios.move(description_);
 }
 
+CoreFile::CoreFile(ARCH arch, Header::CLASS cls, std::string name, uint32_t type,
+                   Note::description_t description) :
+  Note(std::move(name), Note::TYPE::CORE_FILE, type, std::move(description), ""),
+  arch_(arch),
+  class_(cls) {
 
-uint64_t CoreFile::count() const {
-  return files_.size();
+  class_ == Header::CLASS::ELF32 ? read_files<details::ELF32>() :
+                                   read_files<details::ELF64>();
 }
 
-const CoreFile::files_t& CoreFile::files() const {
-  return files_;
-}
-
-
-CoreFile::iterator CoreFile::begin() {
-  return std::begin(files_);
-}
-
-CoreFile::iterator CoreFile::end() {
-  return std::end(files_);
-}
-
-CoreFile::const_iterator CoreFile::begin() const {
-  return std::begin(files_);
-}
-
-CoreFile::const_iterator CoreFile::end() const {
-  return std::end(files_);
-}
 
 void CoreFile::files(const CoreFile::files_t& files) {
   files_ = files;
-  build();
+  class_ == Header::CLASS::ELF32 ? write_files<details::ELF32>() :
+                                   write_files<details::ELF64>();
 }
-
 
 void CoreFile::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool CoreFile::operator==(const CoreFile& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool CoreFile::operator!=(const CoreFile& rhs) const {
-  return !(*this == rhs);
-}
-
 void CoreFile::dump(std::ostream& os) const {
-  static constexpr size_t WIDTH = 16;
-  os << std::left;
-
-  os << std::setw(WIDTH) << std::setfill(' ') << "Files: "<< std::dec << std::endl;
-  for (const CoreFileEntry& file : files()) {
-    os << " - ";
-    os << file.path << " ";
-    os << "[" << std::hex << std::showbase << file.start << ", " << file.end << "] ";
-    os << file.file_ofs;
-    os << std::endl;
+  Note::dump(os);
+  const files_t& files = this->files();
+  if (files.empty()) {
+    return;
   }
-  os << std::endl;
-}
-
-void CoreFile::parse() {
-  if (binary()->type() == ELF_CLASS::ELFCLASS64) {
-    parse_<details::ELF64>();
-  } else if (binary()->type() == ELF_CLASS::ELFCLASS32) {
-    parse_<details::ELF32>();
+  os << '\n';
+  for (const entry_t& entry : files) {
+    os << "  " << entry << '\n';
   }
 }
 
-void CoreFile::build() {
-  if (binary()->type() == ELF_CLASS::ELFCLASS64) {
-    build_<details::ELF64>();
-  } else if (binary()->type() == ELF_CLASS::ELFCLASS32) {
-    build_<details::ELF32>();
-  }
-}
-
-std::ostream& operator<<(std::ostream& os, const CoreFile& note) {
-  note.dump(os);
+std::ostream& operator<<(std::ostream& os, const CoreFile::entry_t& entry) {
+  os << fmt::format("{}: [{:#06x}, {:#06x}]@{:#x}", entry.path, entry.start,
+                    entry.end, entry.file_ofs);
   return os;
 }
 
-CoreFile::~CoreFile() = default;
-
-
-std::ostream& operator<<(std::ostream& os, const CoreFileEntry& entry) {
-  os << std::hex << std::showbase;
-  os << entry.path << ": [" << entry.start << ", " << entry.end << "]@" << entry.file_ofs;
-  return os;
 }
-
-} // namespace ELF
-} // namespace LIEF

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,54 +13,64 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_MACHO_MAIN_COMMAND_H_
-#define LIEF_MACHO_MAIN_COMMAND_H_
-#include <iostream>
+#ifndef LIEF_MACHO_MAIN_COMMAND_H
+#define LIEF_MACHO_MAIN_COMMAND_H
+#include <memory>
+#include <ostream>
 
 #include "LIEF/visibility.h"
 
-#include "LIEF/MachO/enums.hpp"
 #include "LIEF/MachO/LoadCommand.hpp"
 
-namespace LIEF {
-namespace MachO {
+
+namespace LIEF::MachO {
 
 namespace details {
 struct entry_point_command;
 }
 
-//! Class that represent the LC_MAIN command. This kind
-//! of command can be used to determine the entrypoint of an executable
+/// Class that represents the LC_MAIN command. This kind
+/// of command can be used to determine the entrypoint of an executable
 class LIEF_API MainCommand : public LoadCommand {
   public:
-  MainCommand();
+  MainCommand() = default;
   MainCommand(const details::entry_point_command& cmd);
+  MainCommand(uint64_t entrypoint, uint64_t stacksize);
 
-  MainCommand& operator=(const MainCommand& copy);
-  MainCommand(const MainCommand& copy);
+  MainCommand& operator=(const MainCommand& copy) = default;
+  MainCommand(const MainCommand& copy) = default;
 
-  MainCommand* clone() const override;
+  std::unique_ptr<LoadCommand> clone() const override {
+    return std::make_unique<MainCommand>(*this);
+  }
 
-  virtual ~MainCommand();
+  ~MainCommand() override = default;
 
-  //! Offset of the *main* function relative to the ``__TEXT``
-  //! segment
-  uint64_t entrypoint() const;
+  /// Offset of the *main* function relative to the ``__TEXT``
+  /// segment
+  uint64_t entrypoint() const {
+    return entrypoint_;
+  }
 
-  //! The initial stack size (if not 0)
-  uint64_t stack_size() const;
+  /// The initial stack size
+  uint64_t stack_size() const {
+    return stack_size_;
+  }
 
-  void entrypoint(uint64_t entrypoint);
-  void stack_size(uint64_t stacksize);
-
-  bool operator==(const MainCommand& rhs) const;
-  bool operator!=(const MainCommand& rhs) const;
+  void entrypoint(uint64_t entrypoint) {
+    entrypoint_ = entrypoint;
+  }
+  void stack_size(uint64_t stacksize) {
+    stack_size_ = stacksize;
+  }
 
   std::ostream& print(std::ostream& os) const override;
 
   void accept(Visitor& visitor) const override;
 
-  static bool classof(const LoadCommand* cmd);
+  static bool classof(const LoadCommand* cmd) {
+    return cmd->command() == LoadCommand::TYPE::MAIN;
+  }
 
   private:
   uint64_t entrypoint_ = 0;
@@ -68,5 +78,5 @@ class LIEF_API MainCommand : public LoadCommand {
 };
 
 }
-}
+
 #endif

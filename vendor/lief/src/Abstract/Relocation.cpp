@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,90 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iomanip>
-
-#include "LIEF/Abstract/hash.hpp"
-
 #include "LIEF/Abstract/Relocation.hpp"
+#include "LIEF/Visitor.hpp"
+
+#include <spdlog/fmt/fmt.h>
 
 namespace LIEF {
-
-Relocation::Relocation() = default;
-
-Relocation::Relocation(uint64_t address, uint8_t size) :
-  address_{address},
-  size_{size}
-{}
-
-
-Relocation::~Relocation() = default;
-Relocation& Relocation::operator=(const Relocation&) = default;
-Relocation::Relocation(const Relocation&) = default;
-
-
-void Relocation::swap(Relocation& other) {
-  std::swap(address_, other.address_);
-  std::swap(size_,    other.size_);
-}
-
-uint64_t Relocation::address() const {
-  return address_;
-}
-
-size_t Relocation::size() const {
-  return size_;
-}
-
-
-void Relocation::address(uint64_t address) {
-  address_ = address;
-}
-
-
-void Relocation::size(size_t size) {
-  size_ = static_cast<uint8_t>(size);
-}
-
 void Relocation::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-
-bool Relocation::operator==(const Relocation& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = AbstractHash::hash(*this);
-  size_t hash_rhs = AbstractHash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool Relocation::operator!=(const Relocation& rhs) const {
-  return !(*this == rhs);
-}
-
-
-bool Relocation::operator<(const Relocation& rhs) const {
-  return address() < rhs.address();
-}
-
-bool Relocation::operator<=(const Relocation& rhs) const {
-  return !(address() > rhs.address());
-}
-
-bool Relocation::operator>(const Relocation& rhs) const {
-  return address() > rhs.address();
-}
-
-bool Relocation::operator>=(const Relocation& rhs) const {
-  return !(address() < rhs.address());
-}
-
 std::ostream& operator<<(std::ostream& os, const Relocation& entry) {
-  os << std::hex;
-  os << std::left
-     << std::setw(10) << entry.address()
-     << std::setw(4)  << std::dec << entry.size();
+  os << fmt::format("{:#012x} ({} bits)", entry.address(), entry.size());
   return os;
 }
 

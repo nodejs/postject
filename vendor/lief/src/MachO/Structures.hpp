@@ -1,4 +1,4 @@
-/* Copyright 2021 - 2022 R. Thomas
+/* Copyright 2021 - 2026 R. Thomas
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,38 +19,32 @@
 #include <cstdint>
 #include <string>
 
-#include "LIEF/types.hpp"
-
-#include "LIEF/MachO/enums.hpp"
-
 
 // Swap 2 byte, 16 bit values:
-#define Swap2Bytes(val) \
- ( (((val) >> 8) & 0x00FF) | (((val) << 8) & 0xFF00) )
+#define Swap2Bytes(val) ((((val) >> 8) & 0x00FF) | (((val) << 8) & 0xFF00))
 
 
 // Swap 4 byte, 32 bit values:
-#define Swap4Bytes(val) \
- ( (((val) >> 24) & 0x000000FF) | (((val) >>  8) & 0x0000FF00) | \
-   (((val) <<  8) & 0x00FF0000) | (((val) << 24) & 0xFF000000) )
-
+#define Swap4Bytes(val)                                                           \
+  ((((val) >> 24) & 0x000000FF) | (((val) >> 8) & 0x0000FF00) |                   \
+   (((val) << 8) & 0x00FF0000) | (((val) << 24) & 0xFF000000))
 
 
 // Swap 8 byte, 64 bit values:
-#define Swap8Bytes(val) \
- ( (((val) >> 56) & 0x00000000000000FF) | (((val) >> 40) & 0x000000000000FF00) | \
-   (((val) >> 24) & 0x0000000000FF0000) | (((val) >>  8) & 0x00000000FF000000) | \
-   (((val) <<  8) & 0x000000FF00000000) | (((val) << 24) & 0x0000FF0000000000) | \
-   (((val) << 40) & 0x00FF000000000000) | (((val) << 56) & 0xFF00000000000000) )
+#define Swap8Bytes(val)                                                           \
+  ((((val) >> 56) & 0x00000000000000FF) | (((val) >> 40) & 0x000000000000FF00) |  \
+   (((val) >> 24) & 0x0000000000FF0000) | (((val) >> 8) & 0x00000000FF000000) |   \
+   (((val) << 8) & 0x000000FF00000000) | (((val) << 24) & 0x0000FF0000000000) |   \
+   (((val) << 40) & 0x00FF000000000000) | (((val) << 56) & 0xFF00000000000000))
 
-namespace LIEF {
-//! Namespace related to the LIEF's MachO module
-namespace MachO {
 
-namespace details {
+/// Namespace related to the LIEF's MachO module
+
+
+namespace LIEF::MachO::details {
 
 static constexpr uint32_t INDIRECT_SYMBOL_LOCAL = 0x80000000;
-static constexpr uint32_t INDIRECT_SYMBOL_ABS   = 0x40000000;
+static constexpr uint32_t INDIRECT_SYMBOL_ABS = 0x40000000;
 
 struct mach_header {
   uint32_t magic;
@@ -60,7 +54,7 @@ struct mach_header {
   uint32_t ncmds;
   uint32_t sizeofcmds;
   uint32_t flags;
-  //uint32_t reserved; not for 32 bits
+  // uint32_t reserved; not for 32 bits
 };
 
 struct mach_header_64 {
@@ -82,7 +76,7 @@ struct load_command {
 struct segment_command_32 {
   uint32_t cmd;
   uint32_t cmdsize;
-  char     segname[16];
+  char segname[16];
   uint32_t vmaddr;
   uint32_t vmsize;
   uint32_t fileoff;
@@ -96,7 +90,7 @@ struct segment_command_32 {
 struct segment_command_64 {
   uint32_t cmd;
   uint32_t cmdsize;
-  char     segname[16];
+  char segname[16];
   uint64_t vmaddr;
   uint64_t vmsize;
   uint64_t fileoff;
@@ -136,29 +130,14 @@ struct section_64 {
   uint32_t reserved3;
 };
 
-struct fvmlib {
-  uint32_t name;
-  uint32_t minor_version;
-  uint32_t header_addr;
-};
-
-struct fvmlib_command {
-  uint32_t  cmd;
+struct dylib_command {
+  uint32_t cmd;
   uint32_t cmdsize;
-  struct fvmlib fvmlib;
-};
 
-struct dylib {
   uint32_t name;
   uint32_t timestamp;
   uint32_t current_version;
   uint32_t compatibility_version;
-};
-
-struct dylib_command {
-  uint32_t cmd;
-  uint32_t cmdsize;
-  struct dylib dylib;
 };
 
 struct sub_framework_command {
@@ -302,8 +281,7 @@ struct dylib_module_64 {
 };
 
 struct dylib_reference {
-  uint32_t isym:24,
-           flags:8;
+  uint32_t isym : 24, flags : 8;
 };
 
 struct twolevel_hints_command {
@@ -314,8 +292,7 @@ struct twolevel_hints_command {
 };
 
 struct twolevel_hint {
-  uint32_t isub_image:8,
-           itoc:24;
+  uint32_t isub_image : 8, itoc : 24;
 };
 
 static_assert(sizeof(twolevel_hint) == sizeof(uint32_t), "Wrong size");
@@ -366,11 +343,11 @@ struct encryption_info_command {
 };
 
 struct version_min_command {
-  uint32_t cmd;       // LC_VERSION_MIN_MACOSX or
-                      // LC_VERSION_MIN_IPHONEOS
-  uint32_t cmdsize;   // sizeof(struct version_min_command)
-  uint32_t version;   // X.Y.Z is encoded in nibbles xxxx.yy.zz
-  uint32_t sdk;       // X.Y.Z is encoded in nibbles xxxx.yy.zz
+  uint32_t cmd;     // LC_VERSION_MIN_MACOSX or
+                    // LC_VERSION_MIN_IPHONEOS
+  uint32_t cmdsize; // sizeof(struct version_min_command)
+  uint32_t version; // X.Y.Z is encoded in nibbles xxxx.yy.zz
+  uint32_t sdk;     // X.Y.Z is encoded in nibbles xxxx.yy.zz
 };
 
 
@@ -408,6 +385,14 @@ struct linker_option_command {
   uint32_t cmd;
   uint32_t cmdsize;
   uint32_t count;
+};
+
+struct note_command {
+  uint32_t cmd;        /* LC_NOTE */
+  uint32_t cmdsize;    /* sizeof(struct note_command) */
+  char data_owner[16]; /* owner name for this LC_NOTE */
+  uint64_t offset;     /* file offset of this data */
+  uint64_t size;       /* length of data region */
 };
 
 struct symseg_command {
@@ -480,20 +465,12 @@ struct fat_arch {
 // Structs from <mach-o/reloc.h>
 struct relocation_info {
   int32_t r_address;
-  uint32_t r_symbolnum:24,
-           r_pcrel:1,
-           r_length:2,
-           r_extern:1,
-           r_type:4;
+  uint32_t r_symbolnum : 24, r_pcrel : 1, r_length : 2, r_extern : 1, r_type : 4;
 };
 
 
 struct scattered_relocation_info {
-  uint32_t r_address:24,
-           r_type:4,
-           r_length:2,
-           r_pcrel:1,
-           r_scattered:1;
+  uint32_t r_address : 24, r_type : 4, r_length : 2, r_pcrel : 1, r_scattered : 1;
   int32_t r_value;
 };
 
@@ -588,7 +565,7 @@ struct arm_thread_state_t {
   uint32_t r13;
   uint32_t r14;
   uint32_t r15;
-  uint32_t r16;   /* Apple's thread_state has this 17th reg, bug?? */
+  uint32_t r16; /* Apple's thread_state has this 17th reg, bug?? */
 };
 
 struct arm_thread_state64_t {
@@ -600,6 +577,32 @@ struct arm_thread_state64_t {
   uint32_t cpsr;  // cpsr
 };
 
+struct ppc_thread_state_t {
+  uint32_t srr0; /* Instruction address register (PC) */
+  uint32_t srr1; /* Machine state register (supervisor) */
+  uint32_t r[32];
+
+  uint32_t cr;  /* Condition register */
+  uint32_t xer; /* User's integer exception register */
+  uint32_t lr;  /* Link register */
+  uint32_t ctr; /* Count register */
+  uint32_t mq;  /* MQ register (601 only) */
+
+  uint32_t vrsave; /* Vector Save Register */
+};
+
+struct ppc_thread_state64_t {
+  uint64_t srr0;
+  uint64_t srr1;
+  uint64_t r[32];
+  uint32_t cr;
+  uint64_t xer;
+  uint64_t lr;
+  uint64_t ctr;
+  uint32_t vrsave;
+};
+
+
 struct code_directory {
   uint32_t version;
   uint32_t flags;
@@ -608,10 +611,10 @@ struct code_directory {
   uint32_t nb_special_slots;
   uint32_t nb_code_slots;
   uint32_t code_limit;
-  uint8_t  hash_size;
-  uint8_t  hash_type;
-  uint8_t  reserved;
-  uint8_t  page_size;
+  uint8_t hash_size;
+  uint8_t hash_type;
+  uint8_t reserved;
+  uint8_t page_size;
   uint32_t reserved2;
   uint32_t scatter_offset;
 };
@@ -621,7 +624,7 @@ struct code_directory {
 // =================
 // Taken from libunwind-35.3/include/mach-o/compact_unwind_encoding.h
 struct unwind_info_section_header {
-  uint32_t version;            // unwind_section_version
+  uint32_t version; // unwind_section_version
   uint32_t common_encodings_array_section_offset;
   uint32_t common_encodings_arraycount;
   uint32_t personality_array_section_offset;
@@ -637,8 +640,10 @@ struct unwind_info_section_header {
 
 struct unwind_info_section_header_index_entry {
   uint32_t function_offset;
-  uint32_t second_level_pages_section_offset;  // section offset to start of regular or compress page
-  uint32_t lsda_index_array_section_offset;    // section offset to start of lsda_index array for this range
+  uint32_t second_level_pages_section_offset; // section offset to start of regular
+                                              // or compress page
+  uint32_t lsda_index_array_section_offset;   // section offset to start of
+                                              // lsda_index array for this range
 };
 
 struct unwind_info_section_header_lsda_index_entry {
@@ -653,7 +658,7 @@ struct unwind_info_regular_second_level_entry {
 };
 
 struct unwind_info_regular_second_level_page_header {
-  uint32_t kind;    // UNWIND_SECOND_LEVEL_REGULAR
+  uint32_t kind; // UNWIND_SECOND_LEVEL_REGULAR
   uint16_t entry_page_offset;
   uint16_t entry_count;
   // entry array
@@ -661,7 +666,7 @@ struct unwind_info_regular_second_level_page_header {
 
 
 struct unwind_info_compressed_second_level_page_header {
-  uint32_t kind;    // unwind_second_level_compressed
+  uint32_t kind; // unwind_second_level_compressed
   uint16_t entry_page_offset;
   uint16_t entry_count;
   uint16_t encodings_page_offset;
@@ -675,8 +680,7 @@ struct rebase_instruction {
   rebase_instruction(uint8_t opcode, uint64_t op1, uint64_t op2 = 0) :
     opcode{opcode},
     op1{op1},
-    op2{op2}
-  {}
+    op2{op2} {}
 
   uint8_t opcode;
   uint64_t op1;
@@ -684,12 +688,12 @@ struct rebase_instruction {
 };
 
 struct binding_instruction {
-  binding_instruction(uint8_t opcode, uint64_t op1, uint64_t op2 = 0, std::string name = "") :
+  binding_instruction(uint8_t opcode, uint64_t op1, uint64_t op2 = 0,
+                      std::string name = "") :
     opcode{opcode},
     op1{op1},
     op2{op2},
-    name{name}
-  {}
+    name{std::move(name)} {}
   binding_instruction(const binding_instruction&) = default;
   binding_instruction& operator=(const binding_instruction&) = default;
 
@@ -703,28 +707,27 @@ struct binding_instruction {
 
 class MachO32 {
   public:
-  using header                  = mach_header;
-  using segment_command         = segment_command_32;
-  using section                 = section_32;
-  using routines_command        = routines_command_32;
-  using dylib_module            = dylib_module_32;
-  using nlist                   = nlist_32;
+  using header = mach_header;
+  using segment_command = segment_command_32;
+  using section = section_32;
+  using routines_command = routines_command_32;
+  using dylib_module = dylib_module_32;
+  using nlist = nlist_32;
 
-  using uint                    = uint32_t;
+  using uint = uint32_t;
 };
 
 class MachO64 {
   public:
-  using header                  = mach_header_64;
-  using segment_command         = segment_command_64;
-  using section                 = section_64;
-  using routines_command        = routines_command_64;
-  using dylib_module            = dylib_module_64;
-  using nlist                   = nlist_64;
+  using header = mach_header_64;
+  using segment_command = segment_command_64;
+  using section = section_64;
+  using routines_command = routines_command_64;
+  using dylib_module = dylib_module_64;
+  using nlist = nlist_64;
 
-  using uint                    = uint64_t;
+  using uint = uint64_t;
 };
 }
-} // end namespace MachO
-}
+
 #endif

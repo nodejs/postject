@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,120 +13,176 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iomanip>
-
-#include "LIEF/PE/hash.hpp"
+#include "LIEF/Visitor.hpp"
+#include "LIEF/config.h"
 
 #include "LIEF/PE/Export.hpp"
 #include "LIEF/PE/ExportEntry.hpp"
+
 #include "PE/Structures.hpp"
+#include "internal_utils.hpp"
 
-namespace LIEF {
-namespace PE {
+#include <spdlog/fmt/fmt.h>
 
-Export::~Export() = default;
-Export::Export(const Export&) = default;
-Export& Export::operator=(const Export&) = default;
 
-Export::Export() :
-  exportFlags_{0},
-  timestamp_{0},
-  majorVersion_{0},
-  minorVersion_{0},
-  ordinalBase_{0}
-{}
+namespace LIEF::PE {
 
 Export::Export(const details::pe_export_directory_table& header) :
-  exportFlags_{header.ExportFlags},
+  export_flags_{header.ExportFlags},
+  name_rva_{header.NameRVA},
   timestamp_{header.Timestamp},
-  majorVersion_{header.MajorVersion},
-  minorVersion_{header.MinorVersion},
-  ordinalBase_{header.OrdinalBase}
-{}
+  major_version_{header.MajorVersion},
+  minor_version_{header.MinorVersion},
+  ordinal_base_{header.OrdinalBase},
+  exp_addr_table_rva_{header.ExportAddressTableRVA},
+  exp_addr_table_cnt_{header.AddressTableEntries},
+  names_addr_table_rva_{header.NamePointerRVA},
+  names_addr_table_cnt_{header.NumberOfNamePointers},
+  ord_addr_table_rva_{header.OrdinalTableRVA} {}
 
-uint32_t Export::export_flags() const {
-  return exportFlags_;
+
+Export::Export(const Export& other) :
+  Object(other),
+  export_flags_(other.export_flags_),
+  name_rva_(other.name_rva_),
+  timestamp_(other.timestamp_),
+  major_version_(other.major_version_),
+  minor_version_(other.minor_version_),
+  ordinal_base_(other.ordinal_base_),
+  exp_addr_table_rva_(other.exp_addr_table_rva_),
+  exp_addr_table_cnt_(other.exp_addr_table_cnt_),
+  names_addr_table_rva_(other.names_addr_table_rva_),
+  names_addr_table_cnt_(other.names_addr_table_cnt_),
+  ord_addr_table_rva_(other.ord_addr_table_rva_),
+  max_ordinal_(other.max_ordinal_),
+  name_(other.name_) {
+  if (!other.entries_.empty()) {
+    entries_.reserve(other.entries_.size());
+    for (const ExportEntry& entry : other.entries()) {
+      entries_.emplace_back(new ExportEntry(entry));
+    }
+  }
 }
 
-uint32_t Export::timestamp() const {
-  return timestamp_;
+Export& Export::operator=(const Export& other) {
+  if (&other == this) {
+    return *this;
+  }
+
+  export_flags_ = other.export_flags_;
+  name_rva_ = other.name_rva_;
+  timestamp_ = other.timestamp_;
+  major_version_ = other.major_version_;
+  minor_version_ = other.minor_version_;
+  ordinal_base_ = other.ordinal_base_;
+  exp_addr_table_rva_ = other.exp_addr_table_rva_;
+  exp_addr_table_cnt_ = other.exp_addr_table_cnt_;
+  names_addr_table_rva_ = other.names_addr_table_rva_;
+  names_addr_table_cnt_ = other.names_addr_table_cnt_;
+  ord_addr_table_rva_ = other.ord_addr_table_rva_;
+  max_ordinal_ = other.max_ordinal_;
+  name_ = other.name_;
+
+  if (!other.entries_.empty()) {
+    entries_.reserve(other.entries_.size());
+    for (const ExportEntry& entry : other.entries()) {
+      entries_.emplace_back(new ExportEntry(entry));
+    }
+  }
+  return *this;
 }
 
-uint16_t Export::major_version() const {
-  return majorVersion_;
-}
-
-uint16_t Export::minor_version() const {
-  return minorVersion_;
-}
-
-uint32_t Export::ordinal_base() const {
-  return ordinalBase_;
-}
-
-const std::string& Export::name() const {
-  return name_;
-}
-
-Export::it_entries Export::entries() {
-  return entries_;
-}
-
-Export::it_const_entries Export::entries() const {
-  return entries_;
-}
-
-void Export::export_flags(uint32_t flags) {
-  exportFlags_ = flags;
-}
-
-void Export::timestamp(uint32_t timestamp) {
-  timestamp_ = timestamp;
-}
-
-void Export::major_version(uint16_t major_version) {
-  majorVersion_ = major_version;
-}
-
-void Export::minor_version(uint16_t minor_version) {
-  minorVersion_ = minor_version;
-}
-
-void Export::ordinal_base(uint32_t ordinal_base) {
-  ordinalBase_ = ordinal_base;
-}
-
-void Export::name(const std::string& name) {
-  name_ = name;
-}
-
-void Export::accept(LIEF::Visitor& visitor) const {
+void Export::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool Export::operator==(const Export& rhs) const {
-  if (this == &rhs) {
-    return true;
+
+const ExportEntry* Export::find_entry(const std::string& name) const {
+  auto it =
+      std::find_if(entries_.begin(), entries_.end(),
+                   [&name](const std::unique_ptr<ExportEntry>& E) {
+                     if constexpr (lief_extended) {
+                       return E->name() == name || E->demangled_name() == name;
+                     } else {
+                       return E->name() == name;
+                     }
+                   });
+
+  if (it == entries_.end()) {
+    return nullptr;
   }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
+
+  return &**it;
 }
 
-bool Export::operator!=(const Export& rhs) const {
-  return !(*this == rhs);
+const ExportEntry* Export::find_entry(uint32_t ordinal) const {
+  auto it = std::find_if(entries_.begin(), entries_.end(),
+                         [ordinal](const std::unique_ptr<ExportEntry>& E) {
+                           return E->ordinal() == ordinal;
+                         });
+
+  if (it == entries_.end()) {
+    return nullptr;
+  }
+
+  return &**it;
 }
+
+const ExportEntry* Export::find_entry_at(uint32_t rva) const {
+  auto it = std::find_if(entries_.begin(), entries_.end(),
+                         [rva](const std::unique_ptr<ExportEntry>& E) {
+                           return E->address() == rva;
+                         });
+
+  if (it == entries_.end()) {
+    return nullptr;
+  }
+
+  return &**it;
+}
+
+ExportEntry& Export::add_entry(const ExportEntry& exp) {
+  entries_.emplace_back(new ExportEntry(exp));
+  ++max_ordinal_;
+  ExportEntry& new_entry = *entries_.back();
+  new_entry.ordinal(max_ordinal_);
+  return new_entry;
+}
+
+
+bool Export::remove_entry(const ExportEntry& exp) {
+  auto it = std::find_if(entries_.begin(), entries_.end(),
+                         [&exp](const std::unique_ptr<ExportEntry>& E) {
+                           return &exp == E.get();
+                         });
+
+  if (it == entries_.end()) {
+    return false;
+  }
+
+  entries_.erase(it);
+  return true;
+}
+
 
 std::ostream& operator<<(std::ostream& os, const Export& exp) {
-
-  os << std::hex;
-  os << std::left;
-  os << exp.name() << std::endl;
-  for (const ExportEntry& entry : exp.entries()) {
-    os << "  " << entry << std::endl;
+  static constexpr auto WIDTH = 20;
+  os << fmt::format("DLL Name: {}\n", exp.name())
+     << fmt::format("  {:{}} {:#010x}\n", "Characteristics", WIDTH,
+                    exp.export_flags())
+     << fmt::format("  {:{}} {} ({})\n", "Timestamp", WIDTH, exp.timestamp(),
+                    ts_to_str(exp.timestamp()))
+     << fmt::format("  {:{}} {}.{}\n", "Version", WIDTH, exp.major_version(),
+                    exp.minor_version())
+     << fmt::format("  {:{}} {}\n", "Ordinal Base", WIDTH, exp.ordinal_base())
+     << fmt::format("  {:{}} {}\n", "Number of functions", WIDTH,
+                    exp.export_addr_table_cnt())
+     << fmt::format("  {:{}} {}\n", "Number of names", WIDTH,
+                    exp.names_addr_table_cnt());
+  for (const ExportEntry& E : exp.entries()) {
+    os << "    " << E << '\n';
   }
   return os;
 }
 
-}
 }

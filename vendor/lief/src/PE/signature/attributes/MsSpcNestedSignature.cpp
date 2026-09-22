@@ -1,5 +1,5 @@
-/* Copyright 2021 - 2022 R. Thomas
- * Copyright 2021 - 2022 Quarkslab
+/* Copyright 2021 - 2026 R. Thomas
+ * Copyright 2021 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,26 +16,10 @@
 #include <sstream>
 
 #include "LIEF/PE/signature/attributes/MsSpcNestedSignature.hpp"
+#include "LIEF/Visitor.hpp"
 
-namespace LIEF {
-namespace PE {
 
-MsSpcNestedSignature::MsSpcNestedSignature() :
-  Attribute(SIG_ATTRIBUTE_TYPES::MS_SPC_NESTED_SIGN)
-{}
-
-MsSpcNestedSignature::MsSpcNestedSignature(const MsSpcNestedSignature&) = default;
-MsSpcNestedSignature& MsSpcNestedSignature::operator=(const MsSpcNestedSignature&) = default;
-
-MsSpcNestedSignature::MsSpcNestedSignature(Signature sig) :
-  Attribute(SIG_ATTRIBUTE_TYPES::MS_SPC_NESTED_SIGN),
-  sig_{std::move(sig)}
-{}
-
-std::unique_ptr<Attribute> MsSpcNestedSignature::clone() const {
-  return std::unique_ptr<Attribute>(new MsSpcNestedSignature{*this});
-}
-
+namespace LIEF::PE {
 
 void MsSpcNestedSignature::accept(Visitor& visitor) const {
   visitor.visit(*this);
@@ -49,7 +33,4 @@ std::string MsSpcNestedSignature::print() const {
 }
 
 
-MsSpcNestedSignature::~MsSpcNestedSignature() = default;
-
-}
 }

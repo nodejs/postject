@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,70 +13,93 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_DYNAMIC_ENTRY_RUNPATH_H_
-#define LIEF_ELF_DYNAMIC_ENTRY_RUNPATH_H_
+#ifndef LIEF_ELF_DYNAMIC_ENTRY_RUNPATH_H
+#define LIEF_ELF_DYNAMIC_ENTRY_RUNPATH_H
 
+#include <string_view>
 #include <string>
-
-#include "LIEF/visibility.h"
+#include <vector>
 
 #include "LIEF/ELF/DynamicEntry.hpp"
+#include "LIEF/compiler_attributes.hpp"
+#include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace ELF {
 
-//! Class that represents a ``DT_RUNPATH`` wich is used by the loader
-//! to resolve libraries (DynamicEntryLibrary).
+namespace LIEF::ELF {
+
+/// Class that represents a ``DT_RUNPATH`` which is used by the loader
+/// to resolve libraries (DynamicEntryLibrary).
 class LIEF_API DynamicEntryRunPath : public DynamicEntry {
 
   public:
   static constexpr char delimiter = ':';
   using DynamicEntry::DynamicEntry;
 
-  DynamicEntryRunPath();
+  DynamicEntryRunPath() :
+    DynamicEntry::DynamicEntry(DynamicEntry::TAG::RUNPATH, 0) {}
 
-  //! Constructor from (run)path
-  DynamicEntryRunPath(std::string runpath);
+  /// Constructor from (run)path
+  DynamicEntryRunPath(std::string runpath) :
+    DynamicEntry::DynamicEntry(DynamicEntry::TAG::RUNPATH, 0),
+    runpath_(std::move(runpath)) {}
 
-  //! Constructor from a list of paths
-  DynamicEntryRunPath(const std::vector<std::string>& paths);
+  /// Constructor from a list of paths
+  DynamicEntryRunPath(const std::vector<std::string>& paths) :
+    DynamicEntry::DynamicEntry(DynamicEntry::TAG::RUNPATH, 0) {
+    this->paths(paths);
+  }
 
-  DynamicEntryRunPath& operator=(const DynamicEntryRunPath&);
-  DynamicEntryRunPath(const DynamicEntryRunPath&);
+  DynamicEntryRunPath& operator=(const DynamicEntryRunPath&) = default;
+  DynamicEntryRunPath(const DynamicEntryRunPath&) = default;
 
-  //! Runpath raw value
-  const std::string& name() const;
-  void name(const std::string& name);
+  std::unique_ptr<DynamicEntry> clone() const override {
+    return std::unique_ptr<DynamicEntry>(new DynamicEntryRunPath(*this));
+  }
 
-  //! Runpath raw value
-  const std::string& runpath() const;
-  void runpath(const std::string& runpath);
+  /// Runpath raw value
+  std::string_view runpath() const LIEF_LIFETIMEBOUND {
+    return runpath_;
+  }
 
-  //! Paths as a list
+  void runpath(std::string runpath) {
+    runpath_ = std::move(runpath);
+  }
+
+  /// Paths as a list
   std::vector<std::string> paths() const;
   void paths(const std::vector<std::string>& paths);
 
-  //! Insert a ``path`` at the given ``position``
-  DynamicEntryRunPath& insert(size_t pos, const std::string& path);
+  /// Insert a ``path`` at the given ``position``
+  DynamicEntryRunPath& insert(size_t pos,
+                              const std::string& path) LIEF_LIFETIMEBOUND;
 
-  //! Append the given ``path``
-  DynamicEntryRunPath& append(const std::string& path);
+  /// Append the given ``path``
+  DynamicEntryRunPath& append(const std::string& path) LIEF_LIFETIMEBOUND;
 
-  //! Remove the given ``path``
-  DynamicEntryRunPath& remove(const std::string& path);
+  /// Remove the given ``path``
+  DynamicEntryRunPath& remove(const std::string& path) LIEF_LIFETIMEBOUND;
 
-  DynamicEntryRunPath& operator+=(const std::string& path);
-  DynamicEntryRunPath& operator-=(const std::string& path);
+  DynamicEntryRunPath& operator+=(const std::string& path) {
+    return append(path);
+  }
+
+  DynamicEntryRunPath& operator-=(const std::string& path) {
+    return remove(path);
+  }
 
   void accept(Visitor& visitor) const override;
 
-  static bool classof(const DynamicEntry* entry);
+  static bool classof(const DynamicEntry* entry) {
+    return entry->tag() == DynamicEntry::TAG::RUNPATH;
+  }
 
   std::ostream& print(std::ostream& os) const override;
+
+  ~DynamicEntryRunPath() override = default;
 
   private:
   std::string runpath_;
 };
 }
-}
+
 #endif

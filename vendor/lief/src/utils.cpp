@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,50 +13,52 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <iomanip>
-#include <sstream>
-#include <iostream>
 #include <algorithm>
-#include <functional>
-
-#include <locale>
+#include <cstddef>
+#include <cstdlib>
 #include <iterator>
-#include <iostream>
 #include <string>
-#include <numeric>
 
 #include <spdlog/fmt/fmt.h>
 
+#include "LIEF/errors.hpp"
 #include "LIEF/utils.hpp"
+#include "LIEF/version.h"
+
 #include "third-party/utfcpp.hpp"
 
+#include "LIEF/config.h"
+
+#include "internal_utils.hpp"
+#include "logging.hpp"
+
 namespace LIEF {
-namespace LEB128 {
-std::vector<uint8_t> uencode(uint64_t value) {
-  std::vector<uint8_t> result;
-  do {
-    uint8_t b = value & 0x7F;
-    value >>= 7;
-    if (value > 0) {
-      b |= 0x80;
-    }
-    result.push_back(b);
-  } while (value != 0);
-  return result;
+
+template<typename octet_iterator>
+result<uint32_t> next(octet_iterator& it, octet_iterator end) {
+  using namespace utf8;
+  using namespace utf8::internal;
+  utfchar32_t cp = 0;
+  internal::utf_error err_code = validate_next(it, end, cp);
+  switch (err_code) {
+    case UTF8_OK: break;
+    case NOT_ENOUGH_ROOM: return make_error_code(lief_errors::data_too_large);
+    case INVALID_LEAD:
+    case INCOMPLETE_SEQUENCE:
+    case OVERLONG_SEQUENCE:
+    case INVALID_CODE_POINT: return make_error_code(lief_errors::read_error);
+  }
+  return cp;
 }
 
-
-}
-
-std::string u16tou8(const std::u16string& string, bool remove_null_char) {
+std::string u16tou8(const char16_t* buffer, size_t size, bool remove_null_char) {
   std::string name;
 
   std::u16string clean_string;
-  std::copy_if(std::begin(string), std::end(string),
-               std::back_inserter(clean_string),
-              utf8::internal::is_code_point_valid<char16_t>);
+  std::copy_if(buffer, buffer + size, std::back_inserter(clean_string),
+               utf8::internal::is_code_point_valid);
 
-  utf8::unchecked::utf16to8(std::begin(clean_string), std::end(clean_string),
+  utf8::unchecked::utf16to8(clean_string.begin(), clean_string.end(),
                             std::back_inserter(name));
 
   if (remove_null_char) {
@@ -65,38 +67,132 @@ std::string u16tou8(const std::u16string& string, bool remove_null_char) {
   return name;
 }
 
-std::u16string u8tou16(const std::string& string) {
+
+result<std::u16string> u8tou16(const std::string& string) {
+  using namespace utf8::internal;
   std::u16string name;
-  utf8::utf8to16(std::begin(string), std::end(string), std::back_inserter(name));
+  auto start = string.begin();
+  auto end = string.end();
+  auto res = std::back_inserter(name);
+  while (start < end) {
+    auto cp = next(start, end);
+    if (!cp) {
+      return make_error_code(lief_errors::conversion_error);
+    }
+    uint32_t cp_val = *cp;
+    if (cp_val > 0xffff) {
+      *res++ = uint16_t((cp_val >> 10) + LEAD_OFFSET);
+      *res++ = uint16_t((cp_val & 0x3ff) + TRAIL_SURROGATE_MIN);
+    } else {
+      *res++ = uint16_t(cp_val);
+    }
+  }
   return name;
 }
 
-std::string hex_str(uint8_t c) {
-  std::stringstream ss;
-  ss << std::setw(2) << std::setfill('0') << std::hex << static_cast<uint32_t>(c);
-  return ss.str();
+inline std::string pretty_hex(char c) {
+  if (is_printable(c)) {
+    return std::string("") + c;
+  }
+  return ".";
 }
 
-std::string hex_dump(const std::vector<uint8_t>& data, const std::string& sep) {
+std::string dump(const uint8_t* buffer, size_t size, const std::string& title,
+                 const std::string& prefix, size_t limit) {
+  if (size < 2) {
+    return "";
+  }
 
-  std::string hexstring = std::accumulate(std::begin(data), std::end(data), std::string{},
-     [sep] (const std::string& a, uint8_t b) {
-         return a.empty() ? fmt::format("{:02x}", b) : a + sep + fmt::format("{:02x}", b);
-     });
+  std::string out;
+  std::string banner;
 
-  return hexstring;
+  if (!title.empty()) {
+    banner = prefix + "+" +
+             std::string(size_t{22} * 3, '-')
+                 .append("---+\n")
+                 .append(prefix)
+                 .append("| ");
+    banner += title;
+    if (title.size() < 68) {
+      banner += std::string(68 - title.size(), ' ');
+    }
+    banner += "|\n";
+  }
+
+  out = std::string(size_t{22} * 3, '-') + "\n";
+  std::string rhs;
+  if (limit > 0) {
+    size = std::min<size_t>(size, limit);
+  }
+
+  for (size_t i = 0; i < size; ++i) {
+    if (i == 0) {
+      out = prefix + "+" +
+            std::string(size_t{22} * 3, '-')
+                .append("---+\n")
+                .append(prefix)
+                .append("| ");
+    }
+
+    if (i > 0 && i % 16 == 0) {
+      out += "\n" + prefix + "| ";
+    }
+
+    rhs += pretty_hex((char)(buffer[i]));
+    out += fmt::format("{:02x} ", buffer[i]);
+
+    if (i % 16 == 15 || i == (size - 1)) {
+      if (i == (size - 1)) {
+        out += std::string(((16 - ((size - 1) % 16) - 1)) * 3, ' ');
+        rhs += std::string(((16 - ((size - 1) % 16) - 1)) * 1, ' ');
+      }
+      out += " | ";
+      out += rhs + " |";
+      rhs = "";
+    }
+  }
+
+  out +=
+      std::string("\n") + prefix + '+' + std::string(size_t{22} * 3, '-') + "---+";
+  return banner + out;
 }
 
 
-bool is_printable(const std::string& str) {
-  return std::all_of(std::begin(str), std::end(str),
-                     [] (char c) { return std::isprint<char>(c, std::locale("C")); });
+bool is_extended() {
+  return lief_extended;
 }
 
-bool is_hex_number(const std::string& str) {
-  return std::all_of(std::begin(str), std::end(str), isxdigit);
+std::string lief_version_t::to_string() const {
+  if (id == 0) {
+    return fmt::format("{}.{}.{}", major, minor, patch);
+  }
+  return fmt::format("{}.{}.{}.{}", major, minor, patch, id);
 }
 
+lief_version_t version() {
+  if (lief_extended) {
+    return extended_version();
+  }
+  return {LIEF_VERSION_MAJOR, LIEF_VERSION_MINOR, LIEF_VERSION_PATCH, 0};
+}
 
+#if !defined(LIEF_EXTENDED)
+result<std::string> demangle(std::string_view /*mangled*/) {
+  logging::needs_lief_extended();
+  return make_error_code(lief_errors::require_extended_version);
+}
+#endif
 
-} // namespace LIEF
+#if !defined(LIEF_EXTENDED)
+std::string extended_version_info() {
+  return "";
+}
+#endif
+
+#if !defined(LIEF_EXTENDED)
+lief_version_t extended_version() {
+  return {};
+}
+#endif
+
+}

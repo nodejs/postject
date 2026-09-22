@@ -1,6 +1,8 @@
-import lief
 import pathlib
-from utils import get_sample
+
+import lief
+from utils import check_layout, get_sample
+
 
 def test_builder_size():
     FILES = [
@@ -10,13 +12,13 @@ def test_builder_size():
     ]
     for file in FILES:
         infile = pathlib.Path(get_sample(file))
-        target = lief.parse(infile.as_posix())
-        print(infile)
+        target = lief.ELF.parse(infile)
+        assert target is not None
+        config = lief.ELF.Builder.config_t()
+        config.notes = False
 
-        builder = lief.ELF.Builder(target)
-        builder.config.notes = False
-        builder.build()
-        raw = builder.get_build()
-
+        raw = target.write_to_bytes(config)
         assert len(raw) <= infile.stat().st_size
 
+        new = lief.ELF.parse(raw)
+        check_layout(new)

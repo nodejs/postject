@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,41 +16,109 @@
 #ifndef LIEF_SPAN_STREAM_H
 #define LIEF_SPAN_STREAM_H
 
-#include <string>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <vector>
 
+#include "LIEF/BinaryStream/BinaryStream.hpp"
 #include "LIEF/errors.hpp"
 #include "LIEF/span.hpp"
-#include "LIEF/BinaryStream/BinaryStream.hpp"
+#include "LIEF/visibility.h"
 
 namespace LIEF {
-class SpanStream : public BinaryStream {
+class VectorStream;
+class LIEF_API SpanStream : public BinaryStream {
   public:
-  static result<SpanStream> from_vector(const std::vector<uint8_t>& data);
-  SpanStream(span<const uint8_t> data);
-  SpanStream(span<uint8_t> data);
-  SpanStream(const std::vector<uint8_t>& data);
+  using BinaryStream::end;
+  using BinaryStream::p;
+  using BinaryStream::start;
+
+  static result<SpanStream> from_vector(const std::vector<uint8_t>& data) {
+    return SpanStream(data);
+  }
+
+  template<size_t N>
+  static result<SpanStream> from_array(const std::array<uint8_t, N>& data) {
+    return SpanStream(data.data(), N);
+  }
+
+  SpanStream(span<const uint8_t> data) :
+    SpanStream(data.data(), data.size()) {}
+
+  SpanStream(span<uint8_t> data) :
+    SpanStream(data.data(), data.size()) {}
+
+  SpanStream(const uint8_t* p, size_t size) :
+    BinaryStream(BinaryStream::STREAM_TYPE::SPAN),
+    data_{p, p + size} {}
+
+  SpanStream(const std::vector<uint8_t>& data) :
+    SpanStream(data.data(), data.size()) {}
+
+  std::unique_ptr<SpanStream> clone() const {
+    return std::make_unique<SpanStream>(*this);
+  }
+
   SpanStream() = delete;
 
-  SpanStream(const SpanStream&) = delete;
-  SpanStream& operator=(const SpanStream&) = delete;
+  SpanStream(const SpanStream& other) = default;
+  SpanStream& operator=(const SpanStream& other) = default;
 
-  SpanStream(SpanStream&& other);
-  SpanStream& operator=(SpanStream&& other);
+  SpanStream(SpanStream&& other) noexcept = default;
+  SpanStream& operator=(SpanStream&& other) noexcept = default;
 
-  inline uint64_t size() const override {
+  uint64_t size() const override {
     return data_.size();
   }
 
-  std::vector<uint8_t> content() const;
+  const uint8_t* p() const override {
+    return data_.data() + this->pos();
+  }
 
-  result<SpanStream> slice(size_t offset, size_t size) const;
-  result<SpanStream> slice(size_t offset) const;
+  const uint8_t* start() const override {
+    return data_.data();
+  }
 
-  static bool classof(const BinaryStream& stream);
-  ~SpanStream() override;
+  const uint8_t* end() const override {
+    return data_.data() + size();
+  }
+
+  std::vector<uint8_t> content() const {
+    return {data_.begin(), data_.end()};
+  }
+
+  result<SpanStream> slice(size_t offset, size_t size) const {
+    if (offset > data_.size() || size > data_.size() - offset) {
+      return make_error_code(lief_errors::read_out_of_bound);
+    }
+    return data_.subspan(offset, size);
+  }
+  result<SpanStream> slice(size_t offset) const {
+    if (offset > data_.size()) {
+      return make_error_code(lief_errors::read_out_of_bound);
+    }
+    return data_.subspan(offset, data_.size() - offset);
+  }
+
+  std::unique_ptr<VectorStream> to_vector() const;
+
+  static bool classof(const BinaryStream& stream) {
+    return stream.type() == BinaryStream::STREAM_TYPE::SPAN;
+  }
+
+  ~SpanStream() override = default;
 
   protected:
-  result<const void*> read_at(uint64_t offset, uint64_t size) const override;
+  result<const void*> read_at(uint64_t offset, uint64_t size,
+                              uint64_t /*va*/) const override {
+    const uint64_t stream_size = this->size();
+    if (offset > stream_size || size > stream_size - offset) {
+      return make_error_code(lief_errors::read_error);
+    }
+    return data_.data() + offset;
+  }
   span<const uint8_t> data_;
 };
 }

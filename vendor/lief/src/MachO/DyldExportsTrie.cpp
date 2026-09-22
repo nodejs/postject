@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,26 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <numeric>
-#include <iomanip>
+#include "spdlog/fmt/fmt.h"
+#include <sstream>
 
 #include "LIEF/BinaryStream/SpanStream.hpp"
 
-#include "LIEF/MachO/hash.hpp"
 #include "LIEF/MachO/DyldExportsTrie.hpp"
 #include "LIEF/MachO/ExportInfo.hpp"
+#include "LIEF/Visitor.hpp"
 
 #include "MachO/Structures.hpp"
 #include "MachO/exports_trie.hpp"
 
-namespace LIEF {
-namespace MachO {
+
+namespace LIEF::MachO {
+
 DyldExportsTrie::DyldExportsTrie() = default;
 DyldExportsTrie::~DyldExportsTrie() = default;
 DyldExportsTrie::DyldExportsTrie(const DyldExportsTrie& other) :
+  LoadCommand::LoadCommand(other),
   data_offset_{other.data_offset_},
-  data_size_{other.data_size_}
-{
+  data_size_{other.data_size_} {
   /* Do not copy export info */
 }
 
@@ -42,58 +43,26 @@ DyldExportsTrie& DyldExportsTrie::operator=(DyldExportsTrie other) {
 }
 
 DyldExportsTrie::DyldExportsTrie(const details::linkedit_data_command& cmd) :
-  LoadCommand::LoadCommand{static_cast<LOAD_COMMAND_TYPES>(cmd.cmd), cmd.cmdsize},
+  LoadCommand::LoadCommand{LoadCommand::TYPE(cmd.cmd), cmd.cmdsize},
   data_offset_{cmd.dataoff},
-  data_size_{cmd.datasize}
-{}
+  data_size_{cmd.datasize} {}
 
 
-void DyldExportsTrie::swap(DyldExportsTrie& other) {
+void DyldExportsTrie::swap(DyldExportsTrie& other) noexcept {
   LoadCommand::swap(other);
   std::swap(data_offset_, other.data_offset_);
-  std::swap(data_size_,   other.data_size_);
-  std::swap(content_,     other.content_);
+  std::swap(data_size_, other.data_size_);
+  std::swap(content_, other.content_);
   std::swap(export_info_, other.export_info_);
-}
-
-DyldExportsTrie* DyldExportsTrie::clone() const {
-  return new DyldExportsTrie(*this);
-}
-
-
-uint32_t DyldExportsTrie::data_offset() const {
-  return data_offset_;
-}
-
-uint32_t DyldExportsTrie::data_size() const {
-  return data_size_;
-}
-
-void DyldExportsTrie::data_offset(uint32_t offset) {
-  data_offset_ = offset;
-}
-
-void DyldExportsTrie::data_size(uint32_t size) {
-  data_size_ = size;
 }
 
 void DyldExportsTrie::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-DyldExportsTrie::it_export_info DyldExportsTrie::exports() {
-  return export_info_;
+ExportInfo* DyldExportsTrie::add(std::unique_ptr<ExportInfo> info) {
+  return export_info_.emplace_back(std::move(info)).get();
 }
-
-DyldExportsTrie::it_const_export_info DyldExportsTrie::exports() const {
-  return export_info_;
-}
-
-
-void DyldExportsTrie::add(std::unique_ptr<ExportInfo> info) {
-  export_info_.push_back(std::move(info));
-}
-
 
 std::string DyldExportsTrie::show_export_trie() const {
   std::ostringstream output;
@@ -104,36 +73,10 @@ std::string DyldExportsTrie::show_export_trie() const {
   return output.str();
 }
 
-
-bool DyldExportsTrie::operator==(const DyldExportsTrie& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool DyldExportsTrie::operator!=(const DyldExportsTrie& rhs) const {
-  return !(*this == rhs);
-}
-
-bool DyldExportsTrie::classof(const LoadCommand* cmd) {
-  // This must be sync with BinaryParser.tcc
-  const LOAD_COMMAND_TYPES type = cmd->command();
-  return type == LOAD_COMMAND_TYPES::LC_DYLD_EXPORTS_TRIE;
-}
-
-
 std::ostream& DyldExportsTrie::print(std::ostream& os) const {
-  LoadCommand::print(os);
-  os << std::left;
-  os << std::endl;
-  os << "Data location:" << std::endl;
-  os << std::setw(8) << "Offset" << ": 0x" << data_offset() << std::endl;
-  os << std::setw(8) << "Size"   << ": 0x" << data_size()   << std::endl;
+  LoadCommand::print(os) << '\n';
+  os << fmt::format("offset={:#08x}, size={:#08x}", data_offset(), data_size());
   return os;
 }
 
-}
 }

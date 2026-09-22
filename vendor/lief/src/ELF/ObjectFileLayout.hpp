@@ -1,4 +1,4 @@
-/* Copyright 2021 - 2022 R. Thomas
+/* Copyright 2021 - 2026 R. Thomas
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,28 +12,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_OBJECT_FILE_LAYOUT_H_
-#define LIEF_ELF_OBJECT_FILE_LAYOUT_H_
-#include <LIEF/types.hpp>
-#include <LIEF/visibility.h>
-#include <LIEF/ELF/Binary.hpp>
-#include <LIEF/ELF/Section.hpp>
-#include <LIEF/ELF/Symbol.hpp>
-#include <LIEF/iostream.hpp>
-#include <ELF/DataHandler/Handler.hpp>
+#ifndef LIEF_ELF_OBJECT_FILE_LAYOUT_H
+#define LIEF_ELF_OBJECT_FILE_LAYOUT_H
 
-#include "logging.hpp"
+#include "LIEF/ELF/Binary.hpp"
+#include "LIEF/ELF/Section.hpp"
+#include "LIEF/ELF/Symbol.hpp"
+#include "LIEF/visibility.h"
+
+#include "ELF/DataHandler/Handler.hpp"
+
 #include "Layout.hpp"
-namespace LIEF {
-namespace ELF {
+#include "logging.hpp"
 
-//! Class used to compute the size and the offsets of the elements
-//! needed to rebuild the ELF file.
+namespace LIEF::ELF {
+
+/// Class used to compute the size and the offsets of the elements
+/// needed to rebuild the ELF file.
 class LIEF_LOCAL ObjectFileLayout : public Layout {
   public:
-  using relocations_map_t    = std::unordered_map<Section*, std::vector<Relocation*>>; // Relocation associated with a section
-  using sections_reloc_map_t = std::unordered_map<Section*, Section*>; // Map a section with its associated relocation section
-  using rel_sections_size_t  = std::unordered_map<Section*, size_t>;   // Map relocation sections with needed size
+  using relocations_map_t =
+      std::unordered_map<Section*,
+                         std::vector<Relocation*>>; // Relocation associated with a
+                                                    // section
+  using sections_reloc_map_t =
+      std::unordered_map<Section*, Section*>; // Map a section with its associated
+                                              // relocation section
+  using rel_sections_size_t =
+      std::unordered_map<Section*,
+                         size_t>; // Map relocation sections with needed size
 
   public:
   using Layout::Layout;
@@ -43,11 +50,11 @@ class LIEF_LOCAL ObjectFileLayout : public Layout {
   ObjectFileLayout(ObjectFileLayout&&) = default;
   ObjectFileLayout& operator=(ObjectFileLayout&&) = default;
 
-  //! The given section should be relocated if the "needed" size
-  //! is greater than 0
+  /// The given section should be relocated if the "needed" size
+  /// is greater than 0
   bool should_relocate(const Section& sec) const {
     const auto it = sec_reloc_info_.find(&sec);
-    if (it == std::end(sec_reloc_info_)) {
+    if (it == sec_reloc_info_.end()) {
       return false;
     }
     return it->second > 0;
@@ -62,14 +69,16 @@ class LIEF_LOCAL ObjectFileLayout : public Layout {
     uint64_t last_offset_sections = 0;
 
     for (std::unique_ptr<Section>& section : binary_->sections_) {
-      if (section->type() == LIEF::ELF::ELF_SECTION_TYPES::SHT_NOBITS) {
+      if (section->type() == Section::TYPE::NOBITS) {
         continue;
       }
-      last_offset_sections = std::max<uint64_t>(section->file_offset() + section->size(),
-                                                last_offset_sections);
+      last_offset_sections =
+          std::max<uint64_t>(section->file_offset() + section->size(),
+                             last_offset_sections);
     }
-    LIEF_DEBUG("Sections' last offset: 0x{:x}", last_offset_sections);
-    LIEF_DEBUG("SHDR Table:            0x{:x}", binary_->header().section_headers_offset());
+    LIEF_DEBUG("Sections' last offset: {:#x}", last_offset_sections);
+    LIEF_DEBUG("SHDR Table:            {:#x}",
+               binary_->header().section_headers_offset());
 
     Header& hdr = binary_->header();
     for (Section& sec : binary_->sections()) {
@@ -78,7 +87,7 @@ class LIEF_LOCAL ObjectFileLayout : public Layout {
       }
 
       const size_t needed_size = sec_reloc_info_[&sec];
-      LIEF_DEBUG("Need to relocate: '{}' (0x{:x} bytes)", sec.name(), needed_size);
+      LIEF_DEBUG("Need to relocate '{}' ({:#x} bytes)", sec.name(), needed_size);
 
       DataHandler::Node new_node{last_offset_sections, needed_size,
                                  DataHandler::Node::SECTION};
@@ -101,7 +110,7 @@ class LIEF_LOCAL ObjectFileLayout : public Layout {
   template<class ELF_T>
   size_t symtab_size() {
     using Elf_Sym = typename ELF_T::Elf_Sym;
-    return binary_->static_symbols_.size() * sizeof(Elf_Sym);
+    return binary_->symtab_symbols_.size() * sizeof(Elf_Sym);
   }
 
   inline relocations_map_t& relocation_map() {
@@ -119,15 +128,15 @@ class LIEF_LOCAL ObjectFileLayout : public Layout {
   ~ObjectFileLayout() override = default;
 
   ObjectFileLayout() = delete;
+
   private:
   std::unordered_map<const Section*, size_t> sec_reloc_info_;
 
   relocations_map_t relocation_map_;
   sections_reloc_map_t sections_reloc_map_;
   rel_sections_size_t rel_sections_size_;
-
 };
 }
-}
+
 
 #endif

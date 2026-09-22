@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,69 +13,93 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_DYNAMIC_ENTRY_RPATH_H_
-#define LIEF_ELF_DYNAMIC_ENTRY_RPATH_H_
+#ifndef LIEF_ELF_DYNAMIC_ENTRY_RPATH_H
+#define LIEF_ELF_DYNAMIC_ENTRY_RPATH_H
 
+#include <string_view>
+#include <memory>
 #include <string>
-
-#include "LIEF/visibility.h"
+#include <vector>
 
 #include "LIEF/ELF/DynamicEntry.hpp"
+#include "LIEF/compiler_attributes.hpp"
+#include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace ELF {
 
-//! Class which represents a ``DT_RPATH`` entry. This attribute is
-//! deprecated (cf. ``man ld``) in favour of ``DT_RUNPATH`` (See DynamicRunPath)
+namespace LIEF::ELF {
+
+/// Class which represents a ``DT_RPATH`` entry. This attribute is
+/// deprecated (cf. ``man ld``) in favor of ``DT_RUNPATH`` (See
+/// DynamicEntryRunPath)
 class LIEF_API DynamicEntryRpath : public DynamicEntry {
-
   public:
   static constexpr char delimiter = ':';
   using DynamicEntry::DynamicEntry;
-  DynamicEntryRpath();
+  DynamicEntryRpath() :
+    DynamicEntry::DynamicEntry(DynamicEntry::TAG::RPATH, 0) {}
 
-  DynamicEntryRpath(std::string rpath);
+  DynamicEntryRpath(std::string rpath) :
+    DynamicEntry::DynamicEntry(DynamicEntry::TAG::RPATH, 0),
+    rpath_(std::move(rpath)) {}
 
-  //! Constructor from a list of paths
-  DynamicEntryRpath(const std::vector<std::string>& paths);
+  /// Constructor from a list of paths
+  DynamicEntryRpath(const std::vector<std::string>& paths) :
+    DynamicEntry::DynamicEntry(DynamicEntry::TAG::RPATH, 0) {
+    this->paths(paths);
+  }
 
-  DynamicEntryRpath& operator=(const DynamicEntryRpath&);
-  DynamicEntryRpath(const DynamicEntryRpath&);
+  DynamicEntryRpath& operator=(const DynamicEntryRpath&) = default;
+  DynamicEntryRpath(const DynamicEntryRpath&) = default;
 
-  //! The actual rpath as a string
-  const std::string& name() const;
-  void name(const std::string& name);
+  std::unique_ptr<DynamicEntry> clone() const override {
+    return std::make_unique<DynamicEntryRpath>(*this);
+  }
 
-  //! The actual rpath as a string
-  const std::string& rpath() const;
-  void rpath(const std::string& name);
+  /// The actual rpath as a string
+  std::string_view rpath() const LIEF_LIFETIMEBOUND {
+    return rpath_;
+  }
 
-  //! Paths as a list
+  void rpath(std::string name) {
+    rpath_ = std::move(name);
+  }
+
+  /// Paths as a list
   std::vector<std::string> paths() const;
   void paths(const std::vector<std::string>& paths);
 
-  //! Insert a ``path`` at the given ``position``
-  DynamicEntryRpath& insert(size_t pos, const std::string& path);
+  /// Insert a ``path`` at the given ``position``
+  DynamicEntryRpath& insert(size_t pos,
+                            const std::string& path) LIEF_LIFETIMEBOUND;
 
-  //! Append the given ``path``
-  DynamicEntryRpath& append(const std::string& path);
+  /// Append the given ``path``
+  DynamicEntryRpath& append(std::string path) LIEF_LIFETIMEBOUND;
 
-  //! Remove the given ``path``
-  DynamicEntryRpath& remove(const std::string& path);
+  /// Remove the given ``path``
+  DynamicEntryRpath& remove(const std::string& path) LIEF_LIFETIMEBOUND;
 
-  DynamicEntryRpath& operator+=(const std::string& path);
-  DynamicEntryRpath& operator-=(const std::string& path);
+  DynamicEntryRpath& operator+=(std::string path) {
+    return append(std::move(path));
+  }
 
-  static bool classof(const DynamicEntry* entry);
+  DynamicEntryRpath& operator-=(const std::string& path) {
+    return remove(path);
+  }
+
+  static bool classof(const DynamicEntry* entry) {
+    return entry->tag() == DynamicEntry::TAG::RPATH;
+  }
 
   void accept(Visitor& visitor) const override;
 
   std::ostream& print(std::ostream& os) const override;
 
+  ~DynamicEntryRpath() override = default;
+
   private:
   std::string rpath_;
 };
 }
-}
+
 
 #endif

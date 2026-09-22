@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,61 +13,64 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_PE_ATTRIBUTES_MS_SPC_NESTED_SIG_H_
-#define LIEF_PE_ATTRIBUTES_MS_SPC_NESTED_SIG_H_
+#ifndef LIEF_PE_ATTRIBUTES_MS_SPC_NESTED_SIG_H
+#define LIEF_PE_ATTRIBUTES_MS_SPC_NESTED_SIG_H
 
-#include "LIEF/visibility.h"
-#include "LIEF/errors.hpp"
 #include "LIEF/PE/signature/Attribute.hpp"
 #include "LIEF/PE/signature/Signature.hpp"
+#include "LIEF/visibility.h"
 
 
-namespace LIEF {
-class VectorStream;
-namespace PE {
+namespace LIEF::PE {
 
-class Parser;
-class SignatureParser;
-
-//! Interface over the structure described by the OID ``1.3.6.1.4.1.311.2.4.1``
-//!
-//! The internal structure is not documented but we can infer the following structure:
-//!
-//! ```text
-//! MsSpcNestedSignature ::= SET OF SignedData
-//! ```
-//!
-//! ``SignedData`` is the structure described in PKCS #7 RFC (LIEF::PE::Signature)
+/// Interface over the structure described by the OID ``1.3.6.1.4.1.311.2.4.1``
+///
+/// The internal structure is not documented but we can infer the following
+/// structure:
+///
+/// ```text
+/// MsSpcNestedSignature ::= SET OF SignedData
+/// ```
+///
+/// ``SignedData`` is the structure described in PKCS #7 RFC (LIEF::PE::Signature)
 class LIEF_API MsSpcNestedSignature : public Attribute {
 
   friend class Parser;
   friend class SignatureParser;
 
   public:
-  MsSpcNestedSignature();
-  MsSpcNestedSignature(Signature sig);
-  MsSpcNestedSignature(const MsSpcNestedSignature&);
-  MsSpcNestedSignature& operator=(const MsSpcNestedSignature&);
+  MsSpcNestedSignature() = delete;
+  MsSpcNestedSignature(Signature sig) :
+    Attribute(Attribute::TYPE::MS_SPC_NESTED_SIGN),
+    sig_{std::move(sig)} {}
+  MsSpcNestedSignature(const MsSpcNestedSignature&) = default;
+  MsSpcNestedSignature& operator=(const MsSpcNestedSignature&) = default;
 
-  std::unique_ptr<Attribute> clone() const override;
+  std::unique_ptr<Attribute> clone() const override {
+    return std::unique_ptr<Attribute>(new MsSpcNestedSignature{*this});
+  }
 
-  //! Underlying Signature object
-  inline const Signature& sig() const {
+  /// Underlying Signature object
+  const Signature& sig() const LIEF_LIFETIMEBOUND {
     return sig_;
   }
 
-  //! Print information about the attribute
+  /// Print information about the attribute
   std::string print() const override;
 
   void accept(Visitor& visitor) const override;
 
-  virtual ~MsSpcNestedSignature();
+  static bool classof(const Attribute* attr) {
+    return attr->type() == Attribute::TYPE::MS_SPC_NESTED_SIGN;
+  }
+
+  ~MsSpcNestedSignature() override = default;
 
   private:
   Signature sig_;
 };
 
 }
-}
+
 
 #endif

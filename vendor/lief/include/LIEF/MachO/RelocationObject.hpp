@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_MACHO_RELOCATION_OBJECT_COMMAND_H_
-#define LIEF_MACHO_RELOCATION_OBJECT_COMMAND_H_
-#include <iostream>
+#ifndef LIEF_MACHO_RELOCATION_OBJECT_COMMAND_H
+#define LIEF_MACHO_RELOCATION_OBJECT_COMMAND_H
+#include <memory>
+#include <ostream>
 
 #include "LIEF/visibility.h"
-#include "LIEF/types.hpp"
 
 #include "LIEF/MachO/Relocation.hpp"
 
-namespace LIEF {
-namespace MachO {
+
+namespace LIEF::MachO {
 
 class BinaryParser;
 
@@ -32,68 +32,81 @@ struct relocation_info;
 struct scattered_relocation_info;
 }
 
-//! Class that represents a relocation presents in the MachO object
-//! file (``.o``). Usually, this kind of relocation is found in the MachO::Section
-//!
-//! @see RelocationDyld
+/// Class that represents a relocation present in the MachO object
+/// file (``.o``). Usually, this kind of relocation is found in the MachO::Section
+///
+/// @see RelocationDyld
 class LIEF_API RelocationObject : public Relocation {
 
   friend class BinaryParser;
 
   public:
   using Relocation::Relocation;
-  RelocationObject();
+  RelocationObject() = default;
   RelocationObject(const details::relocation_info& relocinfo);
   RelocationObject(const details::scattered_relocation_info& scattered_relocinfo);
 
-  RelocationObject& operator=(RelocationObject other);
-  RelocationObject(const RelocationObject& other);
+  RelocationObject& operator=(const RelocationObject& other) = default;
+  RelocationObject(const RelocationObject& other) = default;
 
-  void swap(RelocationObject& other);
+  void swap(RelocationObject& other) noexcept;
 
-  virtual ~RelocationObject();
+  ~RelocationObject() override = default;
 
-  RelocationObject* clone() const override;
+  std::unique_ptr<Relocation> clone() const override {
+    return std::make_unique<RelocationObject>(*this);
+  }
 
-  //! Whether the relocation is PC relative
-  bool is_pc_relative() const override;
+  /// Whether the relocation is PC relative
+  bool is_pc_relative() const override {
+    return is_pcrel_;
+  }
 
-  //! Size of the relocation
+  /// Size of the relocation
   size_t size() const override;
 
-  //! Address where the relocation is applied
-  //! This address is relative to the start of the section where the relocation takes place
+  /// Address where the relocation is applied
+  /// This address is relative to the start of the section where the relocation
+  /// takes place
   uint64_t address() const override;
 
-  //! ``true`` if the relocation is a scattered one
-  bool is_scattered() const;
+  /// ``true`` if the relocation is a scattered one
+  bool is_scattered() const {
+    return is_scattered_;
+  }
 
-  //! For **scattered** relocations:
-  //! The address of the relocatable expression for the item in the file that needs
-  //! to be updated if the address is changed.
-  //!
-  //! For relocatable expressions with the difference of two section addresses,
-  //! the address from which to subtract (in mathematical terms, the minuend)
-  //! is contained in the first relocation entry and the address to subtract (the subtrahend)
-  //! is contained in the second relocation entry.
+  /// For **scattered** relocations:
+  /// The address of the relocatable expression for the item in the file that needs
+  /// to be updated if the address is changed.
+  ///
+  /// For relocatable expressions with the difference of two section addresses,
+  /// the address from which to subtract (in mathematical terms, the minuend)
+  /// is contained in the first relocation entry and the address to subtract (the
+  /// subtrahend) is contained in the second relocation entry.
   int32_t value() const;
 
-  //! Origin of the relocation. For this object it should be RELOCATION_ORIGINS::ORIGIN_RELOC_TABLE)
-  RELOCATION_ORIGINS origin() const override;
+  /// Origin of the relocation. For this object it should be
+  /// Relocation::ORIGIN::RELOC_TABLE)
+  ORIGIN origin() const override {
+    return ORIGIN::RELOC_TABLE;
+  }
 
-  void pc_relative(bool val) override;
+  void pc_relative(bool val) override {
+    is_pcrel_ = val;
+  }
   void size(size_t size) override;
 
   void value(int32_t value);
 
-  bool operator==(const RelocationObject& rhs) const;
-  bool operator!=(const RelocationObject& rhs) const;
-
   void accept(Visitor& visitor) const override;
 
-  std::ostream& print(std::ostream& os) const override;
+  std::ostream& print(std::ostream& os) const override {
+    return Relocation::print(os);
+  }
 
-  static bool classof(const Relocation& r);
+  static bool classof(const Relocation& r) {
+    return r.origin() == Relocation::ORIGIN::RELOC_TABLE;
+  }
 
   private:
   bool is_pcrel_ = false;
@@ -102,5 +115,5 @@ class LIEF_API RelocationObject : public Relocation {
 };
 
 }
-}
+
 #endif

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_DEX_CODE_INFO_H_
-#define LIEF_DEX_CODE_INFO_H_
-#include "LIEF/visibility.h"
+#ifndef LIEF_DEX_CODE_INFO_H
+#define LIEF_DEX_CODE_INFO_H
+
+#include <cstdint>
+#include <ostream>
+
 #include "LIEF/Object.hpp"
+#include "LIEF/visibility.h"
 
 
-namespace LIEF {
-namespace DEX {
+namespace LIEF::DEX {
 namespace details {
 struct code_item;
 }
+
 class Parser;
-class Method;
 
 class LIEF_API CodeInfo : public Object {
   friend class Parser;
@@ -39,20 +42,19 @@ class LIEF_API CodeInfo : public Object {
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const CodeInfo& rhs) const;
-  bool operator!=(const CodeInfo& rhs) const;
+  uint16_t nb_registers() const;
 
-  virtual ~CodeInfo();
+  ~CodeInfo() override;
 
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const CodeInfo& cinfo);
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const CodeInfo& cinfo);
 
   private:
   uint16_t nb_registers_ = 0;
   uint16_t args_input_sizes_ = 0;
   uint16_t output_sizes_ = 0;
-
 };
 
 } // Namespace DEX
-} // Namespace LIEF
+// Namespace LIEF
 #endif

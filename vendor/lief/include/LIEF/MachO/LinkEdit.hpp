@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_MACHO_LINK_EDIT_H_
-#define LIEF_MACHO_LINK_EDIT_H_
-
-#include <string>
-#include <vector>
-#include <iostream>
+#ifndef LIEF_MACHO_LINK_EDIT_H
+#define LIEF_MACHO_LINK_EDIT_H
 #include <memory>
+#include <vector>
 
-#include "LIEF/types.hpp"
 #include "LIEF/visibility.h"
 
 #include "LIEF/MachO/SegmentCommand.hpp"
 
 
-namespace LIEF {
-namespace MachO {
+namespace LIEF::MachO {
 
+class AtomInfo;
 class Binary;
 class BinaryParser;
 class Builder;
@@ -39,9 +35,14 @@ class DyldChainedFixups;
 class DyldExportsTrie;
 class DyldInfo;
 class FunctionStarts;
+class FunctionVariants;
+class FunctionVariantFixups;
+class LazyLoadDylibInfo;
 class LinkerOptHint;
 class SymbolCommand;
 class TwoLevelHints;
+class SegmentSplitInfo;
+class CodeSignature;
 
 class LIEF_API LinkEdit : public SegmentCommand {
 
@@ -53,39 +54,47 @@ class LIEF_API LinkEdit : public SegmentCommand {
   using SegmentCommand::SegmentCommand;
 
   LinkEdit& operator=(LinkEdit other);
-  LinkEdit(const LinkEdit& copy);
+  LinkEdit(const LinkEdit& copy) = default;
 
-  void swap(LinkEdit& other);
+  void swap(LinkEdit& other) noexcept;
 
-  SegmentCommand* clone() const override;
+  std::unique_ptr<LoadCommand> clone() const override {
+    return std::make_unique<LinkEdit>(*this);
+  }
 
-  ~LinkEdit() override;
+  ~LinkEdit() override = default;
 
-  bool operator==(const SegmentCommand& rhs) const;
-  bool operator!=(const SegmentCommand& rhs) const;
+  static bool classof(const LoadCommand* cmd) {
+    return SegmentCommand::classof(cmd);
+  }
 
-  static bool classof(const LoadCommand* cmd);
-  static bool segmentof(const SegmentCommand& segment);
+  static bool segmentof(const SegmentCommand& segment) {
+    return segment.name() == "__LINKEDIT";
+  }
 
   private:
+  LIEF_LOCAL void update_data(const update_fnc_t& f) override;
+  LIEF_LOCAL void update_data(const update_fnc_ws_t& f, size_t where,
+                              size_t size) override;
 
-  LIEF_LOCAL void update_data(update_fnc_t f) override;
-  LIEF_LOCAL void update_data(update_fnc_ws_t f, size_t where, size_t size) override;
-
-  //x-ref to keep the spans in a consistent state
-  DyldInfo* dyld_                    = nullptr;
+  // x-ref to keep the spans in a consistent state
+  DyldInfo* dyld_ = nullptr;
   DyldChainedFixups* chained_fixups_ = nullptr;
-  DyldExportsTrie* exports_trie_     = nullptr;
-  SegmentSplitInfo* seg_split_       = nullptr;
-  FunctionStarts* fstarts_           = nullptr;
-  DataInCode* data_code_             = nullptr;
-  CodeSignatureDir* code_sig_dir_    = nullptr;
-  LinkerOptHint* linker_opt_         = nullptr;
-  SymbolCommand* symtab_             = nullptr;
-  TwoLevelHints* two_lvl_hint_       = nullptr;
-  CodeSignature* code_sig_           = nullptr;
+  DyldExportsTrie* exports_trie_ = nullptr;
+  SegmentSplitInfo* seg_split_ = nullptr;
+  FunctionStarts* fstarts_ = nullptr;
+  DataInCode* data_code_ = nullptr;
+  CodeSignatureDir* code_sig_dir_ = nullptr;
+  LinkerOptHint* linker_opt_ = nullptr;
+  SymbolCommand* symtab_ = nullptr;
+  TwoLevelHints* two_lvl_hint_ = nullptr;
+  CodeSignature* code_sig_ = nullptr;
+  AtomInfo* atom_info_ = nullptr;
+  FunctionVariants* func_variants_ = nullptr;
+  FunctionVariantFixups* func_variant_fixups_ = nullptr;
+  std::vector<LazyLoadDylibInfo*> lazy_load_dylibs_;
 };
 
 }
-}
+
 #endif

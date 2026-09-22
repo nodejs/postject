@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,264 +13,189 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <map>
-#include <set>
-#include <iomanip>
+
 #include <algorithm>
-#include <numeric>
 #include <iterator>
-#include <string>
 
-#include "LIEF/exception.hpp"
-
-#include "LIEF/MachO/hash.hpp"
+#include "fmt_formatter.hpp"
+#include "frozen.hpp"
+#include "spdlog/fmt/fmt.h"
 
 #include "LIEF/MachO/Header.hpp"
-#include "LIEF/MachO/EnumToString.hpp"
+#include "LIEF/Visitor.hpp"
 #include "MachO/Structures.hpp"
 
-namespace LIEF {
-namespace MachO {
+FMT_FORMATTER(LIEF::MachO::Header::FLAGS, LIEF::MachO::to_string);
 
-static const std::map<CPU_TYPES, std::pair<ARCHITECTURES, std::set<MODES>>> arch_macho_to_lief {
-  {CPU_TYPES::CPU_TYPE_ANY,       {ARCH_NONE,  {}}},
-  {CPU_TYPES::CPU_TYPE_X86_64,    {ARCH_X86,   {MODE_64}}},
-  {CPU_TYPES::CPU_TYPE_ARM,       {ARCH_ARM,   {MODE_32}}},
-  {CPU_TYPES::CPU_TYPE_ARM64,     {ARCH_ARM64, {MODE_64}}},
-  {CPU_TYPES::CPU_TYPE_X86,       {ARCH_X86,   {MODE_32}}},
-  {CPU_TYPES::CPU_TYPE_SPARC,     {ARCH_SPARC, {}}},
-  {CPU_TYPES::CPU_TYPE_POWERPC,   {ARCH_PPC,   {MODE_32}}},
-  {CPU_TYPES::CPU_TYPE_POWERPC64, {ARCH_PPC,   {MODE_64}}},
+
+namespace LIEF::MachO {
+
+static constexpr auto HEADER_FLAGS = {
+    Header::FLAGS::NOUNDEFS,
+    Header::FLAGS::INCRLINK,
+    Header::FLAGS::DYLDLINK,
+    Header::FLAGS::BINDATLOAD,
+    Header::FLAGS::PREBOUND,
+    Header::FLAGS::SPLIT_SEGS,
+    Header::FLAGS::LAZY_INIT,
+    Header::FLAGS::TWOLEVEL,
+    Header::FLAGS::FORCE_FLAT,
+    Header::FLAGS::NOMULTIDEFS,
+    Header::FLAGS::NOFIXPREBINDING,
+    Header::FLAGS::PREBINDABLE,
+    Header::FLAGS::ALLMODSBOUND,
+    Header::FLAGS::SUBSECTIONS_VIA_SYMBOLS,
+    Header::FLAGS::CANONICAL,
+    Header::FLAGS::WEAK_DEFINES,
+    Header::FLAGS::BINDS_TO_WEAK,
+    Header::FLAGS::ALLOW_STACK_EXECUTION,
+    Header::FLAGS::ROOT_SAFE,
+    Header::FLAGS::SETUID_SAFE,
+    Header::FLAGS::NO_REEXPORTED_DYLIBS,
+    Header::FLAGS::PIE,
+    Header::FLAGS::DEAD_STRIPPABLE_DYLIB,
+    Header::FLAGS::HAS_TLV_DESCRIPTORS,
+    Header::FLAGS::NO_HEAP_EXECUTION,
+    Header::FLAGS::APP_EXTENSION_SAFE,
+    Header::FLAGS::NLIST_OUTOFSYNC_WITH_DYLDINFO,
+    Header::FLAGS::SIM_SUPPORT,
+    Header::FLAGS::IMPLICIT_PAGEZERO,
+    Header::FLAGS::DYLIB_IN_CACHE,
 };
 
-static const std::map<FILE_TYPES, OBJECT_TYPES> obj_macho_to_lief {
-  {FILE_TYPES::MH_EXECUTE, OBJECT_TYPES::TYPE_EXECUTABLE},
-  {FILE_TYPES::MH_DYLIB,   OBJECT_TYPES::TYPE_LIBRARY},
-  {FILE_TYPES::MH_OBJECT,  OBJECT_TYPES::TYPE_OBJECT},
-};
-
-static const std::map<CPU_TYPES, ENDIANNESS> endi_macho_to_lief {
-  {CPU_TYPES::CPU_TYPE_X86,       ENDIANNESS::ENDIAN_LITTLE},
-  {CPU_TYPES::CPU_TYPE_I386,      ENDIANNESS::ENDIAN_LITTLE},
-  {CPU_TYPES::CPU_TYPE_X86_64,    ENDIANNESS::ENDIAN_LITTLE},
-  {CPU_TYPES::CPU_TYPE_ARM,       ENDIANNESS::ENDIAN_LITTLE},
-  {CPU_TYPES::CPU_TYPE_ARM64,     ENDIANNESS::ENDIAN_LITTLE},
-  {CPU_TYPES::CPU_TYPE_SPARC,     ENDIANNESS::ENDIAN_BIG},
-  {CPU_TYPES::CPU_TYPE_POWERPC,   ENDIANNESS::ENDIAN_BIG},
-  {CPU_TYPES::CPU_TYPE_POWERPC64, ENDIANNESS::ENDIAN_BIG},
-};
-
-
-Header::Header() = default;
-Header& Header::operator=(const Header&) = default;
-Header::Header(const Header&) = default;
-Header::~Header() = default;
-
-Header::Header(const details::mach_header_64& header) :
+template<class T>
+Header::Header(const T& header) :
   magic_{static_cast<MACHO_TYPES>(header.magic)},
-  cputype_(static_cast<CPU_TYPES>(header.cputype)),
+  cputype_(static_cast<CPU_TYPE>(header.cputype)),
   cpusubtype_{header.cpusubtype},
-  filetype_{static_cast<FILE_TYPES>(header.filetype)},
+  filetype_{static_cast<FILE_TYPE>(header.filetype)},
   ncmds_{header.ncmds},
   sizeofcmds_{header.sizeofcmds},
-  flags_{header.flags},
-  reserved_{header.reserved}
-{}
-
-Header::Header(const details::mach_header& header) :
-  magic_{static_cast<MACHO_TYPES>(header.magic)},
-  cputype_(static_cast<CPU_TYPES>(header.cputype)),
-  cpusubtype_{header.cpusubtype},
-  filetype_{static_cast<FILE_TYPES>(header.filetype)},
-  ncmds_{header.ncmds},
-  sizeofcmds_{header.sizeofcmds},
-  flags_{header.flags},
-  reserved_{0}
-{}
-
-
-MACHO_TYPES Header::magic() const {
-  return magic_;
-}
-CPU_TYPES Header::cpu_type() const {
-  return cputype_;
-}
-
-uint32_t Header::cpu_subtype() const {
-  return cpusubtype_;
-}
-
-FILE_TYPES Header::file_type() const {
-  return filetype_;
-}
-
-uint32_t Header::nb_cmds() const {
-  return ncmds_;
-}
-
-uint32_t Header::sizeof_cmds() const {
-  return sizeofcmds_;
-}
-
-uint32_t Header::flags() const {
-  return flags_;
-}
-
-uint32_t Header::reserved() const {
-  return reserved_;
-}
-
-std::pair<ARCHITECTURES, std::set<MODES>> Header::abstract_architecture() const {
-  auto it = arch_macho_to_lief.find(cpu_type());
-  if (it == std::end(arch_macho_to_lief)) {
-    return {ARCHITECTURES::ARCH_NONE, {}};
+  flags_{header.flags} {
+  if constexpr (std::is_same_v<T, details::mach_header_64>) {
+    reserved_ = header.reserved;
+  } else {
+    reserved_ = 0;
   }
-  return it->second;
 }
 
-
-OBJECT_TYPES Header::abstract_object_type() const {
-  auto it = obj_macho_to_lief.find(file_type());
-  if (it == std::end(obj_macho_to_lief)) {
-    return OBJECT_TYPES::TYPE_NONE;
-  }
-  return it->second;
-}
-
-ENDIANNESS Header::abstract_endianness() const {
-  ENDIANNESS e = endi_macho_to_lief.at(cpu_type());
-  auto not_endianness = [] (ENDIANNESS endian) {
-    return endian == ENDIAN_LITTLE ? ENDIAN_BIG : ENDIAN_LITTLE;
-  };
-  if (magic() == MACHO_TYPES::MH_CIGAM ||
-      magic() == MACHO_TYPES::MH_CIGAM_64 ||
-      magic() == MACHO_TYPES::FAT_CIGAM)
-  {
-    return not_endianness(e);
-  }
-  return e;
-}
+template Header::Header(const details::mach_header_64& header);
+template Header::Header(const details::mach_header& header);
 
 
-Header::flags_list_t Header::flags_list() const {
-  Header::flags_list_t flags;
+std::vector<Header::FLAGS> Header::flags_list() const {
+  std::vector<Header::FLAGS> flags;
 
-  std::copy_if(std::begin(header_flags_array), std::end(header_flags_array),
-               std::inserter(flags, std::begin(flags)),
-               [this] (HEADER_FLAGS f) { return has(f); });
+  std::copy_if(HEADER_FLAGS.begin(), HEADER_FLAGS.end(),
+               std::inserter(flags, flags.begin()),
+               [this](FLAGS f) { return has(f); });
 
   return flags;
 }
 
 
-bool Header::has(HEADER_FLAGS flag) const {
+bool Header::has(FLAGS flag) const {
   return (flags() & static_cast<uint32_t>(flag)) > 0;
 }
 
-
-void Header::add(HEADER_FLAGS flag) {
+void Header::add(FLAGS flag) {
   flags(flags() | static_cast<uint32_t>(flag));
 }
 
-void Header::remove(HEADER_FLAGS flag) {
+void Header::remove(FLAGS flag) {
   flags(flags() & ~static_cast<uint32_t>(flag));
 }
-
-
-void Header::magic(MACHO_TYPES magic) {
-  magic_ = magic;
-}
-void Header::cpu_type(CPU_TYPES cputype) {
-  cputype_ = cputype;
-}
-
-void Header::cpu_subtype(uint32_t cpusubtype) {
-  cpusubtype_ = cpusubtype;
-}
-
-void Header::file_type(FILE_TYPES filetype) {
-  filetype_ = filetype;
-}
-
-void Header::nb_cmds(uint32_t ncmds) {
-  ncmds_ = ncmds;
-}
-
-void Header::sizeof_cmds(uint32_t sizeofcmds) {
-  sizeofcmds_ = sizeofcmds;
-}
-
-void Header::flags(uint32_t flags) {
-  flags_ = flags;
-}
-
-void Header::reserved(uint32_t reserved) {
-  reserved_ = reserved;
-}
-
 
 void Header::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool Header::operator==(const Header& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool Header::operator!=(const Header& rhs) const {
-  return !(*this == rhs);
-}
-
-
-Header& Header::operator+=(HEADER_FLAGS c) {
-  add(c);
-  return *this;
-}
-
-Header& Header::operator-=(HEADER_FLAGS c) {
-  remove(c);
-  return *this;
-}
-
-
 std::ostream& operator<<(std::ostream& os, const Header& hdr) {
-
-  const auto& flags = hdr.flags_list();
-
- std::string flags_str = std::accumulate(
-     std::begin(flags), std::end(flags), std::string{},
-     [] (const std::string& a, HEADER_FLAGS b) {
-         return a.empty() ? to_string(b) : a + " " + to_string(b);
-     });
-
-  os << std::hex;
-  os << std::left
-     << std::setw(10) << "Magic"
-     << std::setw(10) << "CPU Type"
-     << std::setw(15) << "CPU subtype"
-     << std::setw(15) << "File type"
-     << std::setw(10) << "NCMDS"
-     << std::setw(15) << "Sizeof cmds"
-     << std::setw(10) << "Reserved"
-     << std::setw(10) << "Flags" << std::endl
-
-     << std::setw(10) << to_string(hdr.magic())
-     << std::setw(10) << to_string(hdr.cpu_type())
-     << std::setw(15) << hdr.cpu_subtype()
-     << std::setw(15) << to_string(hdr.file_type())
-     << std::setw(10) << hdr.nb_cmds()
-     << std::setw(15) << hdr.sizeof_cmds()
-     << std::setw(10) << hdr.reserved()
-     << std::setw(10) << flags_str
-     << std::endl;
-
+  os << fmt::format("Magic: {:#010x}\n", uint32_t(hdr.magic()));
+  os << fmt::format("CPU: {}\n", to_string(hdr.cpu_type()));
+  os << fmt::format("CPU subtype: {:#010x}\n", hdr.cpu_subtype());
+  os << fmt::format("File type: {} ({:#x})\n", to_string(hdr.file_type()),
+                    (uint32_t)hdr.file_type());
+  os << fmt::format("Flags: {}\n", hdr.flags());
+  os << fmt::format("Reserved: {:#x}\n", hdr.reserved());
+  os << fmt::format("Nb cmds: {}\n", hdr.nb_cmds());
+  os << fmt::format("Sizeof cmds: {}", hdr.sizeof_cmds());
   return os;
 }
 
+const char* to_string(Header::FLAGS e) {
+#define ENTRY(X) std::pair(Header::FLAGS::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(NOUNDEFS),
+      ENTRY(INCRLINK),
+      ENTRY(DYLDLINK),
+      ENTRY(BINDATLOAD),
+      ENTRY(PREBOUND),
+      ENTRY(SPLIT_SEGS),
+      ENTRY(LAZY_INIT),
+      ENTRY(TWOLEVEL),
+      ENTRY(FORCE_FLAT),
+      ENTRY(NOMULTIDEFS),
+      ENTRY(NOFIXPREBINDING),
+      ENTRY(PREBINDABLE),
+      ENTRY(ALLMODSBOUND),
+      ENTRY(SUBSECTIONS_VIA_SYMBOLS),
+      ENTRY(CANONICAL),
+      ENTRY(WEAK_DEFINES),
+      ENTRY(BINDS_TO_WEAK),
+      ENTRY(ALLOW_STACK_EXECUTION),
+      ENTRY(ROOT_SAFE),
+      ENTRY(SETUID_SAFE),
+      ENTRY(NO_REEXPORTED_DYLIBS),
+      ENTRY(PIE),
+      ENTRY(DEAD_STRIPPABLE_DYLIB),
+      ENTRY(HAS_TLV_DESCRIPTORS),
+      ENTRY(NO_HEAP_EXECUTION),
+      ENTRY(APP_EXTENSION_SAFE),
+      ENTRY(NLIST_OUTOFSYNC_WITH_DYLDINFO),
+      ENTRY(SIM_SUPPORT),
+      ENTRY(IMPLICIT_PAGEZERO),
+      ENTRY(DYLIB_IN_CACHE),
+  };
+#undef ENTRY
+
+  if (auto it = enums2str.find(e); it != enums2str.end()) {
+    return it->second;
+  }
+  return "UNKNOWN";
 }
+
+const char* to_string(Header::FILE_TYPE e) {
+#define ENTRY(X) std::pair(Header::FILE_TYPE::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(UNKNOWN), ENTRY(OBJECT),      ENTRY(EXECUTE),   ENTRY(FVMLIB),
+      ENTRY(CORE),    ENTRY(PRELOAD),     ENTRY(DYLIB),     ENTRY(DYLINKER),
+      ENTRY(BUNDLE),  ENTRY(DYLIB_STUB),  ENTRY(DSYM),      ENTRY(KEXT_BUNDLE),
+      ENTRY(FILESET), ENTRY(GPU_EXECUTE), ENTRY(GPU_DYLIB),
+  };
+#undef ENTRY
+
+  if (auto it = enums2str.find(e); it != enums2str.end()) {
+    return it->second;
+  }
+  return "UNKNOWN";
+}
+
+const char* to_string(Header::CPU_TYPE e) {
+#define ENTRY(X) std::pair(Header::CPU_TYPE::X, #X)
+  STRING_MAP enums2str{
+      ENTRY(ANY),       ENTRY(X86),       ENTRY(X86_64),    ENTRY(MIPS),
+      ENTRY(MC98000),   ENTRY(HPPA),      ENTRY(ARM),       ENTRY(ARM64),
+      ENTRY(MC88000),   ENTRY(SPARC),     ENTRY(I860),      ENTRY(ALPHA),
+      ENTRY(POWERPC),   ENTRY(POWERPC64), ENTRY(APPLE_GPU), ENTRY(AMD_GPU),
+      ENTRY(INTEL_GPU), ENTRY(AIR64),
+  };
+#undef ENTRY
+
+  if (auto it = enums2str.find(e); it != enums2str.end()) {
+    return it->second;
+  }
+  return "UNKNOWN";
+}
+
 }

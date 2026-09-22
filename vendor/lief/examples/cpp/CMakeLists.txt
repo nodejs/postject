@@ -1,102 +1,132 @@
-set(LIEF_ELF_CPP_EXAMPLES
-  elf_reader.cpp
-  elf_add_section.cpp
-  elf_builder.cpp
-  elf_section_rename.cpp
-  elf_strip.cpp
-  elf_symbols.cpp
-)
-
-set(LIEF_PE_CPP_EXAMPLES
-  pe_builder.cpp
-  pe_reader.cpp
-  pe_authenticode_check.cpp
-)
-
-set(LIEF_MACHO_CPP_EXAMPLES
-  macho_reader.cpp
-  macho_builder.cpp
-)
-
-set(LIEF_OAT_CPP_EXAMPLES
-  oat_reader.cpp
-)
-
-set(LIEF_VDEX_CPP_EXAMPLES
-  vdex_reader.cpp
-)
-
-set(LIEF_ART_CPP_EXAMPLES
-  art_reader.cpp
-)
-
-set(LIEF_DEX_CPP_EXAMPLES
-  dex_reader.cpp
-)
-
 set(LIEF_CPP_EXAMPLES
-  abstract_reader.cpp
   logging.cpp
+  disassembler.cpp
+  abstract_reader.cpp
   benchmark.cpp
 )
 
+if (LIEF_ELF AND LIEF_PE AND LIEF_MACHO)
+  list(APPEND LIEF_CPP_EXAMPLES
+    dwarf_inspect.cpp
+    pdb_inspect.cpp
+    objc_inspect.cpp
+    dyld_shared_cache_reader.cpp
+    dwarf_editor.cpp
+  )
+endif()
+
 if (LIEF_ELF)
-  set(LIEF_CPP_EXAMPLES "${LIEF_CPP_EXAMPLES}" "${LIEF_ELF_CPP_EXAMPLES}")
+  list(APPEND LIEF_CPP_EXAMPLES
+    elf_reader.cpp
+    elf_add_section.cpp
+    elf_builder.cpp
+    elf_section_rename.cpp
+    elf_strip.cpp
+    elf_symbols.cpp
+  )
 endif()
 
 if (LIEF_PE)
-  set(LIEF_CPP_EXAMPLES "${LIEF_CPP_EXAMPLES}" "${LIEF_PE_CPP_EXAMPLES}")
+  list(APPEND LIEF_CPP_EXAMPLES
+    pe_builder.cpp
+    pe_reader.cpp
+    pe_authenticode_check.cpp
+  )
 endif()
 
 if (LIEF_MACHO)
-  set(LIEF_CPP_EXAMPLES "${LIEF_CPP_EXAMPLES}" "${LIEF_MACHO_CPP_EXAMPLES}")
+  list(APPEND LIEF_CPP_EXAMPLES
+    macho_reader.cpp
+    macho_builder.cpp
+  )
 endif()
 
 if (LIEF_OAT)
-  set(LIEF_CPP_EXAMPLES ${LIEF_CPP_EXAMPLES} ${LIEF_OAT_CPP_EXAMPLES})
+  list(APPEND LIEF_CPP_EXAMPLES
+    oat_reader.cpp
+  )
 endif()
 
 if (LIEF_VDEX)
-  set(LIEF_CPP_EXAMPLES ${LIEF_CPP_EXAMPLES} ${LIEF_VDEX_CPP_EXAMPLES})
+  list(APPEND LIEF_CPP_EXAMPLES
+    vdex_reader.cpp
+  )
 endif()
 
 if (LIEF_ART)
-  set(LIEF_CPP_EXAMPLES ${LIEF_CPP_EXAMPLES} ${LIEF_ART_CPP_EXAMPLES})
+  list(APPEND LIEF_CPP_EXAMPLES
+    art_reader.cpp
+  )
 endif()
 
 if (LIEF_DEX)
-  set(LIEF_CPP_EXAMPLES ${LIEF_CPP_EXAMPLES} ${LIEF_DEX_CPP_EXAMPLES})
+  list(APPEND LIEF_CPP_EXAMPLES
+    dex_reader.cpp
+  )
+endif()
+
+if (LIEF_RUNTIME)
+  if (LIEF_RUNTIME_PLATFORM_LINUX)
+    list(APPEND LIEF_CPP_EXAMPLES
+      runtime_linux.cpp
+    )
+  endif()
+
+  if (LIEF_RUNTIME_PLATFORM_WINDOWS)
+    list(APPEND LIEF_CPP_EXAMPLES
+      runtime_windows.cpp
+    )
+  endif()
+
+  if (LIEF_RUNTIME_PLATFORM_OSX)
+    list(APPEND LIEF_CPP_EXAMPLES
+      runtime_osx.cpp
+    )
+  endif()
+
+  if (LIEF_RUNTIME_PLATFORM_ANDROID)
+    list(APPEND LIEF_CPP_EXAMPLES
+      runtime_android.cpp
+    )
+  endif()
+endif()
+
+if(APPLE)
+  list(APPEND LIEF_CPP_EXAMPLES
+    macho_from_memory.cpp
+  )
 endif()
 
 foreach(example ${LIEF_CPP_EXAMPLES})
   string(REGEX REPLACE ".cpp\$" "" output_name "${example}")
-  add_executable("${output_name}" "${example}")
+  add_executable(${output_name} ${example})
 
   # Don't use default include dir
-  set_property(TARGET "${output_name}" PROPERTY INCLUDE_DIRECTORIES "")
-
-  if (MSVC)
-    set_property(TARGET "${output_name}" PROPERTY LINK_FLAGS /NODEFAULTLIB:MSVCRT)
-    target_compile_options("${output_name}" PUBLIC ${LIEF_CRT})
-  endif()
+  set_property(TARGET "${output_name}"
+    PROPERTY INCLUDE_DIRECTORIES ""
+  )
 
   set_target_properties(
     ${output_name}
     PROPERTIES POSITION_INDEPENDENT_CODE ON
-               CXX_STANDARD              11
-               CXX_STANDARD_REQUIRED     ON)
+               CXX_STANDARD_REQUIRED     ON
+               INCLUDE_DIRECTORIES       "")
 
-  if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    if (UNIX)
-      if (LIEF_FORCE32)
-        target_compile_options("${output_name}" PRIVATE -m32)
-
-        set_property(TARGET "${output_name}" PROPERTY LINK_FLAGS -m32)
-      endif()
-    endif()
+  if (${output_name} MATCHES "^runtime_")
+    set_target_properties(${output_name} PROPERTIES CXX_STANDARD 23)
+  else()
+    set_target_properties(${output_name} PROPERTIES CXX_STANDARD 17)
   endif()
 
-  target_link_libraries("${output_name}" PUBLIC LIB_LIEF)
+  target_link_libraries(${output_name} PUBLIC LIB_LIEF)
+
+  if (LIEF_ASAN)
+    target_link_libraries(${output_name} INTERFACE libclang_rt.asan.a)
+  endif()
+
+  if (LIEF_TSAN)
+    target_link_libraries(${output_name} INTERFACE libclang_rt.tsan.a)
+  endif()
 
   if (CMAKE_BUILD_TYPE MATCHES "Release")
     if (UNIX AND NOT APPLE)
@@ -117,6 +147,7 @@ foreach(example ${LIEF_CPP_EXAMPLES})
       )
     endif()
   endif()
+
   if(LIEF_INSTALL_COMPILED_EXAMPLES)
     install(
       TARGETS ${output_name}
@@ -126,12 +157,11 @@ foreach(example ${LIEF_CPP_EXAMPLES})
   endif()
 endforeach()
 
-
-install(
-  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
-  DESTINATION share/LIEF/examples/cpp
-  COMPONENT examples
-  FILES_MATCHING REGEX "(.*).(hpp|h|cpp)$"
-)
-
-
+if (LIEF_INSTALL)
+  install(
+    DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/LIEF/examples/cpp
+    COMPONENT examples
+    FILES_MATCHING REGEX "(.*).(hpp|h|cpp)$"
+  )
+endif()

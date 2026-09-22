@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,19 @@
  */
 #ifndef LIEF_MACHO_TWO_LEVEL_HINTS_H
 #define LIEF_MACHO_TWO_LEVEL_HINTS_H
+#include <memory>
+#include <ostream>
 #include <vector>
-#include <iostream>
 
-#include "LIEF/visibility.h"
-#include "LIEF/types.hpp"
-#include "LIEF/span.hpp"
+#include "LIEF/compiler_attributes.hpp"
 #include "LIEF/iterators.hpp"
+#include "LIEF/span.hpp"
+#include "LIEF/visibility.h"
 
 #include "LIEF/MachO/LoadCommand.hpp"
 
-namespace LIEF {
-namespace MachO {
+
+namespace LIEF::MachO {
 
 class BinaryParser;
 class Builder;
@@ -36,52 +37,65 @@ namespace details {
 struct twolevel_hints_command;
 }
 
-//! Class which represents the `LC_TWOLEVEL_HINTS` command
+/// Class which represents the `LC_TWOLEVEL_HINTS` command
 class LIEF_API TwoLevelHints : public LoadCommand {
   friend class BinaryParser;
   friend class LinkEdit;
   friend class Builder;
 
   public:
-  using hints_list_t     = std::vector<uint32_t>;
-  using it_hints_t       = ref_iterator<hints_list_t&>;
+  using hints_list_t = std::vector<uint32_t>;
+  using it_hints_t = ref_iterator<hints_list_t&>;
   using it_const_hints_t = const_ref_iterator<const hints_list_t&>;
 
-  TwoLevelHints();
+  TwoLevelHints() = default;
   TwoLevelHints(const details::twolevel_hints_command& cmd);
 
-  TwoLevelHints& operator=(const TwoLevelHints& copy);
-  TwoLevelHints(const TwoLevelHints& copy);
+  TwoLevelHints& operator=(const TwoLevelHints& copy) = default;
+  TwoLevelHints(const TwoLevelHints& copy) = default;
 
-  TwoLevelHints* clone() const override;
+  std::unique_ptr<LoadCommand> clone() const override {
+    return std::make_unique<TwoLevelHints>(*this);
+  }
 
-  //! Original payload of the command
-  inline span<const uint8_t> content() const { return content_; }
-  inline span<uint8_t> content() { return content_; }
+  /// Original payload of the command
+  span<const uint8_t> content() const LIEF_LIFETIMEBOUND {
+    return content_;
+  }
+  span<uint8_t> content() LIEF_LIFETIMEBOUND {
+    return content_;
+  }
 
-  //! Iterator over the hints (`uint32_t` integers)
-  it_hints_t hints() { return hints_; }
-  it_const_hints_t hints() const { return hints_; }
+  /// Iterator over the hints (`uint32_t` integers)
+  it_hints_t hints() {
+    return hints_;
+  }
+  it_const_hints_t hints() const {
+    return hints_;
+  }
 
-  //! Original offset of the command. It should point in the
-  //! `__LINKEDIT` segment
-  inline uint32_t offset() const { return offset_; }
-  inline void offset(uint32_t offset)  { offset_ = offset; }
+  /// Original offset of the command. It should point in the
+  /// `__LINKEDIT` segment
+  uint32_t offset() const {
+    return offset_;
+  }
+  void offset(uint32_t offset) {
+    offset_ = offset;
+  }
 
-  inline uint32_t original_nb_hints() const {
+  uint32_t original_nb_hints() const {
     return original_nb_hints_;
   }
 
-  ~TwoLevelHints() override;
-
-  bool operator==(const TwoLevelHints& rhs) const;
-  bool operator!=(const TwoLevelHints& rhs) const;
+  ~TwoLevelHints() override = default;
 
   void accept(Visitor& visitor) const override;
 
   std::ostream& print(std::ostream& os) const override;
 
-  static bool classof(const LoadCommand* cmd);
+  static bool classof(const LoadCommand* cmd) {
+    return cmd->command() == LoadCommand::TYPE::TWOLEVEL_HINTS;
+  }
 
   private:
   uint32_t offset_ = 0;
@@ -91,5 +105,5 @@ class LIEF_API TwoLevelHints : public LoadCommand {
 };
 
 }
-}
+
 #endif

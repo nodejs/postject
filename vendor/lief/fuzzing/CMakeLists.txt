@@ -8,12 +8,12 @@ set(LIEF_FUZZER_SRC
 
 foreach(fuzzer ${LIEF_FUZZER_SRC})
   string(REGEX REPLACE ".cpp\$" "" output "${fuzzer}")
-  add_executable("${output}"        "${fuzzer}")
+  add_executable("${output}" "${fuzzer}")
 
   set_target_properties(
     "${output}"
     PROPERTIES POSITION_INDEPENDENT_CODE ON
-               CXX_STANDARD              11
+               CXX_STANDARD              17
                CXX_STANDARD_REQUIRED     ON)
 
   set_property(TARGET "${output}"
@@ -22,7 +22,7 @@ foreach(fuzzer ${LIEF_FUZZER_SRC})
   # Don't use default include dir
   #set_property(TARGET "${output}" "${output}_shared" PROPERTY INCLUDE_DIRECTORIES "")
 
-  target_link_libraries("${output}" PUBLIC LIB_LIEF asan)
+  target_link_libraries("${output}" PUBLIC LIB_LIEF)
 endforeach()
 
 

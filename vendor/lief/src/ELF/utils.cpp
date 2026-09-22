@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,25 +14,22 @@
  * limitations under the License.
  */
 #include <algorithm>
-#include <fstream>
 #include <iterator>
-#include <stdexcept>
 #include <vector>
 
 #include "LIEF/BinaryStream/FileStream.hpp"
 #include "LIEF/BinaryStream/SpanStream.hpp"
-#include "logging.hpp"
 
-#include "LIEF/ELF/utils.hpp"
 #include "ELF/Structures.hpp"
+#include "LIEF/ELF/utils.hpp"
 
-namespace LIEF {
-namespace ELF {
 
-inline bool is_elf(BinaryStream& stream) {
+namespace LIEF::ELF {
+
+bool is_elf(BinaryStream& stream) {
   using magic_t = std::array<char, sizeof(details::ElfMagic)>;
-  stream.setpos(0);
-  if (auto res = stream.peek<magic_t>()) {
+  ScopedStream scoped(stream, 0);
+  if (auto res = scoped->peek<magic_t>()) {
     const auto magic = *res;
     return std::equal(std::begin(magic), std::end(magic),
                       std::begin(details::ElfMagic));
@@ -40,7 +37,7 @@ inline bool is_elf(BinaryStream& stream) {
   return false;
 }
 
-bool is_elf(const std::string& file) {
+bool is_elf(std::string_view file) {
   if (auto stream = FileStream::from_file(file)) {
     return is_elf(*stream);
   }
@@ -54,11 +51,12 @@ bool is_elf(const std::vector<uint8_t>& raw) {
   return false;
 }
 
-//! SYSV hash function
+/// SYSV hash function
 unsigned long hash32(const char* name) {
-  unsigned long h = 0, g;
+  unsigned long h = 0, g = 0;
   while (*name != 0) {
     h = (h << 4) + *name++;
+    // NOLINTNEXTLINE(bugprone-assignment-in-if-condition)
     if ((g = h & 0xf0000000) != 0u) {
       h ^= g >> 24;
     }
@@ -67,12 +65,13 @@ unsigned long hash32(const char* name) {
   return h;
 }
 
-//! SYSV hash function
-//! https://blogs.oracle.com/ali/entry/gnu_hash_elf_sections
+/// SYSV hash function
+/// https://blogs.oracle.com/ali/entry/gnu_hash_elf_sections
 unsigned long hash64(const char* name) {
-  unsigned long h = 0, g;
+  unsigned long h = 0, g = 0;
   while (*name != 0) {
     h = (h << 4) + *name++;
+    // NOLINTNEXTLINE(bugprone-assignment-in-if-condition)
     if ((g = h & 0xf0000000) != 0u) {
       h ^= g >> 24;
     }
@@ -91,13 +90,4 @@ uint32_t dl_new_hash(const char* name) {
   return h & 0xffffffff;
 }
 
-
-
-} // namespace ELF
-} // namespace LIEF
-
-
-
-
-
-
+}

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_VDEX_HEADER_H_
-#define LIEF_VDEX_HEADER_H_
+#ifndef LIEF_VDEX_HEADER_H
+#define LIEF_VDEX_HEADER_H
+#include <array>
+#include <ostream>
 
+#include "LIEF/Object.hpp"
 #include "LIEF/VDEX/type_traits.hpp"
 #include "LIEF/visibility.h"
-#include "LIEF/Object.hpp"
 
-namespace LIEF {
-namespace VDEX {
+
+namespace LIEF::VDEX {
 class Parser;
 
 class LIEF_API Header : public Object {
@@ -38,32 +40,30 @@ class LIEF_API Header : public Object {
   Header(const Header&);
   Header& operator=(const Header&);
 
-  //! Magic value used to identify VDEX
+  /// Magic value used to identify VDEX
   magic_t magic() const;
 
-  //! VDEX version number
+  /// VDEX version number
   vdex_version_t version() const;
 
-  //! Number of LIEF::DEX::File files registered
+  /// Number of LIEF::DEX::File files registered
   uint32_t nb_dex_files() const;
 
-  //! Size of **all** LIEF::DEX::File
+  /// Size of **all** LIEF::DEX::File
   uint32_t dex_size() const;
 
-  //! Size of verifier deps section
+  /// Size of verifier deps section
   uint32_t verifier_deps_size() const;
 
-  //! Size of quickening info section
+  /// Size of quickening info section
   uint32_t quickening_info_size() const;
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const Header& rhs) const;
-  bool operator!=(const Header& rhs) const;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Header& header);
 
-  virtual ~Header();
+  ~Header() override;
 
   private:
   magic_t magic_;
@@ -77,6 +77,6 @@ class LIEF_API Header : public Object {
 };
 
 } // Namespace VDEX
-} // Namespace LIEF
+// Namespace LIEF
 
 #endif

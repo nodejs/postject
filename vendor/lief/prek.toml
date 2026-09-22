@@ -1,0 +1,221 @@
+default_env = { RUSTUP_TOOLCHAIN = "nightly" }
+
+[[repos]]
+repo = "local"
+hooks = [
+  {
+    id = "clang-format",
+    name = "format - clang-format",
+    language = "system",
+    entry = "clang-format -i",
+    files = "\\.(cpp|hpp|tcc|c)$",
+  },
+  {
+    id = "format-tests-ruff",
+    name = "format(tests) - Ruff",
+    language = "system",
+    entry = "ruff format",
+    files = { glob = ["tests/**/*.py"] },
+  },
+  {
+    id = "format-backend-ruff",
+    name = "format(backend) - Ruff",
+    language = "system",
+    entry = "ruff format",
+    files = { glob = ["api/python/backend/**/*.py"] },
+  },
+  {
+    id = "format-doc-ruff",
+    name = "format(doc) - Ruff",
+    language = "system",
+    entry = "ruff format",
+    files = { glob = ["doc/code/python/**/*.py"] },
+  },
+  {
+    id = "format-rust",
+    name = "format - RustFmt",
+    language = "system",
+    entry = "rustfmt --edition 2024",
+    files = "\\.rs$",
+  },
+  {
+    id = "lint-bindings-python-ty",
+    name = "lint(bindings-python) - ty",
+    language = "system",
+    entry = "uv run ty check",
+    args = [
+      "--extra-search-path", "api/python",
+      "--extra-search-path", "api/python/backend",
+      "--config-file", "api/python/ty.toml"
+    ],
+    files = { glob = [
+      "api/python/lief/**/*.pyi",
+      "api/python/lief/**/*.py",
+      "api/python/backend/**/*.py",
+    ] }
+  },
+  {
+    id = "lint-tests-ty",
+    name = "lint(tests) - ty",
+    language = "system",
+    entry = "uv run ty check",
+    args = [
+      "--extra-search-path", "./api/python",
+      "--config-file", "./tests/ty.toml"
+    ],
+    files = { glob = ["tests/**/*.py"] },
+  },
+  {
+    id = "lint-examples-ty",
+    name = "lint(examples) - ty",
+    language = "system",
+    entry = "uv run ty check",
+    args = [
+      "--extra-search-path", "api/python",
+      "--config-file", "api/python/examples/ty.toml"
+    ],
+    files = { glob = ["api/python/examples/**/*.py"] },
+  },
+  {
+    id = "lint-doc-examples-ty",
+    name = "lint(doc) - ty",
+    language = "system",
+    entry = "uv run ty check",
+    args = [
+      "--extra-search-path", "./api/python/",
+      "--config-file", "./doc/code/python/ty.toml"
+    ],
+    files = { glob = ["doc/code/python/**/*.py"] },
+  },
+  {
+    id = "lint-tests-ruff",
+    name = "lint(tests) - ruff",
+    language = "system",
+    entry = "ruff check",
+    #args = ["--fix"],
+    files = { glob = ["tests/**/*.py"] },
+  },
+  {
+    id = "lint-examples-ruff",
+    name = "lint(examples) - ruff",
+    language = "system",
+    entry = "ruff check",
+    #args = ["--fix"],
+    files = { glob = ["api/python/examples/**/*.py"] },
+  },
+  {
+    id = "lint-doc-ruff",
+    name = "lint(doc) - ruff",
+    language = "system",
+    entry = "ruff check",
+    #args = ["--fix"],
+    files = { glob = ["doc/code/python/**/*.py"] },
+  },
+  {
+    id = "harper-markdown",
+    name = "lint(markdown) - Harper",
+    language = "python",
+    entry = "uv run internal/scripts/harper_lint.py",
+    additional_dependencies = ["myst-parser==5.1.0"],
+    files = "\\.md$",
+  },
+  {
+    id = "harper-cpp",
+    name = "lint(cpp) - Harper",
+    language = "python",
+    entry = "uv run internal/scripts/harper_lint.py",
+    additional_dependencies = ["myst-parser==5.1.0"],
+    files = "\\.(cpp|hpp|tcc|c)$",
+    exclude = "(third-party/|nanobind/extra/|^src/frozen\\.hpp$)",
+  },
+  {
+    id = "harper-python",
+    name = "lint(python) - Harper",
+    language = "python",
+    entry = "uv run internal/scripts/harper_lint.py",
+    additional_dependencies = ["myst-parser==5.1.0"],
+    files = "\\.py$",
+  },
+  {
+    id = "lint-doc-code-rust-clippy",
+    name = "lint - doc code - clippy",
+    language = "system",
+    entry = "cargo clippy",
+    args = [
+      "--no-deps",
+      "--manifest-path", "doc/code/rust/Cargo.toml",
+      "--", "-D", "warnings"
+    ],
+    pass_filenames = false,
+    files = { glob = ["doc/code/rust/**/*.rs"] },
+  },
+  {
+    id = "lint-tool-rust-clippy",
+    name = "lint - tools - clippy",
+    language = "system",
+    entry = "cargo clippy",
+    args = [
+      "--no-deps",
+      "--manifest-path", "tools/Cargo.toml",
+      "--", "-D", "warnings"
+    ],
+    pass_filenames = false,
+    files = { glob = ["tools/**/*.rs"] },
+  },
+  {
+    id = "lint-core-rust-clippy",
+    name = "lint - core - clippy",
+    language = "system",
+    entry = "cargo clippy",
+    args = [
+      "--no-deps",
+      "--manifest-path", "api/rust/crates/Cargo.toml",
+      "--", "-D", "warnings"
+    ],
+    pass_filenames = false,
+    files = { glob = ["api/rust/crates/**/*.rs"] },
+  },
+  {
+    id = "iwyu-lint",
+    name = "IWYU",
+    language = "system",
+    entry = "iwyu-lint",
+    args = [
+      "--no-insert",
+      #"--fix",
+      "--ignore", ".*third-party.*",
+      "--ignore", ".*spdlog.*",
+      "--ignore", ".*mbedtls.*",
+      "--ignore", ".*/psa/.*",
+      "--ignore", ".*nlohmann.*",
+      "--ignore", ".*frozen.*",
+      "--ignore", ".*nanobind.*",
+      "--ignore", ".*catch2.*",
+      "--ignore", ".*Catch2.*",
+      "--ignore", ".*utf8.*",
+      "--ignore", ".*utfcpp.*",
+    ],
+    files = {
+      glob = [
+        "src/**/*.cpp",
+        "include/**/*.hpp",
+        "src/**/*.hpp"
+      ]
+    },
+  },
+  # ----------------------------------------------------------------------------
+  # Pre-push
+  # ----------------------------------------------------------------------------
+  {
+    id = "revgate",
+    name = "block private paths from being pushed",
+    language = "system",
+    entry = "revgate check",
+    args = [
+      "--config", "../revgate.toml",
+    ],
+    stages = ["pre-push"],
+    pass_filenames = false,
+    always_run = true,
+  },
+]

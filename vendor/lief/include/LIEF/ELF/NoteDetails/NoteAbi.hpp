@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,82 +13,81 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_NOTE_DETAILS_ABI_H_
-#define LIEF_ELF_NOTE_DETAILS_ABI_H_
+#ifndef LIEF_ELF_NOTE_ABI_H
+#define LIEF_ELF_NOTE_ABI_H
 
-#include <vector>
-#include <iostream>
+#include <array>
+#include <memory>
+#include <ostream>
 
-#include "LIEF/Object.hpp"
-#include "LIEF/visibility.h"
 #include "LIEF/ELF/Note.hpp"
-#include "LIEF/ELF/NoteDetails.hpp"
+#include "LIEF/visibility.h"
 
-namespace LIEF {
-namespace ELF {
 
-class Parser;
-class Builder;
-class Binary;
+namespace LIEF::ELF {
 
-//! Class representing the ``.note.android.ident`` section
-//!
-//! @see: https://android.googlesource.com/platform/ndk/+/ndk-release-r16/sources/crt/crtbrand.S#39
-class LIEF_API NoteAbi : public NoteDetails {
-
-  friend class Parser;
-  friend class Builder;
-  friend class Binary;
-
+/// Class that wraps the `NT_GNU_ABI_TAG` note
+class LIEF_API NoteAbi : public Note {
   public:
-
-  //! Version type: (Major, Minor, Patch)
+  /// ABI recognized by this note
+  enum class ABI {
+    LINUX = 0,
+    GNU,
+    SOLARIS2,
+    FREEBSD,
+    NETBSD,
+    SYLLABLE,
+    NACL,
+  };
+  /// Version type: (Major, Minor, Patch)
   using version_t = std::array<uint32_t, 3>;
 
-  static constexpr size_t abi_offset      = 0;
-  static constexpr size_t abi_size        = sizeof(uint32_t);
+  static constexpr size_t abi_offset = 0;
+  static constexpr size_t abi_size = sizeof(uint32_t);
 
-  static constexpr size_t version_offset  = abi_offset + abi_size;
-  static constexpr size_t version_size    = 3 * sizeof(uint32_t);
-
-  static NoteAbi make(Note& note);
-
-  NoteAbi* clone() const override;
+  static constexpr size_t version_offset = abi_size;
+  static constexpr size_t version_size = 3 * sizeof(uint32_t);
 
   public:
-  using NoteDetails::NoteDetails;
-  using description_t = typename Note::description_t;
+  using Note::Note;
 
-  //! @brief Return the target version as ``<Major, Minor, Patch>``.
-  version_t version() const;
+  std::unique_ptr<Note> clone() const override {
+    return std::unique_ptr<Note>(new NoteAbi(*this));
+  }
 
-  //! @brief Return the target ABI. Require a NT_GNU_ABI_TAG type
-  NOTE_ABIS abi() const;
+  /// Return the version or an error if it can't be parsed
+  result<version_t> version() const;
 
-  bool operator==(const NoteAbi& rhs) const;
-  bool operator!=(const NoteAbi& rhs) const;
+  /// Return the ABI or an error if it can't be parsed
+  result<ABI> abi() const;
+
+  void version(const version_t& version);
+  void version(ABI abi);
 
   void dump(std::ostream& os) const override;
 
   void accept(Visitor& visitor) const override;
 
-  virtual ~NoteAbi();
+  static bool classof(const Note* note) {
+    return note->type() == Note::TYPE::GNU_ABI_TAG;
+  }
 
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const NoteAbi& note);
+  /// Size of the description content
+  static constexpr uint8_t description_size() {
+    return /* abi */ sizeof(uint32_t) + /* version */ 3 * sizeof(uint32_t);
+  }
 
-  protected:
-  void parse() override;
+  ~NoteAbi() override = default;
 
-  private:
-  NoteAbi(Note& note);
-
-  version_t version_;
-  NOTE_ABIS abi_;
-
+  LIEF_API friend std::ostream& operator<<(std::ostream& os, const NoteAbi& note) {
+    note.dump(os);
+    return os;
+  }
 };
 
+LIEF_API const char* to_string(NoteAbi::ABI abi);
 
-} // namepsace ELF
-} // namespace LIEF
+}
+
 
 #endif

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,46 +13,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
-#include "logging.hpp"
-
 #include "LIEF/MachO/ParserConfig.hpp"
 
 
-namespace LIEF {
-namespace MachO {
+namespace LIEF::MachO {
 
 ParserConfig ParserConfig::deep() {
   ParserConfig conf;
-  conf.parse_dyld_exports  = true;
+  conf.parse_dyld_exports = true;
   conf.parse_dyld_bindings = true;
-  conf.parse_dyld_rebases  = true;
+  conf.parse_dyld_rebases = true;
+  conf.fix_from_memory = true;
   return conf;
 }
 
 ParserConfig ParserConfig::quick() {
   ParserConfig conf;
-  conf.parse_dyld_exports  = false;
+  conf.parse_dyld_exports = false;
   conf.parse_dyld_bindings = false;
-  conf.parse_dyld_rebases  = false;
+  conf.parse_dyld_rebases = false;
+  conf.fix_from_memory = false;
   return conf;
 }
 
 
 ParserConfig& ParserConfig::full_dyldinfo(bool flag) {
   if (flag) {
-    parse_dyld_exports  = true;
+    parse_dyld_exports = true;
     parse_dyld_bindings = true;
-    parse_dyld_rebases  = true;
+    parse_dyld_rebases = true;
   } else {
-    parse_dyld_exports  = false;
+    parse_dyld_exports = false;
     parse_dyld_bindings = false;
-    parse_dyld_rebases  = false;
+    parse_dyld_rebases = false;
   }
   return *this;
 }
 
 
-} //namespace MachO
 }

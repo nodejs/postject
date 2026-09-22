@@ -1,0 +1,56 @@
+import enum
+import os
+from typing import Union, overload
+
+
+class Level(enum.Enum):
+    Off = 0
+
+    Trace = 1
+
+    Debug = 2
+
+    Critical = 6
+
+    Err = 5
+
+    Warn = 4
+
+    Info = 3
+
+class Scoped:
+    def __enter__(self) -> Scoped | None: ...
+
+    def __exit__(self, *args) -> None: ...
+
+def disable() -> None: ...
+
+def enable() -> None: ...
+
+def set_level(level: Level) -> None: ...
+
+@overload
+def level_scope(level: Level) -> Scoped: ...
+
+@overload
+def level_scope(name: str, lvl: Level) -> Scoped: ...
+
+def get_level() -> Level: ...
+
+def set_path(path: Union[str | os.PathLike]) -> None: ...
+
+def log(level: Level, msg: str) -> None: ...
+
+def debug(*msg) -> None: ...
+
+def info(*args) -> None: ...
+
+def warn(*msg) -> None: ...
+
+def err(*msg) -> None: ...
+
+def critical(*msg) -> None: ...
+
+def enable_debug() -> None: ...
+
+def reset() -> None: ...

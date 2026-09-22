@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,12 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_OAT_METHOD_H_
-#define LIEF_OAT_METHOD_H_
+#ifndef LIEF_OAT_METHOD_H
+#define LIEF_OAT_METHOD_H
 
-#include "LIEF/visibility.h"
-#include "LIEF/Object.hpp"
 #include "LIEF/DEX/deopt.hpp"
+#include "LIEF/Object.hpp"
+#include "LIEF/visibility.h"
+#include <ostream>
+#include <string>
+#include <vector>
 
 namespace LIEF {
 namespace DEX {
@@ -30,34 +33,34 @@ class Class;
 
 class LIEF_API Method : public Object {
   friend class Parser;
-  public:
 
-  //! Container for the Quick Code
+  public:
+  /// Container for the Quick Code
   using quick_code_t = std::vector<uint8_t>;
 
   public:
   Method();
-  Method(DEX::Method* method, Class* oat_class, std::vector<uint8_t>  code = {});
+  Method(DEX::Method* method, Class* oat_class, std::vector<uint8_t> code = {});
   Method(const Method&);
   Method& operator=(const Method&);
 
 
-  //! Method's name
+  /// Method's name
   std::string name() const;
 
-  //! OAT Class associated with this Method
-  const Class* oat_class() const;
-  Class* oat_class();
+  /// OAT Class associated with this Method
+  const Class* oat_class() const LIEF_LIFETIMEBOUND;
+  Class* oat_class() LIEF_LIFETIMEBOUND;
 
-  //! Check if a LIEF::DEX::Method is associated with
-  //! this Method
+  /// Check if a LIEF::DEX::Method is associated with
+  /// this Method
   bool has_dex_method() const;
 
-  //! LIEF::DEX::Method associated (if any)
-  const DEX::Method* dex_method() const;
-  DEX::Method* dex_method();
+  /// LIEF::DEX::Method associated (if any)
+  const DEX::Method* dex_method() const LIEF_LIFETIMEBOUND;
+  DEX::Method* dex_method() LIEF_LIFETIMEBOUND;
 
-  //! True if the optimization is DEX
+  /// True if the optimization is DEX
   bool is_dex2dex_optimized() const;
 
   // True if the optimization is native
@@ -65,18 +68,16 @@ class LIEF_API Method : public Object {
 
   const DEX::dex2dex_method_info_t& dex2dex_info() const;
 
-  //! Quick code associated with the method
+  /// Quick code associated with the method
   const quick_code_t& quick_code() const;
   void quick_code(const quick_code_t& code);
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const Method& rhs) const;
-  bool operator!=(const Method& rhs) const;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Method& meth);
 
-  virtual ~Method();
+  ~Method() override;
 
   private:
   DEX::Method* dex_method_ = nullptr;

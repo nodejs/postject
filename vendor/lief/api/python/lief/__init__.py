@@ -1,0 +1,28 @@
+import os
+import sys
+import traceback
+
+if len(__path__) > 0 and __path__[0] not in sys.path:
+    from . import _lief  # type: ignore
+    from ._lief import *  # type: ignore
+    from ._lief import (  # type: ignore
+        __commit__,
+        __extended__,
+        __free_threaded__,
+        __is_tagged__,
+        __tag__,
+        __version__,
+    )
+
+    if __extended__:
+        from ._lief_extended import (  # type: ignore
+            __LIEF_EXTENDED_VERSION_STR__,
+            __LIEF_MAIN_COMMIT__,
+            __extended_version__,
+        )
+
+    # cf. https://github.com/pytorch/pytorch/blob/60a3b7425dde97fe8b46183c154a9c3b24f0c733/torch/__init__.py#L467-L470
+    for attr in dir(_lief):
+        candidate = getattr(_lief, attr)
+        if type(candidate) is type(_lief):
+            sys.modules.setdefault(f"lief.{attr}", candidate)

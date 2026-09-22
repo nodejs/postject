@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,15 +21,15 @@
 
 using namespace LIEF::PE;
 
-int main(int argc, char **argv) {
-  LIEF::logging::set_level(LIEF::logging::LOGGING_LEVEL::LOG_DEBUG);
+int main(int argc, char** argv) {
+  LIEF::logging::set_level(LIEF::logging::Level::Debug);
   std::cout << "PE Reader" << '\n';
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " <PE binary>" << '\n';
-    return -1;
+    return EXIT_FAILURE;
   }
 
-  std::unique_ptr<const Binary> binary{Parser::parse(argv[1])};
+  std::unique_ptr<const Binary> binary = Parser::parse(argv[1]);
 
   std::cout << "== Dos Header ==" << '\n';
   std::cout << binary->dos_header() << '\n';
@@ -40,9 +40,9 @@ int main(int argc, char **argv) {
   std::cout << "== Optional Header ==" << '\n';
   std::cout << binary->optional_header() << '\n';
 
-  if (binary->has_rich_header()) {
+  if (const LIEF::PE::RichHeader* rich_header = binary->rich_header()) {
     std::cout << "== Rich Header ==" << '\n';
-    std::cout << binary->rich_header() << '\n';
+    std::cout << *rich_header << '\n';
   }
 
   std::cout << "== Data Directories ==" << '\n';
@@ -69,23 +69,22 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (binary->has_tls()) {
+  if (const LIEF::PE::TLS* tls = binary->tls()) {
     std::cout << "== TLS ==" << '\n';
-    std::cout << binary->tls() << '\n';
+    std::cout << *tls << '\n';
   }
 
-  if (binary->has_exports()) {
+  if (const LIEF::PE::Export* exp = binary->get_export()) {
     std::cout << "== Exports ==" << '\n';
-    std::cout << binary->get_export() << '\n';
+    std::cout << *exp << '\n';
   }
 
   if (!binary->symbols().empty()) {
     std::cout << "== Symbols ==" << '\n';
-    for (const Symbol& symbol : binary->symbols()) {
+    for (const LIEF::COFF::Symbol& symbol : binary->symbols()) {
       std::cout << symbol << '\n';
     }
   }
-
 
   if (binary->has_debug()) {
     std::cout << "== Debug ==" << '\n';
@@ -93,7 +92,6 @@ int main(int argc, char **argv) {
       std::cout << debug << '\n';
     }
   }
-
 
   if (auto manager = binary->resources_manager()) {
     std::cout << "== Resources ==" << '\n';

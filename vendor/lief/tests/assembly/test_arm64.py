@@ -1,0 +1,202 @@
+from typing import cast
+
+import lief
+import pytest
+from utils import parse_elf, parse_macho, parse_pe
+
+if not lief.__extended__:
+    pytest.skip("skipping: extended version only", allow_module_level=True)
+
+
+def _create_inst(
+    elf: lief.ELF.Binary, addr: int, asm: str
+) -> lief.assembly.aarch64.Instruction:
+    return cast(
+        lief.assembly.aarch64.Instruction,
+        next(elf.disassemble_from_bytes(elf.assemble(addr, asm), addr)),
+    )
+
+
+def test_arm64e():
+    macho = parse_macho("MachO/ios17/DebugHierarchyKit").at(0)
+    assert macho is not None
+
+    instructions = list(macho.disassemble(0x00016650))
+    assert len(instructions) == 276
+
+    assert instructions[0] is not None
+    assert instructions[0].to_string() == "0x016650: adrp x17, #106496"
+    assert isinstance(instructions[0], lief.assembly.aarch64.Instruction)
+    assert instructions[0].opcode == lief.assembly.aarch64.OPCODE.ADRP
+    new_inst = macho.assemble(0x016650, "adrp x17, #0x4000")
+    assert new_inst.hex(":") == "31:00:00:90"
+    _inst = next(macho.disassemble(0x016650))
+    assert _inst is not None
+    assert _inst.to_string() == "0x016650: adrp x17, #16384"
+
+    assert instructions[3] is not None
+    assert instructions[3].to_string() == "0x01665c: braa x16, x17"
+    assert isinstance(instructions[3], lief.assembly.aarch64.Instruction)
+    assert instructions[3].opcode == lief.assembly.aarch64.OPCODE.BRAA
+    assert instructions[3].is_branch
+    assert instructions[3].is_terminator
+
+    new_inst = macho.assemble(0x01665C, "braa x18, x19")
+    assert new_inst.hex(":") == "53:0a:1f:d7"
+    _inst = next(macho.disassemble(0x01665C))
+    assert _inst is not None
+    assert _inst.to_string() == "0x01665c: braa x18, x19"
+
+
+def test_pe_arm64():
+    pe = parse_pe("PE/elf_reader.arm64.pe.exe")
+
+    instructions = list(pe.disassemble(0x140001000))
+    assert len(instructions) == 6245
+
+    assert instructions[0] is not None
+    assert instructions[0].to_string() == "0x140001000: str x19, [sp, #-0x10]!"
+    assert isinstance(instructions[0], lief.assembly.aarch64.Instruction)
+    assert instructions[0].opcode == lief.assembly.aarch64.OPCODE.STRXpre
+
+    assert instructions[4796] is not None
+    assert instructions[4796].to_string() == "0x140005af0: ldr x30, [sp, #0x10]"
+    assert isinstance(instructions[4796], lief.assembly.aarch64.Instruction)
+    assert instructions[4796].opcode == lief.assembly.aarch64.OPCODE.LDRXui
+
+
+def test_elf_arm64():
+    elf = parse_elf("ELF/issue_975_aarch64.o")
+
+    text_section = elf.get_section(".text")
+    assert text_section is not None
+    instructions = list(elf.disassemble_from_bytes(bytes(text_section.content)))
+    assert len(instructions) == 12
+    assert instructions[0] is not None
+    assert instructions[0].to_string() == "0x000000: bti c"
+    assert instructions[10] is not None
+    assert instructions[10].to_string() == "0x000028: add sp, sp, #0x10"
+    assert instructions[11] is not None
+    assert instructions[11].to_string() == "0x00002c: ret"
+
+    elf = parse_elf("ELF/libmonochrome-arm64.so")
+
+    instructions = list(elf.disassemble(0x056C19B4, 16))
+    assert len(instructions) == 4
+    assert instructions[0] is not None
+    assert instructions[0].to_string() == "0x56c19b4: paciasp"
+    assert isinstance(instructions[0], lief.assembly.aarch64.Instruction)
+    assert instructions[0].opcode == lief.assembly.aarch64.OPCODE.PACIASP
+
+
+def test_arm64_operands():
+    elf = parse_elf("ELF/libmonochrome-arm64.so")
+
+    inst = _create_inst(elf, 0x18A5000, "mov x0, #1")
+    operands = list(inst.operands)
+    assert len(operands) == 3
+    assert isinstance(operands[0], lief.assembly.aarch64.operands.Register)
+    assert operands[0].value == lief.assembly.aarch64.REG.X0
+
+    assert isinstance(operands[1], lief.assembly.aarch64.operands.Immediate)
+    assert operands[1].value == 1
+
+    inst = _create_inst(elf, 0x18A5000, "mrs x23, TPIDR_EL0")
+    operands = list(inst.operands)
+    assert len(operands) == 2
+    assert isinstance(operands[0], lief.assembly.aarch64.operands.Register)
+    assert operands[0].value == lief.assembly.aarch64.REG.X23
+
+    assert isinstance(operands[1], lief.assembly.aarch64.operands.Register)
+    assert operands[1].value == lief.assembly.aarch64.SYSREG.TPIDR_EL0
+
+    inst = _create_inst(elf, 0x18A5000, "ldr x1, [x2, x3, lsl #3]")
+    operands = list(inst.operands)
+    assert len(operands) == 2
+    assert isinstance(operands[0], lief.assembly.aarch64.operands.Register)
+    assert operands[0].value == lief.assembly.aarch64.REG.X1
+
+    assert isinstance(operands[1], lief.assembly.aarch64.operands.Memory)
+    mem_info: lief.assembly.aarch64.operands.Memory = operands[1]
+    assert mem_info.base == lief.assembly.aarch64.REG.X2
+    assert mem_info.offset == lief.assembly.aarch64.REG.X3
+    assert mem_info.shift.type == lief.assembly.aarch64.operands.Memory.SHIFT.LSL
+    assert mem_info.shift.value == 3
+
+    inst = _create_inst(elf, 0x18A5000, "str x3, [x2], #8")
+    operands = list(inst.operands)
+    assert len(operands) == 3
+    assert isinstance(operands[0], lief.assembly.aarch64.operands.Register)
+    assert operands[0].value == lief.assembly.aarch64.REG.X2
+
+    assert isinstance(operands[1], lief.assembly.aarch64.operands.Register)
+    assert operands[1].value == lief.assembly.aarch64.REG.X3
+
+    assert isinstance(operands[2], lief.assembly.aarch64.operands.Memory)
+    mem_info: lief.assembly.aarch64.operands.Memory = operands[2]
+    assert mem_info.base == lief.assembly.aarch64.REG.X2
+    assert mem_info.offset == 8
+    assert mem_info.shift.value == -1
+
+    inst = _create_inst(elf, 0x18A5000, "str x3, [x2, #8]")
+    operands = list(inst.operands)
+    assert len(operands) == 2
+
+    assert isinstance(operands[0], lief.assembly.aarch64.operands.Register)
+    assert operands[0].value == lief.assembly.aarch64.REG.X3
+
+    assert isinstance(operands[1], lief.assembly.aarch64.operands.Memory)
+    mem_info: lief.assembly.aarch64.operands.Memory = operands[1]
+    assert mem_info.base == lief.assembly.aarch64.REG.X2
+    assert mem_info.offset == 8
+
+    inst = _create_inst(elf, 0x18A5000, "adrp x0, #0x1000")
+    operands = list(inst.operands)
+    assert len(operands) == 2
+
+    assert isinstance(operands[0], lief.assembly.aarch64.operands.Register)
+    assert operands[0].value == lief.assembly.aarch64.REG.X0
+
+    assert isinstance(operands[1], lief.assembly.aarch64.operands.Immediate)
+    assert operands[1].value == 1
+
+
+def test_asm_context():
+    class Config(lief.assembly.AssemblerConfig):
+        def __init__(self, elf: lief.ELF.Binary):
+            super().__init__()
+
+            self._elf = elf
+
+        def resolve_symbol(self, name: str) -> int | None:
+            sym = self._elf.get_symtab_symbol(name)
+            if sym is None or sym.type != lief.ELF.Symbol.TYPE.FUNC:
+                return super().resolve_symbol(name)
+            return sym.value
+
+    elf = parse_elf("ELF/ELF64_AArch64_piebinary_ndkr16.bin")
+    assert elf is not None
+
+    config = Config(elf)
+
+    addr = 0x00000E80
+    elf.assemble(
+        addr,
+        """
+    adrp x0, _ZNSt6__ndk113basic_ostreamIcNS_11char_traitsIcEEE3putEc;
+    add x0, x0, :lo12:_ZNSt6__ndk113basic_ostreamIcNS_11char_traitsIcEEE3putEc;
+    br x0;
+    bl _ZNSt6__ndk113basic_ostreamIcNS_11char_traitsIcEEE3putEc
+    """,
+        config,
+    )
+
+    insts = list(elf.disassemble(addr))
+    assert insts[0] is not None
+    assert insts[0].to_string() == "0x000e80: adrp x0, #4096"
+    assert insts[1] is not None
+    assert insts[1].to_string() == "0x000e84: add x0, x0, #0x500"
+    assert insts[2] is not None
+    assert insts[2].to_string() == "0x000e88: br x0"
+    assert insts[3] is not None
+    assert insts[3].to_string() == "0x000e8c: bl #0x674"

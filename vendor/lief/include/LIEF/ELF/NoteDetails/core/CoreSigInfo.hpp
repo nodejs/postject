@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,79 +13,58 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ELF_CORE_SIGINFO_H_
-#define LIEF_ELF_CORE_SIGINFO_H_
+#ifndef LIEF_ELF_CORE_SIGINFO_H
+#define LIEF_ELF_CORE_SIGINFO_H
 
-#include <vector>
-#include <iostream>
-#include <map>
-#include <utility>
+#include <memory>
+#include <ostream>
 
-#include "LIEF/Object.hpp"
+#include "LIEF/ELF/Note.hpp"
+#include "LIEF/errors.hpp"
 #include "LIEF/visibility.h"
 
-#include "LIEF/ELF/NoteDetails.hpp"
 
-namespace LIEF {
-namespace ELF {
+namespace LIEF::ELF {
 
-class Note;
-class Parser;
-class Builder;
-class Binary;
-
-//! Class representing core siginfo object
-class LIEF_API CoreSigInfo : public NoteDetails {
-
+/// Class representing a core siginfo object
+class LIEF_API CoreSigInfo : public Note {
   public:
-  using NoteDetails::NoteDetails;
+  std::unique_ptr<Note> clone() const override {
+    return std::make_unique<CoreSigInfo>(*this);
+  }
 
-  public:
-  static CoreSigInfo make(Note& note);
+  /// Signal number or an error if it can't be resolved
+  result<int32_t> signo() const;
 
-  CoreSigInfo* clone() const override;
+  /// Signal code or an error if it can't be resolved
+  result<int32_t> sigcode() const;
 
-  //! Signal number.
-  int32_t signo() const;
+  /// Signal error number or an error if it can't be resolved
+  result<int32_t> sigerrno() const;
 
-  //! Signal code.
-  int32_t sigcode() const;
-
-  //! If non-zero, an errno value associated with this signal.
-  int32_t sigerrno() const;
-
-  void signo(int32_t signo);
-  void sigcode(int32_t sigcode);
-  void sigerrno(int32_t sigerrno);
-
-  bool operator==(const CoreSigInfo& rhs) const;
-  bool operator!=(const CoreSigInfo& rhs) const;
+  void signo(uint32_t value);
+  void sigcode(uint32_t value);
+  void sigerrno(uint32_t value);
 
   void dump(std::ostream& os) const override;
-
   void accept(Visitor& visitor) const override;
 
-  virtual ~CoreSigInfo();
+  ~CoreSigInfo() override = default;
 
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const CoreSigInfo& note);
+  static bool classof(const Note* note) {
+    return note->type() == Note::TYPE::CORE_SIGINFO;
+  }
+
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const CoreSigInfo& note) {
+    note.dump(os);
+    return os;
+  }
 
   protected:
-  void parse() override;
-  void build() override;
-
-  private:
-  CoreSigInfo(Note& note);
-  struct siginfo_t {
-    int32_t si_signo;
-    int32_t si_code;
-    int32_t si_errno;
-  };
-
-  siginfo_t siginfo_;
+  using Note::Note;
 };
+}
 
-
-} // namepsace ELF
-} // namespace LIEF
 
 #endif

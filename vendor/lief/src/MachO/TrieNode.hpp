@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,53 +15,59 @@
  */
 #ifndef LIEF_MACHO_TRIE_NODE_H_
 #define LIEF_MACHO_TRIE_NODE_H_
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 #include "LIEF/visibility.h"
-#include "LIEF/MachO/ExportInfo.hpp"
-#include "LIEF/iostream.hpp"
-
 
 namespace LIEF {
+class vector_iostream;
 namespace MachO {
 class TrieNode;
+class ExportInfo;
 
 class LIEF_LOCAL TrieEdge {
   public:
-  static std::unique_ptr<TrieEdge> create(const std::string& str, TrieNode& node);
+  static std::unique_ptr<TrieEdge> create(std::string_view str, TrieNode& node) {
+    return std::make_unique<TrieEdge>(str, node);
+  }
 
   TrieEdge() = delete;
-  TrieEdge(std::string str, TrieNode& node);
+  TrieEdge(std::string_view str, TrieNode& node) :
+    substr(str),
+    child(&node) {}
 
-  ~TrieEdge();
+  ~TrieEdge() = default;
 
   public:
-  std::string substr;
+  std::string_view substr;
   TrieNode* child = nullptr;
 };
 
 
 class LIEF_LOCAL TrieNode {
-
   public:
   using trie_edge_list_t = std::vector<std::unique_ptr<TrieEdge>>;
   using node_list_t = std::vector<std::unique_ptr<TrieNode>>;
 
-  static std::unique_ptr<TrieNode> create(const std::string& str);
+  static std::unique_ptr<TrieNode> create(std::string str) {
+    return std::make_unique<TrieNode>(std::move(str));
+  }
 
   TrieNode() = delete;
 
-  TrieNode(std::string str);
-  ~TrieNode();
+  TrieNode(std::string str) :
+    cummulative_string_(std::move(str)) {}
 
-  TrieNode& add_symbol(const ExportInfo& info, node_list_t& nodes);
-  TrieNode& add_ordered_nodes(const ExportInfo& info, std::vector<TrieNode*>& nodes);
+  ~TrieNode() = default;
+
+  node_list_t add_symbol(const ExportInfo& info);
+  std::vector<TrieNode*> add_ordered_nodes(const ExportInfo& info);
   bool update_offset(uint32_t& offset);
 
   TrieNode& write(vector_iostream& buffer);
-
 
   private:
   std::string cummulative_string_;
@@ -73,7 +79,6 @@ class LIEF_LOCAL TrieNode {
   uint32_t trie_offset_ = 0;
   bool has_export_info_ = false;
   bool ordered_ = false;
-
 };
 
 }

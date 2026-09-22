@@ -1,0 +1,31 @@
+target_sources(pyLIEF PRIVATE
+  pyParser.cpp
+  pyBinary.cpp
+  pyBuilder.cpp
+  pyDynamicEntry.cpp
+  pyDynamicEntryArray.cpp
+  pyDynamicEntryFlags.cpp
+  pyDynamicEntryLibrary.cpp
+  pyDynamicEntryRpath.cpp
+  pyDynamicEntryRunPath.cpp
+  pyDynamicSharedObject.cpp
+  pyDynamicEntryAuxiliary.cpp
+  pyDynamicEntryFilter.cpp
+  pyGnuHash.cpp
+  pyHeader.cpp
+  pyParserConfig.cpp
+  pyNote.cpp
+  pyRelocation.cpp
+  pyRelocationTypes.cpp
+  pySection.cpp
+  pySegment.cpp
+  pySymbol.cpp
+  pySymbolVersion.cpp
+  pySymbolVersionAux.cpp
+  pySymbolVersionAuxRequirement.cpp
+  pySymbolVersionRequirement.cpp
+  pySymbolVersionDefinition.cpp
+  pySysvHash.cpp
+)
+
+add_subdirectory(NoteDetails)

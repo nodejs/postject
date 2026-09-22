@@ -1,6 +1,0 @@
-if (PYTHON_TESTS_ENABLED)
-  add_test(UNITTEST_PYTHON_oat
-    ${CMAKE_COMMAND} -E env "PYTHONPATH=${PYTHONENV}"
-    ${PYTHON_EXECUTABLE}
-      ${CMAKE_CURRENT_SOURCE_DIR}/oat_test.py)
-endif()

@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,42 +13,50 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_PLATFORMS_H_
-#define LIEF_PLATFORMS_H_
-#include "LIEF/platforms/android.hpp"
+#ifndef LIEF_PLATFORMS_H
+#define LIEF_PLATFORMS_H
 
 #if defined(__APPLE__)
   #include "TargetConditionals.h"
 #endif
 
+#if defined(__linux__)
+  #include <features.h>
+
+  #ifndef __GLIBC__
+    #define LIEF_PLATFORM_MUSL 1
+  #else
+    #define LIEF_PLATFORM_GLIBC 1
+  #endif
+#endif
+
 namespace LIEF {
 
-enum class PLATFORMS {
-  UNKNOWN = 0,
-  LINUX,
-  ANDROID_PLAT,
-  WINDOWS,
-  IOS,
-  OSX,
+enum PLATFORMS {
+  PLAT_UNKNOWN = 0,
+  PLAT_LINUX,
+  PLAT_ANDROID,
+  PLAT_WINDOWS,
+  PLAT_IOS,
+  PLAT_OSX,
 };
 
 constexpr PLATFORMS current_platform() {
 #if defined(__ANDROID__)
-  return PLATFORMS::ANDROID_PLAT;
+  return PLATFORMS::PLAT_ANDROID;
 #elif defined(__linux__)
-  return PLATFORMS::LINUX;
+  return PLATFORMS::PLAT_LINUX;
 #elif defined(_WIN64) || defined(_WIN32)
-  return PLATFORMS::WINDOWS;
+  return PLATFORMS::PLAT_WINDOWS;
 #elif defined(__APPLE__)
   #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
-    return PLATFORMS::IOS;
+  return PLATFORMS::PLAT_IOS;
   #else
-    return PLATFORMS::OSX;
+  return PLATFORMS::PLAT_OSX;
   #endif
 #else
-  return PLATFORMS::UNKNOWN;
+  return PLATFORMS::PLAT_UNKNOWN;
 #endif
-
 }
 
 

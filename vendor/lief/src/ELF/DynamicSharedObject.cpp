@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,55 +14,21 @@
  * limitations under the License.
  */
 #include "LIEF/ELF/DynamicSharedObject.hpp"
+#include "LIEF/Visitor.hpp"
 
-#include <iomanip>
-#include <utility>
-
-namespace LIEF {
-namespace ELF {
-DynamicSharedObject::DynamicSharedObject() :
-  DynamicEntry::DynamicEntry{DYNAMIC_TAGS::DT_SONAME, 0}
-{}
-
-DynamicSharedObject& DynamicSharedObject::operator=(const DynamicSharedObject&) = default;
-
-DynamicSharedObject::DynamicSharedObject(const DynamicSharedObject&) = default;
-
-DynamicSharedObject::DynamicSharedObject(std::string name) :
-  DynamicEntry::DynamicEntry{DYNAMIC_TAGS::DT_SONAME, 0},
-  name_{std::move(name)}
-{}
+#include <spdlog/fmt/fmt.h>
 
 
-const std::string& DynamicSharedObject::name() const {
-  return name_;
-}
-
-
-void DynamicSharedObject::name(const std::string& name) {
-  name_ = name;
-}
+namespace LIEF::ELF {
 
 void DynamicSharedObject::accept(Visitor& visitor) const {
   visitor.visit(*this);
 }
 
-bool DynamicSharedObject::classof(const DynamicEntry* entry) {
-  const DYNAMIC_TAGS tag = entry->tag();
-  return tag == DYNAMIC_TAGS::DT_SONAME;
-}
-
-
 std::ostream& DynamicSharedObject::print(std::ostream& os) const {
   DynamicEntry::print(os);
-  os << std::hex
-     << std::left
-     << std::setw(10) << name();
+  os << fmt::format("{:<10}", name());
   return os;
-
-}
-}
 }
 
-
-
+}

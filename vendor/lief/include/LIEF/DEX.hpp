@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,20 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_DEX_H_
-#define LIEF_DEX_H_
+#ifndef LIEF_DEX_H
+#define LIEF_DEX_H
+// IWYU pragma: begin_exports
 #include "LIEF/config.h"
 
 #if defined(LIEF_DEX_SUPPORT)
-#include "LIEF/DEX/Parser.hpp"
-#include "LIEF/DEX/utils.hpp"
-#include "LIEF/DEX/File.hpp"
-#include "LIEF/DEX/Class.hpp"
-#include "LIEF/DEX/Prototype.hpp"
-#include "LIEF/DEX/Header.hpp"
-#include "LIEF/DEX/Method.hpp"
-#include "LIEF/DEX/Field.hpp"
-#include "LIEF/DEX/EnumToString.hpp"
+  #include "LIEF/DEX/Class.hpp"
+  #include "LIEF/DEX/EnumToString.hpp"
+  #include "LIEF/DEX/Field.hpp"
+  #include "LIEF/DEX/File.hpp"
+  #include "LIEF/DEX/Header.hpp"
+  #include "LIEF/DEX/Method.hpp"
+  #include "LIEF/DEX/Parser.hpp"
+  #include "LIEF/DEX/Prototype.hpp"
+  #include "LIEF/DEX/utils.hpp"
+// IWYU pragma: end_exports
 #endif
 
 #endif

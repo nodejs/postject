@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 #include "LIEF/ART/Header.hpp"
-#include "LIEF/ART/hash.hpp"
 #include "LIEF/ART/EnumToString.hpp"
+#include "LIEF/ART/hash.hpp"
 
 #include <iomanip>
 
-namespace LIEF {
-namespace ART {
+
+namespace LIEF::ART {
 
 Header::Header(const Header&) = default;
 Header& Header::operator=(const Header&) = default;
@@ -117,61 +117,65 @@ void Header::accept(Visitor& visitor) const {
 }
 
 
-bool Header::operator==(const Header& rhs) const {
-  if (this == &rhs) {
-    return true;
-  }
-  size_t hash_lhs = Hash::hash(*this);
-  size_t hash_rhs = Hash::hash(rhs);
-  return hash_lhs == hash_rhs;
-}
-
-bool Header::operator!=(const Header& rhs) const {
-  return !(*this == rhs);
-}
-
 std::ostream& operator<<(std::ostream& os, const Header& hdr) {
   static constexpr size_t WIDTH = 33;
   os << std::hex << std::left << std::showbase;
-  os << std::setw(WIDTH) << std::setfill(' ') << "Magic: " << std::endl;
-  os << std::setw(WIDTH) << std::setfill(' ') << "Version: " << std::dec << hdr.version() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "Magic: " << '\n';
+  os << std::setw(WIDTH) << std::setfill(' ') << "Version: " << std::dec
+     << hdr.version() << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "Image Begin: " << std::hex << hdr.image_begin() << std::endl;
-  os << std::setw(WIDTH) << std::setfill(' ') << "Image Size: "  << std::hex << hdr.image_size() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "Image Begin: " << std::hex
+     << hdr.image_begin() << '\n';
+  os << std::setw(WIDTH) << std::setfill(' ') << "Image Size: " << std::hex
+     << hdr.image_size() << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "Checksum: " << std::hex << hdr.oat_checksum() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "Checksum: " << std::hex
+     << hdr.oat_checksum() << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "OAT File Begin: " << std::hex << hdr.oat_file_begin() << std::endl;
-  os << std::setw(WIDTH) << std::setfill(' ') << "OAT File End:"    << std::hex << hdr.oat_file_end() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "OAT File Begin: " << std::hex
+     << hdr.oat_file_begin() << '\n';
+  os << std::setw(WIDTH) << std::setfill(' ') << "OAT File End:" << std::hex
+     << hdr.oat_file_end() << '\n';
 
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "OAT Data Begin: " << std::hex << hdr.oat_data_begin() << std::endl;
-  os << std::setw(WIDTH) << std::setfill(' ') << "OAT Data End:"    << std::hex << hdr.oat_data_end() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "OAT Data Begin: " << std::hex
+     << hdr.oat_data_begin() << '\n';
+  os << std::setw(WIDTH) << std::setfill(' ') << "OAT Data End:" << std::hex
+     << hdr.oat_data_end() << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "Patch Delta:"    << std::dec << hdr.patch_delta() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "Patch Delta:" << std::dec
+     << hdr.patch_delta() << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "Pointer Size:"    << std::dec << hdr.pointer_size() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "Pointer Size:" << std::dec
+     << hdr.pointer_size() << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "Compile pic:"    << std::boolalpha << hdr.compile_pic() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "Compile pic:" << std::boolalpha
+     << hdr.compile_pic() << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "Number of sections:"    << std::dec << hdr.nb_sections() << std::endl;
-  os << std::setw(WIDTH) << std::setfill(' ') << "Number of methods:"    << std::dec << hdr.nb_methods() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "Number of sections:" << std::dec
+     << hdr.nb_sections() << '\n';
+  os << std::setw(WIDTH) << std::setfill(' ') << "Number of methods:" << std::dec
+     << hdr.nb_methods() << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "Boot Image Begin:"  << std::hex << hdr.boot_image_begin() << std::endl;
-  os << std::setw(WIDTH) << std::setfill(' ') << "Boot Image Size:"    << std::hex << hdr.boot_image_size() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "Boot Image Begin:" << std::hex
+     << hdr.boot_image_begin() << '\n';
+  os << std::setw(WIDTH) << std::setfill(' ') << "Boot Image Size:" << std::hex
+     << hdr.boot_image_size() << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "Boot OAT Begin:"  << std::hex << hdr.boot_oat_begin() << std::endl;
-  os << std::setw(WIDTH) << std::setfill(' ') << "Boot OAT Size:"   << std::hex << hdr.boot_oat_size() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "Boot OAT Begin:" << std::hex
+     << hdr.boot_oat_begin() << '\n';
+  os << std::setw(WIDTH) << std::setfill(' ') << "Boot OAT Size:" << std::hex
+     << hdr.boot_oat_size() << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "Storage Mode:" << to_string(hdr.storage_mode()) << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ')
+     << "Storage Mode:" << to_string(hdr.storage_mode()) << '\n';
 
-  os << std::setw(WIDTH) << std::setfill(' ') << "Data Size:" << std::hex << hdr.data_size() << std::endl;
+  os << std::setw(WIDTH) << std::setfill(' ') << "Data Size:" << std::hex
+     << hdr.data_size() << '\n';
 
   return os;
 }
 
 Header::~Header() = default;
 
-} // Namespace ART
-} // Namespace LIEF
-
+}

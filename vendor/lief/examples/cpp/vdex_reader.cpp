@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@
 using namespace LIEF::VDEX;
 
 
-int main(int argc, char **argv) {
-  LIEF::logging::set_level(LIEF::logging::LOGGING_LEVEL::LOG_DEBUG);
+int main(int argc, char** argv) {
+  LIEF::logging::set_level(LIEF::logging::Level::Debug);
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " <VDEX file>" << '\n';
     return EXIT_FAILURE;
@@ -38,4 +38,3 @@ int main(int argc, char **argv) {
   }
   return EXIT_FAILURE;
 }
-

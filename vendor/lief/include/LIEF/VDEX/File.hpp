@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_VDEX_FILE_H_
-#define LIEF_VDEX_FILE_H_
-#include <iostream>
+#ifndef LIEF_VDEX_FILE_H
+#define LIEF_VDEX_FILE_H
+#include <ostream>
 
 #include "LIEF/VDEX/Header.hpp"
 #include "LIEF/VDEX/type_traits.hpp"
 
-#include "LIEF/visibility.h"
 #include "LIEF/Object.hpp"
+#include "LIEF/iterators.hpp"
+#include "LIEF/visibility.h"
+
+#include <memory>
+#include <vector>
 
 namespace LIEF {
 namespace DEX {
@@ -34,7 +38,7 @@ class Binary;
 namespace VDEX {
 class Parser;
 
-//! Main class for the VDEX module which represents a VDEX file
+/// Main class for the VDEX module which represents a VDEX file
 class LIEF_API File : public Object {
   friend class Parser;
   friend class OAT::Binary;
@@ -42,18 +46,19 @@ class LIEF_API File : public Object {
   public:
   using dex_files_t = std::vector<std::unique_ptr<DEX::File>>;
   using it_dex_files = ref_iterator<dex_files_t&, DEX::File*>;
-  using it_const_dex_files = const_ref_iterator<const dex_files_t&, const DEX::File*>;
+  using it_const_dex_files =
+      const_ref_iterator<const dex_files_t&, const DEX::File*>;
 
   File& operator=(const File& copy) = delete;
-  File(const File& copy)            = delete;
+  File(const File& copy) = delete;
 
-  //! VDEX Header
-  const Header& header() const;
-  Header& header();
+  /// VDEX Header
+  const Header& header() const LIEF_LIFETIMEBOUND;
+  Header& header() LIEF_LIFETIMEBOUND;
 
-  //! Iterator over LIEF::DEX::Files registered
-  it_dex_files       dex_files();
-  it_const_dex_files dex_files() const;
+  /// Iterator over LIEF::DEX::Files registered
+  it_dex_files dex_files() LIEF_LIFETIMEBOUND;
+  it_const_dex_files dex_files() const LIEF_LIFETIMEBOUND;
 
   dex2dex_info_t dex2dex_info() const;
 
@@ -61,12 +66,11 @@ class LIEF_API File : public Object {
 
   void accept(Visitor& visitor) const override;
 
-  bool operator==(const File& rhs) const;
-  bool operator!=(const File& rhs) const;
 
-  virtual ~File();
+  ~File() override;
 
-  LIEF_API friend std::ostream& operator<<(std::ostream& os, const File& vdex_file);
+  LIEF_API friend std::ostream& operator<<(std::ostream& os,
+                                           const File& vdex_file);
 
   private:
   File();

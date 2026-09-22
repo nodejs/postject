@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,43 +16,44 @@
 #include <functional>
 #include <numeric>
 
-#include "mbedtls/sha256.h"
+#include "mbedtls_wraps.h"
+#include "psa/crypto_builtin_primitives.h"
 
 #include "LIEF/hash.hpp"
 
 
 #if defined(LIEF_PE_SUPPORT)
-#include "LIEF/PE/hash.hpp"
+  #include "LIEF/PE/hash.hpp"
 #endif
 
 #if defined(LIEF_ELF_SUPPORT)
-#include "LIEF/ELF/hash.hpp"
+  #include "LIEF/ELF/hash.hpp"
 #endif
 
 #if defined(LIEF_MACHO_SUPPORT)
-#include "LIEF/MachO/hash.hpp"
+  #include "LIEF/MachO/hash.hpp"
 #endif
 
 #if defined(LIEF_OAT_SUPPORT)
-#include "LIEF/OAT/hash.hpp"
+  #include "LIEF/OAT/hash.hpp"
 #endif
 
 #if defined(LIEF_ART_SUPPORT)
-#include "LIEF/ART/hash.hpp"
+  #include "LIEF/ART/hash.hpp"
 #endif
 
 #if defined(LIEF_DEX_SUPPORT)
-#include "LIEF/DEX/hash.hpp"
+  #include "LIEF/DEX/hash.hpp"
 #endif
 
 #if defined(LIEF_VDEX_SUPPORT)
-#include "LIEF/VDEX/hash.hpp"
+  #include "LIEF/VDEX/hash.hpp"
 #endif
 
 namespace LIEF {
 
-size_t hash(const Object& v) {
-  size_t value = 0;
+Hash::value_type hash(const Object& v) {
+  Hash::value_type value = 0;
 
 #if defined(LIEF_PE_SUPPORT)
   value = Hash::combine(value, Hash::hash<PE::Hash>(v));
@@ -83,37 +84,29 @@ size_t hash(const Object& v) {
 #endif
 
   return value;
-
 }
 
-size_t hash(const std::vector<uint8_t>& raw) {
+Hash::value_type hash(const std::vector<uint8_t>& raw) {
   return Hash::hash(raw);
 }
 
-size_t hash(span<const uint8_t> raw) {
+Hash::value_type hash(span<const uint8_t> raw) {
   return Hash::hash(raw);
 }
 
 Hash::~Hash() = default;
+Hash::Hash() = default;
 
-Hash::Hash() :
-  value_{0}
-{}
-
-Hash::Hash(size_t init_value) :
-  value_{init_value}
-{}
-
+Hash::Hash(Hash::value_type init_value) :
+  value_{init_value} {}
 
 Hash& Hash::process(const Object& obj) {
-  Hash hasher;
-  obj.accept(hasher);
-  value_ = combine(value_, hasher.value());
+  value_ = combine(value_, LIEF::hash(obj));
   return *this;
 }
 
 Hash& Hash::process(size_t integer) {
-  value_ = combine(value_, std::hash<size_t>{}(integer));
+  value_ = combine(value_, std::hash<Hash::value_type>{}(integer));
   return *this;
 }
 
@@ -121,7 +114,6 @@ Hash& Hash::process(const std::string& str) {
   value_ = combine(value_, std::hash<std::string>{}(str));
   return *this;
 }
-
 
 Hash& Hash::process(const std::u16string& str) {
   value_ = combine(value_, std::hash<std::u16string>{}(str));
@@ -138,32 +130,26 @@ Hash& Hash::process(span<const uint8_t> raw) {
   return *this;
 }
 
-size_t Hash::value() const {
-  return value_;
-}
-
-
 // Static methods
 // ==============
-size_t Hash::hash(const std::vector<uint8_t>& raw) {
+Hash::value_type Hash::hash(const std::vector<uint8_t>& raw) {
   return hash(raw.data(), raw.size());
 }
 
 
-size_t Hash::hash(const void* raw, size_t size) {
+Hash::value_type Hash::hash(const void* raw, size_t size) {
   const auto* start = reinterpret_cast<const uint8_t*>(raw);
 
   std::vector<uint8_t> sha256(32, 0u);
   mbedtls_sha256(start, size, sha256.data(), 0);
 
-  return std::accumulate(std::begin(sha256), std::end(sha256), 0llu,
-     [] (size_t v, uint8_t n) {
-        return (v << sizeof(uint8_t) * 8u) | n;
-     });
+  return std::accumulate(sha256.begin(), sha256.end(), size_t(0),
+                         [](size_t v, uint8_t n) {
+                           return (v << sizeof(uint8_t) * 8u) | n;
+                         });
 }
 
-
-size_t Hash::hash(span<const uint8_t> raw) {
+Hash::value_type Hash::hash(span<const uint8_t> raw) {
   return hash(raw.data(), raw.size());
 }
 

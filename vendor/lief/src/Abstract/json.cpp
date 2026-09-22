@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,13 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "LIEF/Abstract.hpp"
 #include "Abstract/json_internal.hpp"
 
-#include "LIEF/ELF.hpp"
-#include "LIEF/PE.hpp"
-#include "LIEF/MachO.hpp"
-#include "LIEF/config.h"
+#include "LIEF/Object.hpp"
+
+#include "LIEF/Abstract/Binary.hpp"
+#include "LIEF/Abstract/Function.hpp"
+#include "LIEF/Abstract/Relocation.hpp"
+#include "LIEF/Abstract/Section.hpp"
+#include "LIEF/Abstract/Symbol.hpp"
 
 #include "Object.tcc"
 
@@ -67,68 +69,59 @@ void AbstractJsonVisitor::visit(const Binary& binary) {
   }
 
 
-  node_["name"]               = binary.name();
-  node_["entrypoint"]         = binary.entrypoint();
-  node_["format"]             = to_string(binary.format());
-  node_["original_size"]      = binary.original_size();
+  node_["entrypoint"] = binary.entrypoint();
+  node_["format"] = to_string(binary.format());
+  node_["original_size"] = binary.original_size();
   node_["exported_functions"] = exports;
   node_["imported_libraries"] = binary.imported_libraries();
   node_["imported_functions"] = imports;
-  node_["header"]             = header_visitor.get();
-  node_["sections"]           = sections;
-  node_["symbols"]            = symbols;
-  node_["relocations"]        = relocations;
+  node_["header"] = header_visitor.get();
+  node_["sections"] = sections;
+  node_["symbols"] = symbols;
+  node_["relocations"] = relocations;
 }
 
 
 void AbstractJsonVisitor::visit(const Header& header) {
-  std::vector<std::string> modes;
-  modes.reserve(header.modes().size());
-  for (MODES m : header.modes()) {
-    modes.emplace_back(to_string(m));
-  }
   node_["architecture"] = to_string(header.architecture());
-  node_["object_type"]  = to_string(header.object_type());
-  node_["entrypoint"]   = header.entrypoint();
-  node_["endianness"]   = to_string(header.endianness());
+  node_["object_type"] = to_string(header.object_type());
+  node_["entrypoint"] = header.entrypoint();
+  node_["endianness"] = to_string(header.endianness());
 }
 
 void AbstractJsonVisitor::visit(const Section& section) {
-  node_["name"]            = section.name();
-  node_["size"]            = section.size();
-  node_["offset"]          = section.offset();
+  node_["name"] = section.name();
+  node_["size"] = section.size();
+  node_["offset"] = section.offset();
   node_["virtual_address"] = section.virtual_address();
 }
 
 void AbstractJsonVisitor::visit(const Symbol& symbol) {
-  node_["name"]  = symbol.name();
+  node_["name"] = symbol.name();
   node_["value"] = symbol.value();
-  node_["size"]  = symbol.size();
+  node_["size"] = symbol.size();
 }
 
 void AbstractJsonVisitor::visit(const Relocation& relocation) {
   node_["address"] = relocation.address();
-  node_["size"]    = relocation.size();
+  node_["size"] = relocation.size();
 }
 
 
 void AbstractJsonVisitor::visit(const Function& function) {
 
   std::vector<std::string> flags_str;
-  Function::flags_list_t flags = function.flags();
+  std::vector<Function::FLAGS> flags = function.flags_list();
   flags_str.reserve(flags.size());
   for (Function::FLAGS f : flags) {
     flags_str.emplace_back(to_string(f));
   }
 
   node_["address"] = function.address();
-  node_["size"]    = function.size();
-  node_["name"]    = function.name();
-  node_["flags"]   = flags_str;
-
+  node_["size"] = function.size();
+  node_["name"] = function.name();
+  node_["flags"] = flags_str;
 }
 
 
-
-
-} // namespace LIEF
+}

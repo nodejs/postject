@@ -1,0 +1,280 @@
+import os
+import re
+import stat
+import subprocess
+from pathlib import Path
+from subprocess import Popen
+
+import lief
+import pytest
+from utils import (
+    check_layout,
+    get_sample,
+    glibc_version,
+    is_aarch64,
+    is_linux,
+    is_x86_64,
+    parse_elf,
+)
+
+CWD = Path(__file__).parent
+
+
+def test_simple(tmp_path: Path):
+    sample_path = get_sample("ELF/ELF64_x86-64_binary_ls.bin")
+    stub = lief.ELF.parse(CWD / "hello_lief.bin")
+    assert stub is not None
+    output = tmp_path / "ls.segment"
+
+    target = lief.ELF.parse(sample_path)
+    assert target is not None
+    for _ in range(4):
+        segment = stub.segments[0]
+        original_va = segment.virtual_address
+        segment.virtual_address = 0
+        segment = target.add(segment)
+        assert segment is not None
+        new_ep = (stub.header.entrypoint - original_va) + segment.virtual_address
+        target.header.entrypoint = new_ep
+
+    target.write(output)
+    check_layout(output)
+
+    if is_linux() and is_x86_64() and glibc_version() >= (2, 30):
+        st = os.stat(output)
+        os.chmod(output, st.st_mode | stat.S_IEXEC)
+
+        with Popen(
+            output.as_posix(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        ) as P:
+            assert P.stdout is not None
+            stdout = P.stdout.read().decode("utf8")
+            lief.logging.info(stdout)
+            assert re.search(r"LIEF is Working", stdout) is not None
+
+
+def test_gcc(tmp_path: Path):
+    sample_path = get_sample("ELF/ELF64_x86-64_binary_gcc.bin")
+    stub = lief.ELF.parse(CWD / "hello_lief.bin")
+    assert stub is not None
+    output = tmp_path / "gcc.segment"
+
+    target = lief.ELF.parse(sample_path)
+    assert target is not None
+    segment = stub.segments[0]
+    original_va = segment.virtual_address
+    segment.virtual_address = 0
+    segment = target.add(segment)
+    assert segment is not None
+    new_ep = (stub.header.entrypoint - original_va) + segment.virtual_address
+
+    target.header.entrypoint = new_ep
+    target.write(output)
+    check_layout(output)
+
+    if is_linux() and is_x86_64() and glibc_version() >= (2, 30):
+        st = os.stat(output)
+        os.chmod(output, st.st_mode | stat.S_IEXEC)
+
+        with Popen(
+            output.as_posix(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        ) as P:
+            assert P.stdout is not None
+            stdout = P.stdout.read().decode("utf8")
+            lief.logging.info(stdout)
+            assert re.search(r"LIEF is Working", stdout) is not None
+
+
+@pytest.mark.linux("x86_64")
+def test_static(tmp_path: Path):
+    sample_path = get_sample("ELF/ELF64_x86-64_binary_static-binary.bin")
+    stub = lief.ELF.parse(CWD / "hello_lief.bin")
+    assert stub is not None
+    output = tmp_path / "static.segment"
+
+    target = lief.ELF.parse(sample_path)
+    assert target is not None
+    segment = stub.segments[0]
+    original_va = segment.virtual_address
+    segment.virtual_address = 0
+    segment = target.add(segment)
+    assert segment is not None
+    new_ep = (stub.header.entrypoint - original_va) + segment.virtual_address
+
+    target.header.entrypoint = new_ep
+    target.write(output)
+    check_layout(output)
+
+    st = os.stat(output)
+    os.chmod(output, st.st_mode | stat.S_IEXEC)
+
+    with Popen(
+        output.as_posix(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    ) as P:
+        assert P.stdout is not None
+        stdout = P.stdout.read().decode("utf8")
+        lief.logging.info(stdout)
+        assert re.search(r"LIEF is Working", stdout) is not None
+
+
+@pytest.mark.linux
+@pytest.mark.parametrize(
+    "binpath",
+    [
+        "/usr/bin/ls",
+        "/bin/ls",
+        "/usr/bin/ssh",
+        "/usr/bin/nm",
+        "/usr/bin/openssl",
+        "/usr/bin/bc",
+        "/usr/bin/bzip2",
+        "/bin/bzip2",
+        "/usr/bin/cp",
+        "/bin/cp",
+        "/usr/bin/find",
+        "/usr/bin/file",
+    ],
+)
+def test_add_segment(tmp_path: Path, binpath: str):
+    target = Path(binpath)
+    if not target.is_file():
+        lief.logging.info(f"{target} does not exists. Skip!")
+        return
+
+    stub = None
+    if is_x86_64():
+        stub = lief.ELF.parse(CWD / "hello_lief.bin")
+    elif is_aarch64():
+        stub = lief.ELF.parse(CWD / "hello_lief_aarch64.bin")
+    assert stub is not None
+
+    name = target.name
+    elf = lief.ELF.parse(target)
+    assert elf is not None
+    output = tmp_path / f"{name}.segment"
+    for _ in range(6):
+        stub_segment = stub.segments[0]
+        segment = lief.ELF.Segment()
+        segment.content = stub.segments[0].content
+        segment.type = stub_segment.type
+        segment.alignment = 0x1000
+        segment.flags = stub_segment.flags
+
+        new_segment = elf.add(segment)
+        assert new_segment is not None
+        new_ep = (
+            stub.header.entrypoint - stub.imagebase - stub_segment.file_offset
+        ) + new_segment.virtual_address
+
+        elf.header.entrypoint = new_ep
+    elf.write(output)
+    check_layout(output)
+
+    st = os.stat(output)
+    os.chmod(output, st.st_mode | stat.S_IEXEC)
+
+    with Popen(
+        output.as_posix(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    ) as P:
+        assert P.stdout is not None
+        stdout = P.stdout.read().decode("utf8")
+        lief.logging.info(stdout)
+        assert re.search(r"LIEF is Working", stdout) is not None
+
+
+def test_add_segment_alignment_dyn(tmp_path: Path):
+    dyn_elf = lief.ELF.parse(CWD / "hello_lief.bin")
+    assert dyn_elf is not None
+
+    # For ease of testing, just try to duplicate the second segment.
+    # It is a LOAD segment with an alignment of 0x200000 and a non-zero page offset, so the result should be similarly aligned.
+    old_segment = dyn_elf.segments[1]
+    assert old_segment is not None
+    new_segment = dyn_elf.add(old_segment)
+    assert new_segment is not None
+
+    # Ensure that we have actually added an independent segment.
+    assert old_segment.file_offset != new_segment.file_offset
+    assert old_segment.physical_address != new_segment.physical_address
+    assert old_segment.virtual_address != new_segment.virtual_address
+
+    # Ensure that the alignment information made it through.
+    assert old_segment.alignment == new_segment.alignment
+
+    # Ensure that the page offset has been kept in all relevant attributes.
+    # We cannot reasonably do page offset alignment adjustments on all platforms.
+    assert (
+        old_segment.file_offset % dyn_elf.page_size
+        == new_segment.file_offset % dyn_elf.page_size
+    )
+    assert (
+        old_segment.physical_address % dyn_elf.page_size
+        == new_segment.physical_address % dyn_elf.page_size
+    )
+    assert (
+        old_segment.virtual_address % dyn_elf.page_size
+        == new_segment.virtual_address % dyn_elf.page_size
+    )
+
+    # The given alignment needs to be reflected in the chosen virtual address.
+    # To make sure that we don't misunderstand ELF, check that property for the input segment as well.
+    assert (
+        old_segment.virtual_address % old_segment.alignment
+        == old_segment.file_offset % old_segment.alignment
+    )
+    assert (
+        new_segment.virtual_address % new_segment.alignment
+        == new_segment.file_offset % new_segment.alignment
+    )
+
+    out = tmp_path / "hello_lief.bin"
+    dyn_elf.write(out)
+
+    check_layout(out)
+
+
+@pytest.mark.parametrize(
+    "sample",
+    [
+        Path("ELF/ld-linux-x86-64.so.2"),
+        Path("ELF/ELF64_AARCH64_piebinary_toybox.pie"),
+    ],
+)
+def test_issue_1333(tmp_path: Path, sample: Path):
+    """See discussion in issue #1333"""
+    elf = parse_elf(sample)
+
+    page = elf.page_size
+    next_va_before = elf.next_virtual_address
+
+    segment = lief.ELF.Segment()
+    segment.type = lief.ELF.Segment.TYPE.LOAD
+    segment.alignment = page
+    segment.content = [0xCC] * 0x40
+
+    new_segment = elf.add(segment)
+    assert new_segment is not None
+
+    off = new_segment.file_offset
+    va = new_segment.virtual_address
+    alignment = new_segment.alignment
+    match sample.name:
+        case "ld-linux-x86-64.so.2":
+            assert va == 0x35000
+
+        case "ELF64_AARCH64_piebinary_toybox.pie":
+            assert va == 0x5D000
+
+    assert alignment == page
+    assert va >= next_va_before
+    assert va % alignment == off % alignment
+
+    out = tmp_path / sample.name
+    elf.write(out)
+    check_layout(out)
+
+    new = lief.ELF.parse(out)
+    assert new is not None
+    new_seg = new.segment_from_offset(off)
+    assert new_seg is not None
+    assert new_seg.virtual_address == va

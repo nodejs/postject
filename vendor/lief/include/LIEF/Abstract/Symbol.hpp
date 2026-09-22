@@ -1,5 +1,5 @@
-/* Copyright 2017 - 2022 R. Thomas
- * Copyright 2017 - 2022 Quarkslab
+/* Copyright 2017 - 2026 R. Thomas
+ * Copyright 2017 - 2026 Quarkslab
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,45 +13,77 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIEF_ABSTRACT_SYMBOLS_H_
-#define LIEF_ABSTRACT_SYMBOLS_H_
+#ifndef LIEF_ABSTRACT_SYMBOLS_H
+#define LIEF_ABSTRACT_SYMBOLS_H
 
+#include <string_view>
+#include <cstdint>
 #include <string>
 
 #include "LIEF/Object.hpp"
+#include "LIEF/compiler_attributes.hpp"
 #include "LIEF/visibility.h"
 
 namespace LIEF {
 
-//! This class represents a symbol in an executable format.
+/// This class represents a symbol in an executable format.
 class LIEF_API Symbol : public Object {
   public:
-  Symbol();
-  Symbol(std::string name);
-  Symbol(std::string name, uint64_t value);
-  Symbol(std::string name, uint64_t value, uint64_t size);
-  Symbol(const Symbol&);
-  Symbol& operator=(const Symbol&);
-  virtual ~Symbol();
+  Symbol() = default;
+  Symbol(std::string name) :
+    name_(std::move(name)) {}
 
-  void swap(Symbol& other);
+  Symbol(std::string name, uint64_t value) :
+    name_(std::move(name)),
+    value_(value) {}
 
-  //! Return the symbol's name
-  virtual const std::string& name() const;
-  virtual std::string& name();
+  Symbol(std::string name, uint64_t value, uint64_t size) :
+    name_(std::move(name)),
+    value_(value),
+    size_(size) {}
 
-  //! Set symbol name
-  virtual void name(const std::string& name);
+  Symbol(const Symbol&) = default;
+  Symbol& operator=(const Symbol&) = default;
 
-  // Symbol's value which is usually the **address** of the symbol
-  virtual uint64_t value() const;
-  virtual void     value(uint64_t value);
+  Symbol(Symbol&&) = default;
+  Symbol& operator=(Symbol&&) = default;
 
-  //! This size of the symbol (when applicable)
-  virtual uint64_t size() const;
-  virtual void     size(uint64_t value);
+  ~Symbol() override = default;
 
-  //! Method so that the ``visitor`` can visit us
+  void swap(Symbol& other) noexcept;
+
+  /// Return the symbol's name
+  virtual std::string_view name() const LIEF_LIFETIMEBOUND {
+    return name_;
+  }
+
+  virtual std::string& name() {
+    return name_;
+  }
+
+  /// Set symbol name
+  virtual void name(std::string name) {
+    name_ = std::move(name);
+  }
+
+  /// Symbol's value which is usually the **address** of the symbol
+  virtual uint64_t value() const {
+    return value_;
+  }
+  virtual void value(uint64_t value) {
+    value_ = value;
+  }
+
+  /// The size of the symbol (when applicable)
+  virtual uint64_t size() const {
+    return size_;
+  }
+
+  virtual void size(uint64_t value) {
+    size_ = value;
+  }
+
+  /// Method so that the ``visitor`` can visit us
   void accept(Visitor& visitor) const override;
 
   LIEF_API friend std::ostream& operator<<(std::ostream& os, const Symbol& entry);
@@ -64,4 +96,3 @@ class LIEF_API Symbol : public Object {
 }
 
 #endif
-
